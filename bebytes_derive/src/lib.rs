@@ -75,7 +75,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
                                     let err = std::io::Error::new(std::io::ErrorKind::Other, err_msg);
                                     panic!("{}", err);
-                                    // return Err(std::boxed::Box::new(err));
                                 }
                             });
 

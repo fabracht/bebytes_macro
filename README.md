@@ -35,7 +35,7 @@ The BeBytes derive macro will generate the following methods for your struct:
 Here's an example showcasing the usage of the BeBytes Derive:
 
 ```rust
-use message_macro_derive::BeBytes;
+use bebytes_macro::BeBytes;
 
 #[derive(Debug, BeBytes)]
 struct MyStruct {
