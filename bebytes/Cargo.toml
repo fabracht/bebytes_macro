@@ -25,3 +25,6 @@ bebytes_derive = "0.2"
 [dev-dependencies]
 trybuild = { version = "1.0.49", features = ["diff"] }
 test-case = "3.0"
+
+[patch.crates-io]
+bebytes_derive = { path = "../bebytes_derive" }

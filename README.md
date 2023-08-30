@@ -70,11 +70,11 @@ In this example, we define a struct MyStruct with four fields. The `#[U8]` attri
 
 The `U8` attribute allows you to define 2 attributes, `pos` and `size`. The position attribute defines the position in current byte where the bits should start. For example, a pos(0), size(4) specifies that the field should take only 4 bits and should start at position 0 from left to right. The macro will displace the bits so that they occupy the correct place in the resulting byte vector when `.to_be_bytes()` is used. So a `4` with pos(0) and size(4):
 
-4 => 00000100 
+4 => 00000100
 Shifted and masked => 0100
 
 Fields are read/written sequentially in Big Endian order and MUST complete a multiple of 8.
-This means that fields decorated with the `U8` attribute MUST complete a byte before the next non `U8` byte is provided. For example, the struct 
+This means that fields decorated with the `U8` attribute MUST complete a byte before the next non `U8` byte is provided. For example, the struct
 
 ```rust
 #[derive(Debug, BeBytes)]
@@ -93,8 +93,11 @@ As long as you follow the above rule, you can create custom sequence of bits by 
 One of the advantages is that we don't need an intermediate vector implementation to parse groups of or individual bits.
 
 ## Multi Byte values
+
 The macro has support for all unsigned types from u8 to u128. These can be used in the same way the u8 type is used:
+
 - Using a u16
+
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 struct U16 {
@@ -108,6 +111,7 @@ struct U16 {
 ```
 
 - Using a u32
+
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 struct U32 {
@@ -152,11 +156,11 @@ pub struct NestedStruct {
 }
 ```
 
-
 ## Byte arrays and Vectors
 
 You can pass a static array of bytes, since the size if known at compilation time.
 Example:
+
 ```rust
 pub struct DummyStruct {
     pub dummy0: [u8; 2],
@@ -166,10 +170,11 @@ pub struct DummyStruct {
     pub dummy2: u8,
 }
 ```
- 
+
 Vectors can ONLY be used as the last field.
 
 Example:
+
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 pub struct ErrorEstimate {
@@ -199,6 +204,7 @@ pub struct NestedStruct {
 ```
 
 ## Contribute
+
 I'm doing this for fun, but all help is appreciated. Thanks
 
 ## License
