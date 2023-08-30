@@ -239,8 +239,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     &mut field_writing,
                                 );
                             }
-                            // if field is an Array
-                            syn::Type::Array(tp) => {
+                            syn::Type::Array(tp) => { // if field is an Array
                                 // get the size of the array
                                 let array_length: usize;
                                 let len = tp.len.clone();
