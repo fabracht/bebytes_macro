@@ -1,0 +1,28 @@
+{
+	"name": "Rust Project",
+	"dockerFile": "Dockerfile",
+	"appPort": [],
+	"customizations": {
+		"vscode": {
+			"setttings": {
+				"[rust]": {
+					"editor.defaultFormatter": "rust-lang.rust-analyzer",
+					"editor.formatOnSave": true
+				}
+			},
+			"extensions": [
+				"ms-azuretools.vscode-docker",
+				"vscode-icons-team.vscode-icons",
+				"rust-lang.rust-analyzer",
+				"tamasfe.even-better-toml",
+				"eamodio.gitlens",
+				"stkb.rewrap",
+				"davidanson.vscode-markdownlint",
+				"WakaTime.vscode-wakatime",
+				"serayuzgur.crates",
+				"github.vscode-github-actions"
+			]
+		}
+	},
+	"remoteUser": "vscode"
+}
