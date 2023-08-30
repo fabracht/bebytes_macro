@@ -48,4 +48,4 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_API_KEY }}
         run: cargo release -v --execute --no-confirm ${{ steps.extract_version.outputs.version_component }}
-        working-directory: message_macro/bebytes_derive
+        working-directory: bebytes_derive
