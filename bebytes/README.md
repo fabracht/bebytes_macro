@@ -8,7 +8,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-bebytes = "0.1"
+bebytes = "0.2"
 ```
 
 Then, import the BeBytes trait and use it as a trait bound in your method signatures:

@@ -451,7 +451,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 if !tp.path.segments.is_empty()
                                     && !is_primitive_type(&tp.path.segments[0].ident) =>
                             {
-                                // println!("TP is {:?}", tp);
                                 field_parsing.push(quote_spanned! { field.span() =>
                                     byte_index = _bit_sum / 8;
                                     let predicted_size = core::mem::size_of::<#field_type>();
