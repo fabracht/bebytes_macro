@@ -1,0 +1,7 @@
+[workspace]
+members = ["bebytes_derive", "bebytes"]
+resolver = "2"
+
+[patch.crates-io]
+bebytes_derive = { path = "bebytes_derive" }
+bebytes = { path = "bebytes" }
