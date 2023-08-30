@@ -370,8 +370,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     }
                                 }
                             }
-                            // if field is a non-empty Option
-                            syn::Type::Path(tp)
+                            syn::Type::Path(tp) // if field is a non-empty Option
                                 if !tp.path.segments.is_empty()
                                     && tp.path.segments[0].ident == "Option" =>
                             {

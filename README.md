@@ -205,7 +205,7 @@ pub struct NestedStruct {
 
 ## Contribute
 
-I'm doing this for fun, but all help is appreciated. Thanks
+I'm doing this for fun, but all help is appreciated.
 
 ## License
 
