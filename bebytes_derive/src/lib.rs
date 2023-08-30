@@ -309,8 +309,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     };
                                 }
                             }
-                            // if field is a non-empty Vec
-                            syn::Type::Path(tp)
+                            syn::Type::Path(tp) // if field is a non-empty Vec
                                 if !tp.path.segments.is_empty()
                                     && tp.path.segments[0].ident == "Vec" =>
                             {

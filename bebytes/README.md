@@ -4,7 +4,7 @@ BeBytes is a Rust library that provides the BeBytes trait and the BeBytes derive
 
 ## Usage
 
-Add this to your `Cargo.toml`:
+Add the crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
