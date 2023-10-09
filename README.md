@@ -26,6 +26,7 @@ struct MyStruct {
 
 The BeBytes derive macro will generate the following methods for your struct:
 
+- `new(args...) -> Self`: A constructor method to create a new instance of your struct. Arguments come from the fields of your struct.
 - `try_from_be_bytes(&[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>>`: A method to convert a byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
 - `to_be_bytes(&self) -> Vec<u8>`: A method to convert the struct into a byte representation. It returns a `Vec<u8>` containing the serialized bytes.
 - `field_size(&self) -> usize`: A method to calculate the size (in bytes) of the struct.
