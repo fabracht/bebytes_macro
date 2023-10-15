@@ -55,7 +55,7 @@ fn main() {
     for byte in &bytes {
         print!("{:08b} ", byte);
     }
-    println!("");
+
     let error = ErrorEstimate::try_from_be_bytes(&bytes);
     println!("\nError: {:?}", error);
     assert_eq!(error_estimate, error.unwrap().0);
