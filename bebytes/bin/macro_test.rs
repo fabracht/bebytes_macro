@@ -3,7 +3,7 @@
 // use std::ops::BitAnd;
 
 use bebytes::BeBytes;
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_setup_response = ClientSetupResponse::new(Modes::new(0), [0; 80], [0; 64], [0; 16]);
     let bytes = client_setup_response.to_be_bytes();
     println!("Bytes len: {}", bytes.len());
@@ -69,10 +69,16 @@ fn main() {
     let re_dummy = DummyStruct::try_from_be_bytes(&dummy_bytes);
     println!("\ndummy error {:?}", re_dummy);
     assert_eq!(dummy, re_dummy.unwrap().0);
-    let _nested = NestedStruct::new(dummy, error_estimate);
+    let nested = NestedStruct::new(dummy, None, error_estimate);
+    let nested_bytes = nested.to_be_bytes();
+    println!("Nested bytes:");
+    for byte in &nested_bytes {
+        print!("{:08b} ", byte);
+    }
+
     let dummy_enum = DummyEnum::ServerStart;
     let dummy_enum_bytes = dummy_enum.to_be_bytes();
-    println!("{:?}", dummy_enum_bytes);
+    println!("DummyEnum: {:?}", dummy_enum_bytes);
     let re_dummy_enum = DummyEnum::try_from_be_bytes(&dummy_enum_bytes);
     println!("{:?}", re_dummy_enum);
     assert_eq!(dummy_enum, re_dummy_enum.unwrap().0);
@@ -112,6 +118,29 @@ fn main() {
     let re_u_32 = U32::try_from_be_bytes(&u_32_bytes);
     println!("{:?}", re_u_32);
     assert_eq!(u_32, re_u_32.unwrap().0);
+
+    let optional = Optional {
+        optional_number: Some(5),
+    };
+    let optional_bytes = optional.to_be_bytes();
+    println!("Optional Some: {:?}", optional_bytes);
+    let none_optional = Optional {
+        optional_number: None,
+    };
+    let none_optional_bytes = none_optional.to_be_bytes();
+    println!("Optional None: {:?}", none_optional_bytes);
+
+    let innocent_struct = InnocentStruct {
+        innocent: 1,
+        mid_tail: WithTailingVec { tail: vec![2, 3] },
+        real_tail: vec![4, 5],
+    };
+    let innocent_struct_bytes = innocent_struct.to_be_bytes();
+    println!("InnocentStruct: {:?}", innocent_struct_bytes);
+    let re_innocent_struct = InnocentStruct::try_from_be_bytes(&innocent_struct_bytes)?;
+    println!("ReInnocentStruct: {:?}", re_innocent_struct);
+    assert_ne!(innocent_struct, re_innocent_struct.0);
+    Ok(())
 }
 
 #[derive(BeBytes, Debug, PartialEq)]
@@ -186,8 +215,13 @@ pub struct ErrorEstimateMini {
 #[derive(BeBytes, Debug, PartialEq)]
 pub struct NestedStruct {
     pub dummy_struct: DummyStruct,
-    // pub optional_number: Option<i32>,
+    pub optional_number: Option<i32>,
     pub error_estimate: ErrorEstimate,
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+pub struct Optional {
+    pub optional_number: Option<i32>,
 }
 
 #[derive(BeBytes, Debug, PartialEq, Clone)]
@@ -244,4 +278,16 @@ pub enum Mode {
     Unauthenticated = 0b0001,
     Authenticated = 0b0010,
     Encrypted = 0b0100,
+}
+
+#[derive(Debug, PartialEq, Clone, BeBytes)]
+struct WithTailingVec {
+    tail: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq, Clone, BeBytes)]
+struct InnocentStruct {
+    innocent: u8,
+    mid_tail: WithTailingVec,
+    real_tail: Vec<u8>,
 }

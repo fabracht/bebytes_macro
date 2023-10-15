@@ -60,7 +60,7 @@ fn main() {
     let bytes = my_struct.to_be_bytes();
     println!("Serialized bytes: {:?}", bytes);
 
-    let deserialized = MyStruct::try_from_be_bytes(&bytes).unwrap();
+    let (deserialized, bytes_written) = MyStruct::try_from_be_bytes(&bytes).unwrap();
     println!("Deserialized struct: {:?}", deserialized);
 }
 ```
@@ -143,6 +143,16 @@ pub enum DummyEnum {
 }
 ```
 
+The following code
+
+```rust
+    let dummy_enum = DummyEnum::ServerStart;
+    let dummy_enum_bytes = dummy_enum.to_be_bytes();
+    println!("DummyEnum: {:?}", dummy_enum_bytes);
+```
+
+Produces `DummyEnum: [2]`
+
 ## Options
 
 Options are supported, as long as the internal type is a primitive
@@ -150,16 +160,16 @@ Example:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
-pub struct NestedStruct {
-    pub dummy_struct: DummyStruct,
+pub struct Optional {
     pub optional_number: Option<i32>,
-    pub error_estimate: ErrorEstimate,
 }
 ```
 
+Options are serialized as the internal type. A `None` is serialized as a zero byte.
+
 ## Byte arrays and Vectors
 
-You can pass a static array of bytes, since the size if known at compilation time.
+You can pass a static array of bytes, since the size is known at compilation time.
 Example:
 
 ```rust
@@ -172,7 +182,7 @@ pub struct DummyStruct {
 }
 ```
 
-Vectors can ONLY be used as the last field.
+**Vectors can ONLY be used as the last field.**
 
 Example:
 
@@ -194,14 +204,41 @@ Trying to place a vector anywhere else in the sequence produces a compile time e
 
 ## Nested Fields
 
-In theory, you can nest structures, but beware of padding vectors. I have not implemented, nor tested anything to prevent you from doing it, so just don't put nested structs with vectors in it unless they are occupy the last position.
+In theory, you can nest structures, but beware of padding vectors. I have not implemented, nor tested anything to prevent you from doing it, so just don't put nested structs with vectors in it unless they are occupy the very last position.
+
+The problem lies in the fact that the macro will not know how many bytes to consume for the vector, since it is not a fixed size. Here's a simple example:
 
 ```rust
-#[derive(BeBytes, Debug, PartialEq)]
-pub struct NestedStruct {
-    pub dummy_struct: DummyStruct,
-    pub error_estimate: ErrorEstimate,
-}
+    #[derive(Debug, PartialEq, Clone, BeBytes)]
+    struct WithTailingVec {
+        tail: Vec<u8>,
+    }
+
+    #[derive(Debug, PartialEq, Clone, BeBytes)]
+    struct InnocentStruct {
+        innocent: u8,
+        mid_tail: WithTailingVec,
+        real_tail: Vec<u8>,
+    }
+    fn main() {
+        let innocent_struct = InnocentStruct {
+            innocent: 1,
+            mid_tail: WithTailingVec { tail: vec![2, 3] },
+            real_tail: vec![4, 5],
+        };
+        let innocent_struct_bytes = innocent_struct.to_be_bytes();
+        println!("InnocentStruct: {:?}", innocent_struct_bytes);
+        let re_innocent_struct = InnocentStruct::try_from_be_bytes(&innocent_struct_bytes)?;
+        println!("ReInnocentStruct: {:?}", re_innocent_struct);
+        assert_ne!(innocent_struct, re_innocent_struct.0);
+    }
+```
+
+Produces the following output:
+
+```sh
+InnocentStruct: [1, 2, 3, 4, 5]
+ReInnocentStruct: (InnocentStruct { innocent: 1, mid_tail: WithTailingVec { tail: [2, 3, 4, 5] }, real_tail: [2, 3, 4, 5] }, 1)
 ```
 
 ## Contribute
