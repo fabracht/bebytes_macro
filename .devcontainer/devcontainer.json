@@ -11,17 +11,18 @@
         }
       },
       "extensions": [
-        "ms-azuretools.vscode-docker",
-        "vscode-icons-team.vscode-icons",
-        "rust-lang.rust-analyzer",
-        "tamasfe.even-better-toml",
-        "eamodio.gitlens",
-        "stkb.rewrap",
-        "davidanson.vscode-markdownlint",
-        "WakaTime.vscode-wakatime",
-        "serayuzgur.crates",
-        "github.vscode-github-actions"
-      ]
+		"ms-azuretools.vscode-docker",
+		"vscode-icons-team.vscode-icons",
+		"rust-lang.rust-analyzer",
+		"tamasfe.even-better-toml",
+		"eamodio.gitlens",
+		"stkb.rewrap",
+		"davidanson.vscode-markdownlint",
+		"WakaTime.vscode-wakatime",
+		"serayuzgur.crates",
+		"github.vscode-github-actions",
+		"GitHub.copilot"
+	]
     }
   },
   "remoteUser": "vscode"
