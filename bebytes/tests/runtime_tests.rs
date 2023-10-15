@@ -46,3 +46,58 @@ fn test_to_be_bytes(input: ErrorEstimate, expected: Vec<u8>) {
 fn test_value_out_of_range() {
     let _ = ErrorEstimate::new(0, 1, 64, 1);
 }
+
+#[derive(BeBytes, Copy, Clone, Eq, PartialEq, Debug)]
+pub struct ClientSetupResponse {
+    pub mode: Modes,
+    pub key_id: [u8; 1],
+    pub token: [u8; 1],
+    pub client_iv: [u8; 1],
+}
+
+#[derive(BeBytes, Copy, Clone, Eq, PartialEq, Debug)]
+pub struct Modes {
+    pub bits: u8,
+}
+
+#[test_case(ClientSetupResponse { mode: Modes { bits: 1 }, key_id: [0; 1], token: [0; 1], client_iv: [0; 1] }, 4; "test arrays length")]
+fn test_arrays(input: ClientSetupResponse, len: usize) {
+    let bytes = input.clone().to_be_bytes();
+    let (client_setup_response, written_len) =
+        ClientSetupResponse::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(client_setup_response, input);
+    assert_eq!(len, written_len);
+}
+
+#[derive(BeBytes, Debug, PartialEq, Clone, Default)]
+pub struct NestedStruct {
+    #[U8(size(1), pos(0))]
+    pub s_bit: u8,
+    #[U8(size(1), pos(1))]
+    pub z_bit: u8,
+    #[U8(size(6), pos(2))]
+    pub scale: u8,
+    pub dummy_struct: DummyStruct,
+}
+
+#[derive(BeBytes, Debug, PartialEq, Clone, Default)]
+pub struct DummyStruct {
+    pub dummy0: [u8; 2],
+    #[U8(size(1), pos(0))]
+    pub dummy1: u8,
+    #[U8(size(7), pos(1))]
+    pub dummy2: u8,
+}
+
+#[test_case(NestedStruct::default(), 4; "test nested struct")]
+fn test_nested_struct(input: NestedStruct, len: usize) {
+    let bytes = input.clone().to_be_bytes();
+    for byte in bytes.iter() {
+        print!("{:08b} ", *byte);
+        print!("\n");
+    }
+    println!("bytes: {:?}, len: {}", bytes, bytes.len());
+    let (nested_struct, written_len) = NestedStruct::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(nested_struct, input);
+    assert_eq!(len, written_len);
+}

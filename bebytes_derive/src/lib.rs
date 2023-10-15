@@ -167,7 +167,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 });
                             } else {
                                 field_parsing.push(quote! {
-                                    let shift_factor = 8 - #total_size % 8;
+                                    // let shift_factor = 8 - #total_size % 8;
                                     let #field_name = (bytes[_bit_sum / 8]  >> (7 - (#size + #pos % 8 - 1) as #field_type )) & (#mask as #field_type);
                                     _bit_sum += #size;
                                     // println!("Field name {:?}, value {:?}", stringify!(#field_name), #field_name);
@@ -287,6 +287,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                             field_parsing.push(quote! {
                                                 byte_index = _bit_sum / 8;
                                                 let mut #field_name = [0u8; #array_length];
+                                                // println!("{} byte_index, {} array_length, {:?} bytes", byte_index, #array_length, bytes);
                                                 #field_name.copy_from_slice(&bytes[byte_index..#array_length + byte_index]);
                                                 _bit_sum += 8 * #array_length;
                                             });
@@ -442,21 +443,22 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     }
                                 }
                             }
-                            // Struct case
-                            syn::Type::Path(tp)
+                            syn::Type::Path(tp)  // Struct case
                                 if !tp.path.segments.is_empty()
                                     && !is_primitive_type(&tp.path.segments[0].ident) =>
                             {
+                                // println!("first_segment ident: {:?}", &tp.path.segments[0].ident);
                                 field_parsing.push(quote_spanned! { field.span() =>
                                     byte_index = _bit_sum / 8;
                                     let predicted_size = core::mem::size_of::<#field_type>();
-                                    end_byte_index = byte_index + predicted_size;
+                                    end_byte_index = usize::min(bytes.len(), byte_index + predicted_size);
+                                    // println!("field_type: {:?}, predicted_size: {}", stringify!(#field_type), predicted_size);
                                     let (#field_name, bytes_written) = #field_type::try_from_be_bytes(&bytes[byte_index..end_byte_index])?;
                                     _bit_sum += bytes_written * 8;
                                     // println!("Field Name: {:?}, bytes_written: {}", #field_name, bytes_written);
                                 });
                                 field_writing.push(quote_spanned! { field.span() =>
-                                    // println!("Writing field {:?}, with bytes: {:08b}",  #field_name, BeBytes::to_be_bytes(&#field_name)[0]);
+                                    // println!("Writing field {:?}, with bytes: {:08b} {:08b} {:08b}",  #field_name, BeBytes::to_be_bytes(&#field_name)[0], BeBytes::to_be_bytes(&#field_name)[1], BeBytes::to_be_bytes(&#field_name)[2]);
                                     let be_bytes = &BeBytes::to_be_bytes(&#field_name);
                                     bytes.extend_from_slice(be_bytes);
                                     _bit_sum += be_bytes.len() * 8;
