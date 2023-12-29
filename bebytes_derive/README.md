@@ -162,6 +162,7 @@ You can pass a static array of bytes, since the size if known at compilation tim
 Example:
 
 ```rust
+#[derive(BeBytes, Debug, PartialEq)]
 pub struct DummyStruct {
     pub dummy0: [u8; 2],
     #[U8(size(1), pos(0))]
@@ -171,25 +172,45 @@ pub struct DummyStruct {
 }
 ```
 
-Vectors can ONLY be used as the last field.
+Vectors are supported, but you must either provide a hint of how many bytes you are planning to read or ONLY use it as the last field of your struct. This is because the macro needs to know how many bytes it should read from the buffer in order to be able to read the next field properly aligned. If you don't provide a hint, you can still use a vector, as long as it's the last field of the last struct. You can provide a hint by using:
 
+### With(size(#))
+
+With(size(#)) will tell the macro how many bytes to read from the buffer in order to fill the annotated vector.
+Example:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+pub struct DummyStruct {
+    pub dummy0: [u8; 2],
+    #[With(size(10))]
+    pub vecty: Vec<u8>,
+    pub dummy1: u8,
+}
+```
+
+### From(*fieldname*)
+
+From(*fieldname*) will tell the macro to use the value of the field with the
 Example:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 pub struct ErrorEstimate {
-    #[U8(size(1), pos(0))]
-    pub s_bit: u8,
-    #[U8(size(1), pos(1))]
-    pub z_bit: u8,
-    #[U8(size(6), pos(2))]
-    pub scale: u8,
-    pub dummy_struct: DummyStruct,
-    pub padding: Vec<u8>,
+    pub ipv4: u8,
+    #[From(ipv4)]
+    pub address: Vec<u8>,
+    pub rest: u8,
 }
 ```
 
-Trying to place a vector anywhere else in the sequence produces a compile time error.
+This allows you to read the value as part of the incoming buffer, such as is the case for DNS packets, where the domain name is interleaved by the number that specifies the length of the next part of the name. (3www7example3com)
+
+### Last field
+
+If you don't provide a hint and try to use a vector in the middle of your struct, the macro will throw a compile time error.
+
+NOTICE: If a vector is used as the last field of another struct, but the struct is not the last field of the parent struct, the macro will read the whole buffer and try to put that as the value of the vector. This is probably not what you want, so just don't do it.
 
 ## Nested Fields
 
