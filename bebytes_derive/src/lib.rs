@@ -1,10 +1,20 @@
+extern crate alloc;
 extern crate proc_macro;
+use alloc::vec::Vec;
 use proc_macro::TokenStream;
 use quote::{__private::Span, quote, quote_spanned};
 use syn::{
     parenthesized, parse_macro_input, spanned::Spanned, AngleBracketedGenericArguments, Data,
     DeriveInput, Fields, LitInt,
 };
+
+const PRIMITIVES: [&str; 17] = [
+    "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize", "f32",
+    "f64", "bool", "char", "str",
+];
+const SUPPORTED_PRIMITIVES: [&str; 10] = [
+    "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
+];
 
 // BeBytes makes your bit shifting life a thing of the past
 #[proc_macro_derive(BeBytes, attributes(U8, With, FromField))]
@@ -52,6 +62,17 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
                     // check if the U8 attribute is present
                     if u8_attribute_present {
+                        match field_type {
+                            // if field is U8, we apply bit shifting
+                            syn::Type::Path(tp) if !is_supported_primitive_type(tp) => {
+                                let error = syn::Error::new(
+                                    field_type.span(),
+                                    "Unsupported type for U8 attribute",
+                                );
+                                errors.push(error.to_compile_error());
+                            }
+                            _ => {}
+                        }
                         named_fields.push(quote! { let #field_name = self.#field_name; });
                         let number_length = get_number_size(field_type, &field, &mut errors)
                             .unwrap_or_else(|| {
@@ -66,14 +87,13 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 "U8 attribute must have a size and a position",
                             );
                             errors.push(error.to_compile_error());
-                            continue;
                         }
                         // Deal with the position and size
                         if let (Some(pos), Some(size)) = (pos, size) {
                             bit_sum.push(quote! {bit_sum += #size;});
 
                             // set the bit mask
-                            let mask = (1 << size) - 1;
+                            let mask: u128 = (1 << size) - 1;
                             // add runtime check if the value requested is in the valid range for that type
                             field_limit_check.push(quote! {
                                 if #field_name > #mask as #field_type {
@@ -107,7 +127,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 field_parsing.push(quote! {
                                     let mut inner_total_size = #total_size;
                                     // Initialize the field
-                                    let mut #field_name: #field_type = 0;
+                                    let mut #field_name = 0 as #field_type;
                                     // In order to use the mask, we need to reset the multi-byte
                                     // field to it's original position
                                     // To do that, we can iterate over chunks of the bytes array
@@ -124,12 +144,12 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                         // Then we mask the shifted value to delete unwanted bits
                                         // and that becomes the field value
                                         #field_name = shifted_u_type & #mask as #field_type;
-                                        _bit_sum += #size;
 
                                     });
+                                    _bit_sum += #size;
                                 });
                                 field_writing.push(quote! {
-                                    if (#field_name) & !(#mask as #field_type) != 0 {
+                                    if #field_name > #mask as #field_type {
                                         panic!(
                                             "Value {} for field {} exceeds the maximum allowed value {}.",
                                             #field_name,
@@ -137,17 +157,21 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                             #mask
                                         );
                                     }
-                                    let mut inner_total_size = 0;
+                                    // println!("Field name {}", stringify!(#field_name));
                                     let masked_value = #field_name & #mask as #field_type;
                                     // The shift factor tells us about the current position in the byte
                                     // It's the size of the number in bits minus the size requested in bits
                                     // plus the current position in the byte
                                     let shift_left = (#number_length * 8) - #size;
+                                    // println!("shift_left: {}", shift_left);
                                     let shift_right = (#pos % 8);
+                                    // println!("shift_right: {}", shift_right);
                                     // The shifted value aligns the value with the current position in the byte
                                     let shifted_masked_value = (masked_value << shift_left) >> shift_right;
+                                    // println!("shifted_masked_value: {:08b}", shifted_masked_value);
                                     // We split the value into bytes
                                     let byte_values = #field_type::to_be_bytes(shifted_masked_value);
+                                    // println!("byte_values: {:?}", byte_values);
                                     // Iterating over the bytes. The first byte always fills a byte completely.
                                     // The following bytes will fill the second, third, ... byte and so on. So,
                                     // we need to increase the index value in the bytes array by the index of the
@@ -158,18 +182,18 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                             bytes.resize(_bit_sum / 8 + i + 1, 0);
                                         }
                                         bytes[_bit_sum / 8 + i] |= byte_values[i];
-                                        inner_total_size = inner_total_size + (8 - shift_right);
+                                        // println!("bytes[{}]: {:08b}", _bit_sum / 8 + i, bytes[_bit_sum / 8 + i]);
                                     }
-                                    _bit_sum += inner_total_size;
+                                    _bit_sum += #size;
                                 });
                             } else {
                                 field_parsing.push(quote! {
-                                    let #field_name = (bytes[_bit_sum / 8]  >> (7 - (#size + #pos % 8 - 1) as #field_type )) & (#mask as #field_type);
+                                    let #field_name = (bytes[_bit_sum / 8] as #field_type >> (7 - (#size + #pos % 8 - 1) as #field_type )) & (#mask as #field_type);
                                     _bit_sum += #size;
                                 });
                                 // add the writing code for the field
                                 field_writing.push(quote! {
-                                    if (#field_name) & !(#mask as #field_type) != 0 {
+                                    if #field_name > #mask as #field_type {
                                         panic!(
                                             "Value {} for field {} exceeds the maximum allowed value {}.",
                                             #field_name,
@@ -181,6 +205,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                         bytes.resize(_bit_sum / 8 + 1, 0);
                                     }
                                     bytes[_bit_sum / 8] |= (#field_name as u8) << (7 - (#size - 1) - #pos % 8 );
+                                    // println!("field_name {} left shift {} bytes[{}]", stringify!(#field_name), (7 - (#size - 1) - #pos % 8 ), _bit_sum / 8);
                                     _bit_sum += #size;
                                 });
                             }
@@ -288,7 +313,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                                 "Unsupported type for [T; N]",
                                             );
                                             errors.push(error.to_compile_error());
-                                            continue;
                                         }
                                     };
                                 }
@@ -368,7 +392,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                             "Unsupported type for Vec<T>",
                                         );
                                         errors.push(error.to_compile_error());
-                                        continue;
                                     }
                                 }
                             }
@@ -433,7 +456,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                                 "Unsupported type for Option<T>",
                                             );
                                             errors.push(error.to_compile_error());
-                                            continue;
                                         }
                                     }
                                 }
@@ -464,7 +486,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     format!("Unsupported type for field {}", field_name);
                                 let error = syn::Error::new(field.ty.span(), error_message);
                                 errors.push(error.to_compile_error());
-                                continue;
                             }
                         }
                     }
@@ -713,7 +734,6 @@ fn parse_attributes(
                     let lit: LitInt = content.parse()?;
                     let n: usize = lit.base10_parse()?;
                     size = Some(n);
-                    println!("Size is : {}", n);
                 } else {
                     let e = meta.error(
                         "Allowed attributes are `size` - Example: #[With(size(3))]".to_string(),
@@ -770,21 +790,17 @@ fn solve_for_inner_type(input: &syn::TypePath, identifier: &str) -> Option<syn::
 
 // Helper function to check if a given identifier is a primitive type
 fn is_primitive_identity(ident: &syn::Ident) -> bool {
-    let primitives = [
-        "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize",
-        "f32", "f64", "char", "bool", "str",
-    ];
-
-    primitives.iter().any(|&primitive| ident == primitive)
+    PRIMITIVES.iter().any(|&primitive| ident == primitive)
 }
 
 fn is_primitive_type(tp: &syn::TypePath) -> bool {
-    let primitives = [
-        "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize",
-        "f32", "f64", "char", "bool", "str",
-    ];
+    PRIMITIVES
+        .iter()
+        .any(|&primitive| tp.path.is_ident(primitive))
+}
 
-    primitives
+fn is_supported_primitive_type(tp: &syn::TypePath) -> bool {
+    SUPPORTED_PRIMITIVES
         .iter()
         .any(|&primitive| tp.path.is_ident(primitive))
 }

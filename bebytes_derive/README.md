@@ -128,6 +128,8 @@ And so on.
 
 **The same rules apply here. Your `U8` fields must complete a byte, even if they span over multiple bytes.**
 
+*The following primitives can be used with the `U8` attribute: u8, u16, u32, u64, u128, i8, i16, i32, i64, i128*
+
 ## Enums
 
 Only enums with named fields are supported and values are read/written as a byte.
@@ -214,7 +216,7 @@ NOTICE: If a vector is used as the last field of another struct, but the struct 
 
 ## Nested Fields
 
-In theory, you can nest structures, but beware of padding vectors. I have not implemented, nor tested anything to prevent you from doing it, so just don't put nested structs with vectors in it unless they are occupy the last position.
+In theory, you can nest structures, but beware of padding vectors. I have not implemented, nor tested anything to prevent you from doing it, so just don't put nested structs with unhinted vectors in it unless they are occupy the last position.
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]

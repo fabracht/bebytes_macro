@@ -101,3 +101,231 @@ fn test_nested_struct(input: NestedStruct, len: usize) {
     assert_eq!(nested_struct, input);
     assert_eq!(len, written_len);
 }
+
+#[derive(Debug, PartialEq, Clone, BeBytes)]
+struct VecLengthFromFieldName {
+    pre_tail: u8,
+    #[FromField(pre_tail)]
+    tail: Vec<u8>,
+    post_tail: u8,
+}
+
+#[test_case(VecLengthFromFieldName { pre_tail: 2, tail: vec![2, 3], post_tail: 4 }, 4; "test vec length from field name")]
+fn test_vec_length_from_field_name(input: VecLengthFromFieldName, len: usize) {
+    let bytes = input.clone().to_be_bytes();
+    let (vec_length_from_field_name, written_len) =
+        VecLengthFromFieldName::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(vec_length_from_field_name, input);
+    assert_eq!(len, written_len);
+    // Check that we read the number of bytes specified by the pre_tail field
+    let bytes = vec![2, 2, 3, 4];
+    let (vec_length_from_field_name, _written_len) =
+        VecLengthFromFieldName::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(vec_length_from_field_name.tail.len(), 2);
+}
+
+#[derive(Debug, PartialEq, Clone, BeBytes)]
+struct PaddingVecWithVecLengthFromFieldName {
+    innocent: u8,
+    mid_tail: VecLengthFromFieldName,
+    real_tail: Vec<u8>,
+}
+
+#[test_case(PaddingVecWithVecLengthFromFieldName { innocent: 1, mid_tail: VecLengthFromFieldName { pre_tail: 2, tail: vec![2, 3], post_tail: 4 }, real_tail: vec![5, 6] }, 7; "test padding vec with vec length from field name")]
+fn test_padding_vec_with_vec_length_from_field_name(
+    input: PaddingVecWithVecLengthFromFieldName,
+    len: usize,
+) {
+    let bytes = input.clone().to_be_bytes();
+    let (padding_vec_with_vec_length_from_field_name, written_len) =
+        PaddingVecWithVecLengthFromFieldName::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(padding_vec_with_vec_length_from_field_name, input.clone());
+    assert_eq!(len, written_len);
+}
+
+#[derive(BeBytes, Debug, PartialEq, Clone)]
+struct WithSizeAttribute {
+    #[With(size(3))]
+    with_size: Vec<u8>,
+    fourth: u8,
+}
+
+#[test_case(WithSizeAttribute { with_size: vec![1, 2, 3], fourth: 4 }, 4; "test with size attribute")]
+fn test_with_size_attribute(input: WithSizeAttribute, len: usize) {
+    let bytes = input.clone().to_be_bytes();
+    let (with_size_attribute, written_len) = WithSizeAttribute::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(with_size_attribute, input);
+    assert_eq!(len, written_len);
+    // Test that we read the number of bytes specified by the size attribute
+    let bytes = vec![1, 2, 3, 4, 5, 6];
+    let (with_size_attribute, _written_len) = WithSizeAttribute::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(
+        with_size_attribute,
+        WithSizeAttribute {
+            with_size: vec![1, 2, 3],
+            fourth: 4
+        }
+    );
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct U16 {
+    #[U8(size(1), pos(0))]
+    first: u8,
+    #[U8(size(14), pos(1))]
+    second: u16,
+    #[U8(size(1), pos(15))]
+    fourth: u8,
+}
+
+#[test_case(U16 { first: 1, second: 2, fourth: 1 }, 2; "test u16")]
+fn test_u16(input: U16, len: usize) {
+    let bytes = input.to_be_bytes();
+    let (u16, written_len) = U16::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(u16, input);
+    assert_eq!(len, written_len);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct U32 {
+    #[U8(size(1), pos(0))]
+    first: u8,
+    #[U8(size(30), pos(1))]
+    second: u32,
+    #[U8(size(1), pos(31))]
+    fourth: u8,
+}
+
+#[test_case(U32 { first: 1, second: 2, fourth: 1 }, 4; "test u32")]
+fn test_u32(input: U32, len: usize) {
+    let bytes = input.to_be_bytes();
+    let (u32, written_len) = U32::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(u32, input);
+    assert_eq!(len, written_len);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct U64 {
+    #[U8(size(1), pos(0))]
+    first: u8,
+    #[U8(size(62), pos(1))]
+    second: u64,
+    #[U8(size(1), pos(63))]
+    fourth: u8,
+}
+
+#[test_case(U64 { first: 1, second: 3, fourth: 1 }, 8; "test u64")]
+fn test_u64(input: U64, len: usize) {
+    let bytes = input.to_be_bytes();
+    let (u64, written_len) = U64::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(u64, input);
+    assert_eq!(len, written_len);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct U128 {
+    #[U8(size(1), pos(0))]
+    first: u8,
+    #[U8(size(126), pos(1))]
+    second: u128,
+    #[U8(size(1), pos(127))]
+    fourth: u8,
+}
+
+#[test_case(U128 { first: 1, second: 33, fourth: 1 }, 16; "test u128")]
+fn test_u128(input: U128, len: usize) {
+    let bytes = input.to_be_bytes();
+    let (u128, written_len) = U128::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(u128, input);
+    assert_eq!(len, written_len);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct I8 {
+    #[U8(size(1), pos(0))]
+    first: u8,
+    #[U8(size(6), pos(1))]
+    second: i8,
+    #[U8(size(1), pos(7))]
+    fourth: u8,
+}
+
+#[test_case(I8 { first: 1, second: 3, fourth: 1 }, 1; "test i8")]
+fn test_i8(input: I8, len: usize) {
+    let bytes = input.to_be_bytes();
+    let (i8, written_len) = I8::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(i8, input);
+    assert_eq!(len, written_len);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct I16 {
+    #[U8(size(1), pos(0))]
+    first: u8,
+    #[U8(size(14), pos(1))]
+    second: i16,
+    #[U8(size(1), pos(15))]
+    fourth: u8,
+}
+
+#[test_case(I16 { first: 1, second: 3, fourth: 1 }, 2; "test i16")]
+fn test_i16(input: I16, len: usize) {
+    let bytes = input.to_be_bytes();
+    let (i16, written_len) = I16::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(i16, input);
+    assert_eq!(len, written_len);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct I32 {
+    #[U8(size(1), pos(0))]
+    first: u8,
+    #[U8(size(30), pos(1))]
+    second: i32,
+    #[U8(size(1), pos(31))]
+    fourth: u8,
+}
+
+#[test_case(I32 { first: 1, second: 3, fourth: 1 }, 4; "test i32")]
+fn test_i32(input: I32, len: usize) {
+    let bytes = input.to_be_bytes();
+    let (i32, written_len) = I32::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(i32, input);
+    assert_eq!(len, written_len);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct I64 {
+    #[U8(size(1), pos(0))]
+    first: u8,
+    #[U8(size(62), pos(1))]
+    second: i64,
+    #[U8(size(1), pos(63))]
+    fourth: u8,
+}
+
+#[test_case(I64 { first: 1, second: 3, fourth: 1 }, 8; "test i64")]
+fn test_i64(input: I64, len: usize) {
+    let bytes = input.to_be_bytes();
+    let (i64, written_len) = I64::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(i64, input);
+    assert_eq!(len, written_len);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct I128 {
+    #[U8(size(1), pos(0))]
+    first: u8,
+    #[U8(size(126), pos(1))]
+    second: i128,
+    #[U8(size(1), pos(127))]
+    fourth: u8,
+}
+
+#[test_case(I128 { first: 1, second: 3, fourth: 1 }, 16; "test i128")]
+fn test_i128(input: I128, len: usize) {
+    let bytes = input.to_be_bytes();
+    let (i128, written_len) = I128::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(i128, input);
+    assert_eq!(len, written_len);
+}
