@@ -1,0 +1,70 @@
+error: Unsupported type for U8 attribute
+ --> tests/compile_time/unsupported_char.rs:8:13
+  |
+8 |     second: char,
+  |             ^^^^
+
+error: Unsupported type
+ --> tests/compile_time/unsupported_char.rs:8:13
+  |
+8 |     second: char,
+  |             ^^^^
+
+error: Type not supported'
+ --> tests/compile_time/unsupported_char.rs:8:13
+  |
+8 |     second: char,
+  |             ^^^^
+
+error[E0277]: cannot subtract `char` from `{integer}`
+ --> tests/compile_time/unsupported_char.rs:3:10
+  |
+3 | #[derive(BeBytes, Debug, PartialEq)]
+  |          ^^^^^^^ no implementation for `{integer} - char`
+  |
+  = help: the trait `Sub<char>` is not implemented for `{integer}`
+  = help: the following other types implement trait `Sub<Rhs>`:
+            <isize as Sub>
+            <isize as Sub<&isize>>
+            <i8 as Sub>
+            <i8 as Sub<&i8>>
+            <i16 as Sub>
+            <i16 as Sub<&i16>>
+            <i32 as Sub>
+            <i32 as Sub<&i32>>
+          and $N others
+  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0369]: no implementation for `char >> _`
+ --> tests/compile_time/unsupported_char.rs:3:10
+  |
+3 | #[derive(BeBytes, Debug, PartialEq)]
+  |          ^^^^^^^
+  |
+  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0604]: only `u8` can be cast as `char`, not `usize`
+ --> tests/compile_time/unsupported_char.rs:3:10
+  |
+3 | #[derive(BeBytes, Debug, PartialEq)]
+  |          ^^^^^^^ invalid cast
+  |
+help: try `char::from_u32` instead (via a `u32`)
+ --> tests/compile_time/unsupported_char.rs:3:10
+  |
+3 | #[derive(BeBytes, Debug, PartialEq)]
+  |          ^^^^^^^
+  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0604]: only `u8` can be cast as `char`, not `u128`
+ --> tests/compile_time/unsupported_char.rs:3:10
+  |
+3 | #[derive(BeBytes, Debug, PartialEq)]
+  |          ^^^^^^^ invalid cast
+  |
+help: try `char::from_u32` instead (via a `u32`)
+ --> tests/compile_time/unsupported_char.rs:3:10
+  |
+3 | #[derive(BeBytes, Debug, PartialEq)]
+  |          ^^^^^^^
+  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
