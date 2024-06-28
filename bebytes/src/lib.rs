@@ -1,7 +1,13 @@
+#![no_std]
+
+#[cfg(feature = "std")]
+extern crate std;
 #[cfg(feature = "std")]
 use std::boxed::Box;
 #[cfg(feature = "std")]
 use std::error::Error;
+#[cfg(feature = "std")]
+use std::vec::Vec;
 
 #[cfg(not(feature = "std"))]
 use core::convert::Infallible;
