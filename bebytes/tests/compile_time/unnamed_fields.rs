@@ -1,6 +1,6 @@
 use bebytes::BeBytes;
 #[cfg(not(feature = "std"))]
-use core::fmt::Write;
+extern crate alloc;
 
 #[derive(BeBytes)]
 enum UnsupportedEnum {
