@@ -1,4 +1,6 @@
 use bebytes::BeBytes;
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 #[derive(BeBytes, Debug, PartialEq, Clone)]
 pub struct ArrayedStruct {

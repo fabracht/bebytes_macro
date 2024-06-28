@@ -7,14 +7,11 @@ use core::fmt::Write;
 use std::fmt::Write;
 
 #[derive(BeBytes, Debug, PartialEq)]
-struct U8 {
-    #[U8(size(1), pos(0))]
+struct Char {
+    #[U8(size(4), pos(0))]
     first: u8,
-    #[U8(size(3), pos(1))]
+    #[U8(size(4), pos(3))]
     second: u8,
-    #[U8(size(4), pos(4))]
-    third: u8,
-    fourth: u8,
 }
 
 fn main() {}

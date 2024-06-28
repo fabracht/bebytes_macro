@@ -1,6 +1,10 @@
+#![no_std]
 extern crate alloc;
 extern crate proc_macro;
-use alloc::vec::Vec;
+
+use alloc::{borrow::ToOwned, string::ToString, vec::Vec};
+
+use core::fmt::Write;
 use proc_macro::TokenStream;
 use quote::{__private::Span, quote, quote_spanned};
 use syn::{
@@ -16,6 +20,12 @@ const SUPPORTED_PRIMITIVES: [&str; 10] = [
     "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
 ];
 
+#[cfg(feature = "std")]
+extern crate std;
+
+#[cfg(not(feature = "std"))]
+use core::fmt::Write;
+
 // BeBytes makes your bit shifting life a thing of the past
 #[proc_macro_derive(BeBytes, attributes(U8, With, FromField))]
 pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
@@ -29,17 +39,13 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     let mut bit_sum = Vec::new();
     let mut field_writing = Vec::new();
     let mut named_fields = Vec::new();
-    // let mut lifetime_params = Vec::new();
+
     match input.data {
         Data::Struct(data) => match data.fields {
             Fields::Named(fields) => {
                 let struct_field_names = fields.named.iter().map(|f| &f.ident).collect::<Vec<_>>();
 
-                // Total size tracks the total size of the U8 attributes
                 let mut total_size: usize = 0;
-                // Check for the last field. This is used to check if the Vec is the last field
-                // We can't have a Vec in the middle of a struct because we have no way of dealing
-                // with the variable size of the Vec
                 let last_field = fields.named.last();
                 let mut is_last_field = false;
 
@@ -47,29 +53,22 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     if let Some(last_field) = last_field {
                         is_last_field = last_field.ident == field.ident;
                     }
-                    // initialize u8 flag to false
                     let mut u8_attribute_present = false;
-
-                    // get the attributes of the field
                     let attributes = field.attrs.clone();
-
-                    // get the name of the field
                     let field_name = field.ident.clone().unwrap();
-                    // get the type of the field
                     let field_type = &field.ty;
-                    let (pos, mut size, vec_size_ident) =
+                    let (pos, mut size, vec_size_ident_option) =
                         parse_attributes(attributes, &mut u8_attribute_present, &mut errors);
 
-                    // check if the U8 attribute is present
                     if u8_attribute_present {
                         match field_type {
-                            // if field is U8, we apply bit shifting
                             syn::Type::Path(tp) if !is_supported_primitive_type(tp) => {
                                 let error = syn::Error::new(
                                     field_type.span(),
                                     "Unsupported type for U8 attribute",
                                 );
                                 errors.push(error.to_compile_error());
+                                break;
                             }
                             _ => {}
                         }
@@ -80,7 +79,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     syn::Error::new(field_type.span(), "Type not supported'");
                                 errors.push(error.to_compile_error());
                                 0
-                            }); // retrieve position and size from attributes
+                            });
                         if pos.is_none() && size.is_none() {
                             let error = syn::Error::new(
                                 field.span(),
@@ -88,36 +87,32 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             );
                             errors.push(error.to_compile_error());
                         }
-                        // Deal with the position and size
                         if let (Some(pos), Some(size)) = (pos, size) {
                             bit_sum.push(quote! {bit_sum += #size;});
 
-                            // set the bit mask
                             let mask: u128 = (1 << size) - 1;
-                            // add runtime check if the value requested is in the valid range for that type
                             field_limit_check.push(quote! {
                                 if #field_name > #mask as #field_type {
-                                    let err_msg = format!(
-                                        "Value of field {} is out of range (max value: {})",
+                                    #[cfg(not(feature = "std"))]
+                                    let mut err_msg = alloc::string::String::new();
+
+                                    #[cfg(feature = "std")]
+                                    let mut err_msg = std::string::String::new();
+                                    core::write!(&mut err_msg, "Value of field {} is out of range (max value: {})",
                                         stringify!(#field_name),
                                         #mask
-                                    );
-                                    let err = std::io::Error::new(std::io::ErrorKind::Other, err_msg);
-                                    panic!("{}", err);
+                                    ).unwrap();
+                                    panic!("{}", err_msg);
                                 }
                             });
 
-                            // check if the position is in sequence
                             if pos % 8 != total_size % 8 {
-                                let message = format!(
-                                "U8 attributes must obey the sequence specified by the previous attributes. Expected position {} but got {}",
-                                total_size, pos
-                            );
+                                let mut message = alloc::string::String::new();
+                                core::write!(&mut message, "U8 attributes must obey the sequence specified by the previous attributes. Expected position {} but got {}", total_size, pos).unwrap();
                                 errors.push(
                                     syn::Error::new_spanned(&field, message).to_compile_error(),
                                 );
                             }
-                            // add the parsing code for the field
                             if number_length > 1 {
                                 let chunks = generate_chunks(
                                     number_length,
@@ -126,25 +121,14 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
                                 field_parsing.push(quote! {
                                     let mut inner_total_size = #total_size;
-                                    // Initialize the field
                                     let mut #field_name = 0 as #field_type;
-                                    // In order to use the mask, we need to reset the multi-byte
-                                    // field to it's original position
-                                    // To do that, we can iterate over chunks of the bytes array
                                     bytes.chunks(#number_length).for_each(|chunk| {
-                                        // First we parse the chunk into the field type
                                         let u_type = #field_type::from_be_bytes(#chunks);
-                                        // Then we shift the u_type to the right based on its actual size
-                                        // If the field size attribute is 14, we need to shift 2 bytes to the right
-                                        // If the field size attribute is 16, we need to shift 0 bytes to the right
                                         let shift_left = _bit_sum % 8;
                                         let left_shifted_u_type = u_type << shift_left;
                                         let shift_right = 8 * #number_length - #size;
                                         let shifted_u_type = left_shifted_u_type >> shift_right;
-                                        // Then we mask the shifted value to delete unwanted bits
-                                        // and that becomes the field value
                                         #field_name = shifted_u_type & #mask as #field_type;
-
                                     });
                                     _bit_sum += #size;
                                 });
@@ -157,32 +141,16 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                             #mask
                                         );
                                     }
-                                    // println!("Field name {}", stringify!(#field_name));
                                     let masked_value = #field_name & #mask as #field_type;
-                                    // The shift factor tells us about the current position in the byte
-                                    // It's the size of the number in bits minus the size requested in bits
-                                    // plus the current position in the byte
                                     let shift_left = (#number_length * 8) - #size;
-                                    // println!("shift_left: {}", shift_left);
                                     let shift_right = (#pos % 8);
-                                    // println!("shift_right: {}", shift_right);
-                                    // The shifted value aligns the value with the current position in the byte
                                     let shifted_masked_value = (masked_value << shift_left) >> shift_right;
-                                    // println!("shifted_masked_value: {:08b}", shifted_masked_value);
-                                    // We split the value into bytes
                                     let byte_values = #field_type::to_be_bytes(shifted_masked_value);
-                                    // println!("byte_values: {:?}", byte_values);
-                                    // Iterating over the bytes. The first byte always fills a byte completely.
-                                    // The following bytes will fill the second, third, ... byte and so on. So,
-                                    // we need to increase the index value in the bytes array by the index of the
-                                    // current byte in the input sequence.
-                                    // The last byte may or may not fill the byte completely.
                                     for i in 0..#number_length {
                                         if bytes.len() <= _bit_sum / 8 + i {
                                             bytes.resize(_bit_sum / 8 + i + 1, 0);
                                         }
                                         bytes[_bit_sum / 8 + i] |= byte_values[i];
-                                        // println!("bytes[{}]: {:08b}", _bit_sum / 8 + i, bytes[_bit_sum / 8 + i]);
                                     }
                                     _bit_sum += #size;
                                 });
@@ -191,7 +159,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     let #field_name = (bytes[_bit_sum / 8] as #field_type >> (7 - (#size + #pos % 8 - 1) as #field_type )) & (#mask as #field_type);
                                     _bit_sum += #size;
                                 });
-                                // add the writing code for the field
                                 field_writing.push(quote! {
                                     if #field_name > #mask as #field_type {
                                         panic!(
@@ -205,38 +172,24 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                         bytes.resize(_bit_sum / 8 + 1, 0);
                                     }
                                     bytes[_bit_sum / 8] |= (#field_name as u8) << (7 - (#size - 1) - #pos % 8 );
-                                    // println!("field_name {} left shift {} bytes[{}]", stringify!(#field_name), (7 - (#size - 1) - #pos % 8 ), _bit_sum / 8);
                                     _bit_sum += #size;
                                 });
                             }
                             total_size += size;
                         }
                     } else {
-                        // if field is not U8, total_size has to be a multiple of 8
                         if total_size % 8 != 0 {
-                            errors.push(
-                                syn::Error::new_spanned(
-                                    &field,
-                                    "U8 attributes must add up to 8 before any other non U8 field is added",
-                                )
-                                .to_compile_error(),
-                            );
+                            errors.push(syn::Error::new_spanned(&field, "U8 attributes must add up to 8 before any other non U8 field is added").to_compile_error());
                         }
-                        // supported primitive types
                         match field_type {
-                            // if field is number type, we apply be bytes conversion
-                            syn::Type::Path(tp) if is_primitive_type(tp) =>
-                            {
+                            syn::Type::Path(tp) if is_primitive_type(tp) => {
                                 named_fields.push(quote! { let #field_name = self.#field_name; });
-
-                                // get the size of the number in bytes
                                 let field_size =
                                     match get_number_size(field_type, &field, &mut errors) {
                                         Some(value) => value,
                                         None => continue,
                                     };
                                 bit_sum.push(quote! { bit_sum += #field_size * 8;});
-                                // write the parse and writing code for the field
                                 parse_write_number(
                                     field_size,
                                     &mut field_parsing,
@@ -244,12 +197,12 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     field_type,
                                     &mut field_writing,
                                 );
-
                             }
-                            syn::Type::Array(tp) => { // if field is an Array
-                                named_fields.push(quote! { let #field_name = self.#field_name.to_owned(); });
+                            syn::Type::Array(tp) => {
+                                named_fields.push(
+                                    quote! { let #field_name = self.#field_name.to_owned(); },
+                                );
 
-                                // get the size of the array
                                 let array_length: usize;
                                 let len = tp.len.clone();
                                 match len {
@@ -283,12 +236,10 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     }
                                 }
                                 if let syn::Type::Path(elem) = *tp.elem.clone() {
-                                    // Retrieve type segments
                                     let syn::TypePath {
                                         path: syn::Path { segments, .. },
                                         ..
                                     } = elem;
-                                    // Array must be of bytes
                                     match &segments[0] {
                                         syn::PathSegment {
                                             ident,
@@ -317,12 +268,13 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     };
                                 }
                             }
-                            // if field is a non-empty Vec and is made of a primitive type
                             syn::Type::Path(tp)
                                 if !tp.path.segments.is_empty()
                                     && tp.path.segments[0].ident == "Vec" =>
                             {
-                                named_fields.push(quote! { let #field_name = self.#field_name.to_owned(); });
+                                named_fields.push(
+                                    quote! { let #field_name = self.#field_name.to_owned(); },
+                                );
 
                                 let inner_type = match solve_for_inner_type(tp, "Vec") {
                                     Some(t) => t,
@@ -337,18 +289,28 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 };
 
                                 if let syn::Type::Path(inner_tp) = &inner_type {
-                                    if is_primitive_type(inner_tp)
-                                    {
-                                        if let Some(vec_size_ident) = vec_size_ident {
+                                    if is_primitive_type(inner_tp) {
+                                        if let Some(vec_size_ident) = vec_size_ident_option {
                                             bit_sum.push(quote! {
-                                                bit_sum = 2<<16 as usize;
+                                                bit_sum = 4096 * 8;
                                             });
 
                                             field_parsing.push(quote! {
                                                 let vec_length = #vec_size_ident as usize;
                                                 byte_index = _bit_sum / 8;
                                                 let end_index = byte_index + vec_length;
-                                                let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                                                if end_index > bytes.len() {
+                                                    #[cfg(feature = "std")]
+                                                    let mut error_message = std::string::String::new();
+                                                    #[cfg(not(feature = "std"))]
+                                                    let mut error_message = alloc::string::String::new();
+                                                    core::write!(&mut error_message, "Not enough bytes to parse a vector of size {}", vec_length).unwrap();
+                                                    panic!("{}", error_message);
+                                                }
+                                                #[cfg(feature = "std")]
+                                                let #field_name = std::vec::Vec::from(&bytes[byte_index..end_index]);
+                                                #[cfg(not(feature = "std"))]
+                                                let #field_name = alloc::vec::Vec::from(&bytes[byte_index..end_index]);
                                                 _bit_sum += vec_length * 8;
                                             });
                                         } else if let Some(s) = size.take() {
@@ -359,30 +321,38 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                                 let vec_length = #s as usize;
                                                 byte_index = _bit_sum / 8;
                                                 let end_index = byte_index + vec_length;
-                                                let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                                                #[cfg(feature = "std")]
+                                                let #field_name = std::vec::Vec::from(&bytes[byte_index..end_index]);
+
+                                                #[cfg(not(feature = "std"))]
+                                                let #field_name = alloc::vec::Vec::from(&bytes[byte_index..end_index]);
+
                                                 _bit_sum += #s * 8;
                                             });
                                         } else {
                                             bit_sum.push(quote! {
-                                                bit_sum = 2<<16 as usize;
+                                                bit_sum = 4096 * 8;
                                             });
                                             field_parsing.push(quote! {
                                                 byte_index = _bit_sum / 8;
-                                                let #field_name = Vec::from(&bytes[byte_index..]);
+                                                #[cfg(feature = "std")]
+                                                let #field_name = std::vec::Vec::from(&bytes[byte_index..]);
+
+                                                #[cfg(not(feature = "std"))]
+                                                let #field_name = alloc::vec::Vec::from(&bytes[byte_index..]);
+
                                                 _bit_sum += #field_name.len() * 8;
                                             });
-                                            // If the current field is not the last field, raise an error
                                             if !is_last_field {
                                                 let error = syn::Error::new(
                                                     field.ty.span(),
-                                                    "Vectors can only be used for padding the end of a struct",
+                                                    "Unbounded vectors can only be used as padding at the end of a struct",
                                                 );
                                                 errors.push(error.to_compile_error());
                                             }
                                         }
                                         field_writing.push(quote! {
                                             let field_length = &#field_name.len();
-                                            // Vec type
                                             bytes.extend_from_slice(&#field_name);
                                             _bit_sum += #field_name.len() * 8;
                                         });
@@ -395,14 +365,15 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     }
                                 }
                             }
-                            syn::Type::Path(tp) // if field is a non-empty Option
+                            syn::Type::Path(tp)
                                 if !tp.path.segments.is_empty()
                                     && tp.path.segments[0].ident == "Option" =>
                             {
                                 if !tp.path.segments.is_empty()
                                     && tp.path.segments[0].ident == "Option"
                                 {
-                                    named_fields.push(quote! { let #field_name = self.#field_name; });
+                                    named_fields
+                                        .push(quote! { let #field_name = self.#field_name; });
 
                                     let inner_type = match solve_for_inner_type(tp, "Option") {
                                         Some(t) => t,
@@ -417,9 +388,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     };
 
                                     if let syn::Type::Path(inner_tp) = &inner_type {
-                                        if is_primitive_type(inner_tp)
-                                        {
-                                            // get the size of the number in bytes
+                                        if is_primitive_type(inner_tp) {
                                             let field_size = match get_number_size(
                                                 &inner_type,
                                                 &field,
@@ -430,7 +399,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                             };
                                             bit_sum.push(quote! { bit_sum += 8 * #field_size;});
                                             field_parsing.push(quote! {
-                                                // Option type
                                                 byte_index = _bit_sum / 8;
                                                 end_byte_index = byte_index + #field_size;
                                                 let #field_name = if bytes[byte_index..end_byte_index] == [0_u8; #field_size] {
@@ -460,19 +428,20 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     }
                                 }
                             }
-                            syn::Type::Path(tp)  // Struct case
+                            syn::Type::Path(tp)
                                 if !tp.path.segments.is_empty()
                                     && !is_primitive_identity(&tp.path.segments[0].ident) =>
                             {
-                                named_fields.push(quote! { let #field_name = self.#field_name.to_owned(); });
+                                named_fields.push(
+                                    quote! { let #field_name = self.#field_name.to_owned(); },
+                                );
 
                                 bit_sum.push(quote! { bit_sum += 8 * #field_type::field_size();});
                                 field_parsing.push(quote_spanned! { field.span() =>
                                     byte_index = _bit_sum / 8;
-                                    // let predicted_size = core::mem::size_of::<#field_type>();
                                     let predicted_size = #field_type::field_size();
                                     end_byte_index = usize::min(bytes.len(), byte_index + predicted_size);
-                                    let (#field_name, bytes_read) = #field_type::try_from_be_bytes(&bytes[byte_index..end_byte_index])?;
+                                    let (#field_name, bytes_read) = #field_type::try_from_be_bytes(&bytes[byte_index..end_byte_index]).unwrap();
                                     _bit_sum += bytes_read * 8;
                                 });
                                 field_writing.push(quote_spanned! { field.span() =>
@@ -482,8 +451,13 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 });
                             }
                             _ => {
-                                let error_message =
-                                    format!("Unsupported type for field {}", field_name);
+                                let mut error_message = alloc::string::String::new();
+                                core::write!(
+                                    &mut error_message,
+                                    "Unsupported type for field {}",
+                                    field_name
+                                )
+                                .unwrap();
                                 let error = syn::Error::new(field.ty.span(), error_message);
                                 errors.push(error.to_compile_error());
                             }
@@ -491,7 +465,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     }
                 }
 
-                // Generate the code for the constructor
                 let constructor_arg_list = fields.named.iter().map(|f| {
                     let field_ident = &f.ident;
                     let field_type = &f.ty;
@@ -499,7 +472,13 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 });
                 let expanded = quote! {
                     impl #my_trait_path for #name {
+                        #[cfg(feature = "std")]
                         fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
+
+                            if bytes.is_empty() {
+                                return Err("No bytes provided.".into());
+                            }
+
                             let mut _bit_sum = 0;
                             let mut byte_index = 0;
                             let mut end_byte_index = 0;
@@ -510,8 +489,39 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             }, _bit_sum / 8))
                         }
 
-                        fn to_be_bytes(&self) -> Vec<u8> {
-                            let mut bytes = Vec::with_capacity(256);
+                        #[cfg(not(feature = "std"))]
+                        fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), core::convert::Infallible> {
+                            extern crate alloc;
+
+                            if bytes.is_empty() {
+                                panic!("No bytes provided.");
+                            }
+                            let mut _bit_sum = 0;
+                            let mut byte_index = 0;
+                            let mut end_byte_index = 0;
+                            let buffer_size = bytes.len();
+                            #(#field_parsing)*
+                            Ok((Self {
+                                #( #struct_field_names, )*
+                            }, _bit_sum / 8))
+                        }
+
+                        #[cfg(not(feature = "std"))]
+                        fn to_be_bytes(&self) -> alloc::vec::Vec<u8> {
+                            let mut bytes = alloc::vec::Vec::with_capacity(256);
+                            let mut _bit_sum = 0;
+                            #(
+                                #named_fields
+                                #field_writing
+                            )*
+                            bytes
+                        }
+
+                        #[cfg(feature = "std")]
+                        fn to_be_bytes(&self) -> std::vec::Vec<u8> {
+                            ;
+
+                            let mut bytes = std::vec::Vec::with_capacity(256);
                             let mut _bit_sum = 0;
                             #(
                                 #named_fields
@@ -527,7 +537,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
                     }
 
-                    impl  #name {
+                    impl #name {
                         #[allow(clippy::too_many_arguments)]
                         pub fn new(#(#constructor_arg_list,)*) -> Self {
                             #(#field_limit_check)*
@@ -576,36 +586,74 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     };
                     (ident, assigned_value)
                 })
+                .collect::<alloc::vec::Vec<_>>();
+
+            let from_be_bytes_arms = values
+                .iter()
+                .map(|(ident, assigned_value)| {
+                    quote! {
+                        #assigned_value => Ok((Self::#ident, 1)),
+                    }
+                })
                 .collect::<Vec<_>>();
 
-            let from_be_bytes_arms = values.iter().map(|(ident, assigned_value)| {
-                quote! {
-                    #assigned_value => Ok((Self::#ident, 1)),
-                }
-            });
+            let to_be_bytes_arms = values
+                .iter()
+                .map(|(ident, assigned_value)| {
+                    quote! {
+                        Self::#ident => #assigned_value as u8,
+                    }
+                })
+                .collect::<Vec<_>>();
 
-            let to_be_bytes_arms = values.iter().map(|(ident, assigned_value)| {
-                quote! {
-                    Self::#ident => #assigned_value as u8,
-                }
-            });
-            // Generate the code for the enum
             let expanded = quote! {
                 impl #my_trait_path for #name {
+                    #[cfg(feature = "std")]
                     fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
+                        ;
+
                         if bytes.is_empty() {
-                            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, "No bytes provided.")));
+                            return Err("No bytes provided.".into());
+                        }
+                        let value = bytes[0];
+                        match value {
+                            #(#from_be_bytes_arms)*
+                            _ => Err(format!("No matching variant found for value {}", value).into()),
+                        }
+                    }
+
+                    #[cfg(not(feature = "std"))]
+                    fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), core::convert::Infallible> {
+                        ;
+
+                        if bytes.is_empty() {
+                            panic!("No bytes provided.");
                         }
 
                         let value = bytes[0];
                         match value {
                             #(#from_be_bytes_arms)*
-                            _ => Err(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("No matching variant found for value {}", value)))),
+                            _ => panic!("No matching variant found for value {}", value),
                         }
                     }
 
-                    fn to_be_bytes(&self) -> Vec<u8> {
-                        let mut bytes = Vec::with_capacity(1);
+                    #[cfg(not(feature = "std"))]
+                    fn to_be_bytes(&self) -> alloc::vec::Vec<u8> {
+                        ;
+
+                        let mut bytes = alloc::vec::Vec::with_capacity(1);
+                        let val = match self {
+                            #(#to_be_bytes_arms)*
+                        };
+                        bytes.push(val);
+                        bytes
+                    }
+
+                    #[cfg(feature = "std")]
+                    fn to_be_bytes(&self) -> std::vec::Vec<u8> {
+                        ;
+
+                        let mut bytes = std::vec::Vec::with_capacity(1);
                         let val = match self {
                             #(#to_be_bytes_arms)*
                         };
@@ -614,7 +662,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     }
 
                     fn field_size() -> usize {
-                        std::mem::size_of::<Self>()
+                        core::mem::size_of::<Self>()
                     }
                 }
             };
@@ -634,10 +682,10 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
 fn parse_write_number(
     field_size: usize,
-    field_parsing: &mut Vec<quote::__private::TokenStream>,
+    field_parsing: &mut alloc::vec::Vec<quote::__private::TokenStream>,
     field_name: &syn::Ident,
     field_type: &syn::Type,
-    field_writing: &mut Vec<quote::__private::TokenStream>,
+    field_writing: &mut alloc::vec::Vec<quote::__private::TokenStream>,
 ) {
     field_parsing.push(quote! {
         byte_index = _bit_sum / 8;
@@ -651,7 +699,6 @@ fn parse_write_number(
         });
     });
     field_writing.push(quote! {
-        // bytes[#byte_index..#end_byte_index].copy_from_slice(&#field_name.to_be_bytes());
         let field_slice = &#field_name.to_be_bytes();
         bytes.extend_from_slice(field_slice);
         _bit_sum += field_slice.len() * 8;
@@ -661,7 +708,7 @@ fn parse_write_number(
 fn get_number_size(
     field_type: &syn::Type,
     field: &syn::Field,
-    errors: &mut Vec<quote::__private::TokenStream>,
+    errors: &mut alloc::vec::Vec<quote::__private::TokenStream>,
 ) -> Option<usize> {
     let field_size = match &field_type {
         syn::Type::Path(tp) if tp.path.is_ident("i8") || tp.path.is_ident("u8") => 1,
@@ -694,79 +741,90 @@ fn parse_attributes(
     let mut pos = None;
     let mut size = None;
     let mut field = None;
+
     for attr in attributes {
         if attr.path().is_ident("U8") {
             *u8_attribute_present = true;
-            let nested_result = attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("pos") || meta.path.is_ident("size") {
-                    if meta.path.is_ident("pos") {
-                        let content;
-                        parenthesized!(content in meta.input);
-                        let lit: LitInt = content.parse()?;
-                        let n: usize = lit.base10_parse()?;
-                        pos = Some(n);
-                        return Ok(());
-                    }
-                    if meta.path.is_ident("size") {
-                        let content;
-                        parenthesized!(content in meta.input);
-                        let lit: LitInt = content.parse()?;
-                        let n: usize = lit.base10_parse()?;
-                        size = Some(n);
-                        return Ok(());
-                    }
-                } else {
-                    return Err(meta.error(
-                        "Allowed attributes are `pos` and `size` - Example: #[U8(pos=1, size=3)]"
-                            .to_string(),
-                    ));
-                }
-                Ok(())
-            });
-            if let Err(e) = nested_result {
+            if let Err(e) = parse_u8_attribute(&attr, &mut pos, &mut size) {
                 errors.push(e.to_compile_error());
             }
         } else if attr.path().is_ident("With") {
-            if let Err(e) = attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("size") {
-                    let content;
-                    parenthesized!(content in meta.input);
-                    let lit: LitInt = content.parse()?;
-                    let n: usize = lit.base10_parse()?;
-                    size = Some(n);
-                } else {
-                    let e = meta.error(
-                        "Allowed attributes are `size` - Example: #[With(size(3))]".to_string(),
-                    );
-                    errors.push(e.to_compile_error());
-                    return Err(e);
-                }
-                Ok(())
-            }) {
+            if let Err(e) = parse_with_attribute(&attr, &mut size) {
                 errors.push(e.to_compile_error());
-            };
+            }
         } else if attr.path().is_ident("FromField") {
-            let _ = attr.parse_nested_meta(|meta| {
-                if let Some(name) = meta.path.get_ident().cloned() {
-                    field = Some(name.to_owned());
-                } else {
-                    return Err(meta.error(
-                        "Allowed attributes are `field_name` - Example: #[From(field_name)]"
-                            .to_string(),
-                    ));
-                }
-                Ok(())
-            });
+            if let Err(e) = parse_from_field_attribute(&attr, &mut field) {
+                errors.push(e.to_compile_error());
+            }
         }
     }
+
     (pos, size, field)
 }
 
-/// Given a type and an identifier, `solve_for_inner_type` attempts to retrieve the inner type of the input type
-/// that is wrapped by the provided identifier. If the input type does not contain the specified identifier or
-/// has more than one generic argument, the function returns `None`.
+fn parse_u8_attribute(
+    attr: &syn::Attribute,
+    pos: &mut Option<usize>,
+    size: &mut Option<usize>,
+) -> Result<(), syn::Error> {
+    attr.parse_nested_meta(|meta| {
+        if meta.path.is_ident("pos") {
+            let content;
+            parenthesized!(content in meta.input);
+            let lit: LitInt = content.parse()?;
+            let n: usize = lit.base10_parse()?;
+            *pos = Some(n);
+            Ok(())
+        } else if meta.path.is_ident("size") {
+            let content;
+            parenthesized!(content in meta.input);
+            let lit: LitInt = content.parse()?;
+            let n: usize = lit.base10_parse()?;
+            *size = Some(n);
+            Ok(())
+        } else {
+            Err(meta.error(
+                "Allowed attributes are `pos` and `size` - Example: #[U8(pos=1, size=3)]"
+                    .to_string(),
+            ))
+        }
+    })
+}
+
+fn parse_with_attribute(attr: &syn::Attribute, size: &mut Option<usize>) -> Result<(), syn::Error> {
+    attr.parse_nested_meta(|meta| {
+        if meta.path.is_ident("size") {
+            let content;
+            parenthesized!(content in meta.input);
+            let lit: LitInt = content.parse()?;
+            let n: usize = lit.base10_parse()?;
+            *size = Some(n);
+            Ok(())
+        } else {
+            let e =
+                meta.error("Allowed attributes are `size` - Example: #[With(size(3))]".to_string());
+            Err(e)
+        }
+    })
+}
+
+fn parse_from_field_attribute(
+    attr: &syn::Attribute,
+    field: &mut Option<proc_macro2::Ident>,
+) -> Result<(), syn::Error> {
+    attr.parse_nested_meta(|meta| {
+        if let Some(name) = meta.path.get_ident().cloned() {
+            *field = Some(name.to_owned());
+            Ok(())
+        } else {
+            Err(meta.error(
+                "Allowed attributes are `field_name` - Example: #[From(field_name)]".to_string(),
+            ))
+        }
+    })
+}
+
 fn solve_for_inner_type(input: &syn::TypePath, identifier: &str) -> Option<syn::Type> {
-    // Retrieve type segments
     let syn::TypePath {
         path: syn::Path { segments, .. },
         ..
@@ -788,7 +846,6 @@ fn solve_for_inner_type(input: &syn::TypePath, identifier: &str) -> Option<syn::
     Some(inner_type.clone())
 }
 
-// Helper function to check if a given identifier is a primitive type
 fn is_primitive_identity(ident: &syn::Ident) -> bool {
     PRIMITIVES.iter().any(|&primitive| ident == primitive)
 }

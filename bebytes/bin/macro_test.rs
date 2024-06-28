@@ -1,7 +1,14 @@
 #![allow(clippy::assign_op_pattern)]
 
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+#[cfg(not(feature = "std"))]
+use core::fmt::Write;
+#[cfg(feature = "std")]
+use std::fmt::Write;
+
 use bebytes::BeBytes;
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let client_setup_response = ArrayedStruct::new(Modes::new(0), [1; 1], [2; 2], [3; 3]);
     let bytes = client_setup_response.to_be_bytes();
     println!("Bytes len: {}", bytes.len());
@@ -73,12 +80,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for byte in &nested_bytes {
         print!("{:08b} ", byte);
     }
-
     let dummy_enum = DummyEnum::ServerStart;
     let dummy_enum_bytes = dummy_enum.to_be_bytes();
-    println!("DummyEnum: {:?}", dummy_enum_bytes);
     let re_dummy_enum = DummyEnum::try_from_be_bytes(&dummy_enum_bytes);
-    println!("{:?}", re_dummy_enum);
     assert_eq!(dummy_enum, re_dummy_enum.unwrap().0);
 
     let u_8 = U8 {
@@ -127,21 +131,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let none_optional_bytes = none_optional.to_be_bytes();
     println!("Optional None: {:?}", none_optional_bytes);
+    let with_tailing_vec = WithTailingVec {
+        pre_tail: 2,
+        tail: vec![2, 3],
+        post_tail: 3,
+    };
+    let with_tailing_vec_bytes = with_tailing_vec.to_be_bytes();
+    println!("WithTailingVec: {:?}", with_tailing_vec_bytes);
+    let re_with_tailing_vec = WithTailingVec::try_from_be_bytes(&with_tailing_vec_bytes);
+    println!("ReWithTailingVec: {:?}", re_with_tailing_vec);
+    assert_eq!(with_tailing_vec, re_with_tailing_vec.unwrap().0);
+
+    let with_size_struct = WithSizeStruct {
+        innocent: 1,
+        real_tail: vec![2, 3, 4],
+    };
+    let with_size_struct_bytes = with_size_struct.to_be_bytes();
+    println!("WithSizeStruct: {:?}", with_size_struct_bytes);
+    let re_with_size_struct = WithSizeStruct::try_from_be_bytes(&with_size_struct_bytes);
+    println!("ReWithSizeStruct: {:?}", re_with_size_struct);
+    assert_eq!(with_size_struct, re_with_size_struct.unwrap().0);
 
     let innocent_struct = InnocentStruct {
         innocent: 1,
-        mid_tail: WithTailingVec {
-            pre_tail: 5,
-            tail: vec![2, 3],
-            post_tail: 3,
-        },
         real_tail: vec![4, 5],
     };
     let innocent_struct_bytes = innocent_struct.to_be_bytes();
     println!("InnocentStruct: {:?}", innocent_struct_bytes);
-    let re_innocent_struct = InnocentStruct::try_from_be_bytes(&innocent_struct_bytes)?;
+    let re_innocent_struct = InnocentStruct::try_from_be_bytes(&innocent_struct_bytes);
     println!("ReInnocentStruct: {:?}", re_innocent_struct);
-    assert_ne!(innocent_struct, re_innocent_struct.0);
+    assert_eq!(innocent_struct, re_innocent_struct.unwrap().0);
 
     let complete_func = CompleteFunctionality::new(
         1,
@@ -165,9 +184,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let complete_func_bytes = complete_func.to_be_bytes();
     println!("CompleteFunctionality: {:?}", complete_func_bytes);
-    let re_complete_func = CompleteFunctionality::try_from_be_bytes(&complete_func_bytes)?;
+    let re_complete_func = CompleteFunctionality::try_from_be_bytes(&complete_func_bytes);
     println!("ReCompleteFunctionality: {:?}", re_complete_func);
-    assert_eq!(complete_func, re_complete_func.0);
+    assert_eq!(complete_func, re_complete_func.unwrap().0);
     let u_64 = U64 {
         first: 1,
         second: (1 << 62) - 1,
@@ -200,8 +219,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let re_i_8 = I8::try_from_be_bytes(&i_8_bytes);
     println!("{:?}", re_i_8);
     assert_eq!(i_8, re_i_8.unwrap().0);
-
-    Ok(())
 }
 
 #[derive(BeBytes, Debug, PartialEq)]
@@ -297,9 +314,9 @@ struct U32 {
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 pub enum DummyEnum {
-    SetupResponse = 1,
-    ServerStart = 2,
-    SetupRequest = 3,
+    SetupResponse,
+    ServerStart,
+    SetupRequest,
 }
 
 #[derive(BeBytes, Debug, PartialEq, Clone)]
@@ -388,6 +405,12 @@ struct WithTailingVec {
 #[derive(Debug, PartialEq, Clone, BeBytes)]
 struct InnocentStruct {
     innocent: u8,
-    mid_tail: WithTailingVec,
+    real_tail: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq, Clone, BeBytes)]
+struct WithSizeStruct {
+    innocent: u8,
+    #[With(size(3))]
     real_tail: Vec<u8>,
 }

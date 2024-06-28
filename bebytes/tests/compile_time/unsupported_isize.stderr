@@ -1,17 +1,17 @@
 error: Unsupported type for U8 attribute
- --> tests/compile_time/unsupported_isize.rs:8:13
-  |
-8 |     second: isize,
-  |             ^^^^^
+  --> tests/compile_time/unsupported_isize.rs:14:13
+   |
+14 |     second: isize,
+   |             ^^^^^
 
-error: Unsupported type
- --> tests/compile_time/unsupported_isize.rs:8:13
-  |
-8 |     second: isize,
-  |             ^^^^^
+error[E0425]: cannot find value `second` in this scope
+  --> tests/compile_time/unsupported_isize.rs:14:5
+   |
+14 |     second: isize,
+   |     ^^^^^^ not found in this scope
 
-error: Type not supported'
- --> tests/compile_time/unsupported_isize.rs:8:13
-  |
-8 |     second: isize,
-  |             ^^^^^
+error[E0425]: cannot find value `fourth` in this scope
+  --> tests/compile_time/unsupported_isize.rs:16:5
+   |
+16 |     fourth: u8,
+   |     ^^^^^^ not found in this scope

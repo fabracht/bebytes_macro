@@ -1,9 +1,25 @@
+#[cfg(feature = "std")]
+use std::boxed::Box;
+#[cfg(feature = "std")]
+use std::error::Error;
+
+#[cfg(not(feature = "std"))]
+use core::convert::Infallible;
+
 pub use bebytes_derive::BeBytes;
 
 pub trait BeBytes {
     fn field_size() -> usize;
+
     fn to_be_bytes(&self) -> Vec<u8>;
-    fn try_from_be_bytes(bytes: &'_ [u8]) -> Result<(Self, usize), Box<dyn std::error::Error>>
+
+    #[cfg(feature = "std")]
+    fn try_from_be_bytes(bytes: &'_ [u8]) -> core::result::Result<(Self, usize), Box<dyn Error>>
+    where
+        Self: Sized;
+
+    #[cfg(not(feature = "std"))]
+    fn try_from_be_bytes(bytes: &'_ [u8]) -> core::result::Result<(Self, usize), Infallible>
     where
         Self: Sized;
 }
