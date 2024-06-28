@@ -68,6 +68,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     "Unsupported type for U8 attribute",
                                 );
                                 errors.push(error.to_compile_error());
+                                break;
                             }
                             _ => {}
                         }
