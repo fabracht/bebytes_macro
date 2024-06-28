@@ -4,7 +4,6 @@ extern crate proc_macro;
 
 use alloc::{borrow::ToOwned, string::ToString, vec::Vec};
 
-use core::fmt::Write;
 use proc_macro::TokenStream;
 use quote::{__private::Span, quote, quote_spanned};
 use syn::{
@@ -23,7 +22,6 @@ const SUPPORTED_PRIMITIVES: [&str; 10] = [
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(not(feature = "std"))]
 use core::fmt::Write;
 
 // BeBytes makes your bit shifting life a thing of the past
