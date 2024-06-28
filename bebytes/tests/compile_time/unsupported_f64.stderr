@@ -1,24 +1,24 @@
 error: Unsupported type for U8 attribute
- --> tests/compile_time/unsupported_f64.rs:8:13
-  |
-8 |     second: f64,
-  |             ^^^
+  --> tests/compile_time/unsupported_f64.rs:12:13
+   |
+12 |     second: f64,
+   |             ^^^
 
 error[E0369]: no implementation for `f64 << usize`
- --> tests/compile_time/unsupported_f64.rs:3:10
+ --> tests/compile_time/unsupported_f64.rs:7:10
   |
-3 | #[derive(BeBytes, Debug, PartialEq)]
+7 | #[derive(BeBytes, Debug, PartialEq)]
   |          ^^^^^^^
   |
   = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0369]: no implementation for `f64 & f64`
- --> tests/compile_time/unsupported_f64.rs:3:10
-  |
-3 | #[derive(BeBytes, Debug, PartialEq)]
-  |          ^^^^^^^ f64
+  --> tests/compile_time/unsupported_f64.rs:7:10
+   |
+7  | #[derive(BeBytes, Debug, PartialEq)]
+   |          ^^^^^^^ f64
 ...
-8 |     second: f64,
-  |     ------ f64
-  |
-  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+12 |     second: f64,
+   |     ------ f64
+   |
+   = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)

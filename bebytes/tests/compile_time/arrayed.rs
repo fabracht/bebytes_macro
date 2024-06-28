@@ -1,4 +1,6 @@
 use bebytes::BeBytes;
+#[cfg(not(feature = "std"))]
+use core::fmt::Write;
 
 #[derive(BeBytes, Debug, PartialEq, Clone)]
 pub struct ArrayedStruct {

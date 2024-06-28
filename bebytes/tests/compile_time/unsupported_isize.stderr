@@ -1,17 +1,17 @@
 error: Unsupported type for U8 attribute
- --> tests/compile_time/unsupported_isize.rs:8:13
-  |
-8 |     second: isize,
-  |             ^^^^^
+  --> tests/compile_time/unsupported_isize.rs:12:13
+   |
+12 |     second: isize,
+   |             ^^^^^
 
 error: Unsupported type
- --> tests/compile_time/unsupported_isize.rs:8:13
-  |
-8 |     second: isize,
-  |             ^^^^^
+  --> tests/compile_time/unsupported_isize.rs:12:13
+   |
+12 |     second: isize,
+   |             ^^^^^
 
 error: Type not supported'
- --> tests/compile_time/unsupported_isize.rs:8:13
-  |
-8 |     second: isize,
-  |             ^^^^^
+  --> tests/compile_time/unsupported_isize.rs:12:13
+   |
+12 |     second: isize,
+   |             ^^^^^

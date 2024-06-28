@@ -1,5 +1,13 @@
 error: Only named fields are supported
- --> tests/compile_time/unsupported_structure.rs:4:25
+ --> tests/compile_time/unsupported_structure.rs:8:25
   |
-4 | struct UnsupportedStruct(u8, u16, u32);
+8 | struct UnsupportedStruct(u8, u16, u32);
   |                         ^^^^^^^^^^^^^^
+
+warning: unused import: `std::fmt::Write`
+ --> tests/compile_time/unsupported_structure.rs:5:5
+  |
+5 | use std::fmt::Write;
+  |     ^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default

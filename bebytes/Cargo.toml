@@ -6,13 +6,7 @@ license = "MIT"
 repository = "https://github.com/fabracht/bebytes_macro"
 description = "A Rust library for serialization and deserialization of network structs."
 readme = "README.md"
-keywords = [
-    "serialization",
-    "deserialization",
-    "network",
-    "bytes",
-    "big-endian",
-]
+keywords = ["serialization", "deserialization", "network", "bytes", "no-std"]
 
 
 [[bin]]
@@ -25,3 +19,7 @@ bebytes_derive = "0.4"
 [dev-dependencies]
 trybuild = { version = "1.0.49", features = ["diff"] }
 test-case = "3.0"
+
+[features]
+default = ["std"]
+std = []

@@ -15,3 +15,7 @@ proc-macro = true
 syn = { version = "2.0", features = ["extra-traits", "parsing"] }
 quote = "1.0"
 proc-macro2 = "1.0"
+
+[features]
+default = ["std"]
+std = []
