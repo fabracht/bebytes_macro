@@ -1,8 +1,7 @@
-#![no_std]
-extern crate alloc;
-extern crate proc_macro;
+#![cfg_attr(not(feature = "std"), no_std)]
 
-use alloc::{borrow::ToOwned, string::ToString, vec::Vec};
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 use proc_macro::TokenStream;
 use quote::{__private::Span, quote, quote_spanned};
@@ -10,6 +9,12 @@ use syn::{
     parenthesized, parse_macro_input, spanned::Spanned, AngleBracketedGenericArguments, Data,
     DeriveInput, Fields, LitInt,
 };
+
+#[cfg(feature = "std")]
+use std::{string::ToString, vec::Vec};
+
+#[cfg(not(feature = "std"))]
+use alloc::{string::ToString, vec::Vec};
 
 const PRIMITIVES: [&str; 17] = [
     "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize", "f32",
@@ -19,12 +24,6 @@ const SUPPORTED_PRIMITIVES: [&str; 10] = [
     "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
 ];
 
-#[cfg(feature = "std")]
-extern crate std;
-
-use core::fmt::Write;
-
-// BeBytes makes your bit shifting life a thing of the past
 #[proc_macro_derive(BeBytes, attributes(U8, With, FromField))]
 pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -91,22 +90,18 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             let mask: u128 = (1 << size) - 1;
                             field_limit_check.push(quote! {
                                 if #field_name > #mask as #field_type {
-                                    #[cfg(not(feature = "std"))]
-                                    let mut err_msg = alloc::string::String::new();
-
-                                    #[cfg(feature = "std")]
-                                    let mut err_msg = std::string::String::new();
-                                    core::write!(&mut err_msg, "Value of field {} is out of range (max value: {})",
+                                    let mut err_msg = String::new();
+                                    core::fmt::write(&mut err_msg, format_args!("Value of field {} is out of range (max value: {})",
                                         stringify!(#field_name),
                                         #mask
-                                    ).unwrap();
+                                    )).unwrap();
                                     panic!("{}", err_msg);
                                 }
                             });
 
                             if pos % 8 != total_size % 8 {
-                                let mut message = alloc::string::String::new();
-                                core::write!(&mut message, "U8 attributes must obey the sequence specified by the previous attributes. Expected position {} but got {}", total_size, pos).unwrap();
+                                let mut message = String::new();
+                                core::fmt::write(&mut message, format_args!("U8 attributes must obey the sequence specified by the previous attributes. Expected position {} but got {}", total_size, pos)).unwrap();
                                 errors.push(
                                     syn::Error::new_spanned(&field, message).to_compile_error(),
                                 );
@@ -298,17 +293,11 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                                 byte_index = _bit_sum / 8;
                                                 let end_index = byte_index + vec_length;
                                                 if end_index > bytes.len() {
-                                                    #[cfg(feature = "std")]
-                                                    let mut error_message = std::string::String::new();
-                                                    #[cfg(not(feature = "std"))]
-                                                    let mut error_message = alloc::string::String::new();
-                                                    core::write!(&mut error_message, "Not enough bytes to parse a vector of size {}", vec_length).unwrap();
+                                                    let mut error_message = String::new();
+                                                    core::fmt::write(&mut error_message, format_args!("Not enough bytes to parse a vector of size {}", vec_length)).unwrap();
                                                     panic!("{}", error_message);
                                                 }
-                                                #[cfg(feature = "std")]
-                                                let #field_name = std::vec::Vec::from(&bytes[byte_index..end_index]);
-                                                #[cfg(not(feature = "std"))]
-                                                let #field_name = alloc::vec::Vec::from(&bytes[byte_index..end_index]);
+                                                let #field_name = Vec::from(&bytes[byte_index..end_index]);
                                                 _bit_sum += vec_length * 8;
                                             });
                                         } else if let Some(s) = size.take() {
@@ -319,12 +308,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                                 let vec_length = #s as usize;
                                                 byte_index = _bit_sum / 8;
                                                 let end_index = byte_index + vec_length;
-                                                #[cfg(feature = "std")]
-                                                let #field_name = std::vec::Vec::from(&bytes[byte_index..end_index]);
-
-                                                #[cfg(not(feature = "std"))]
-                                                let #field_name = alloc::vec::Vec::from(&bytes[byte_index..end_index]);
-
+                                                let #field_name = Vec::from(&bytes[byte_index..end_index]);
                                                 _bit_sum += #s * 8;
                                             });
                                         } else {
@@ -333,12 +317,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                             });
                                             field_parsing.push(quote! {
                                                 byte_index = _bit_sum / 8;
-                                                #[cfg(feature = "std")]
-                                                let #field_name = std::vec::Vec::from(&bytes[byte_index..]);
-
-                                                #[cfg(not(feature = "std"))]
-                                                let #field_name = alloc::vec::Vec::from(&bytes[byte_index..]);
-
+                                                let #field_name = Vec::from(&bytes[byte_index..]);
                                                 _bit_sum += #field_name.len() * 8;
                                             });
                                             if !is_last_field {
@@ -367,62 +346,55 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 if !tp.path.segments.is_empty()
                                     && tp.path.segments[0].ident == "Option" =>
                             {
-                                if !tp.path.segments.is_empty()
-                                    && tp.path.segments[0].ident == "Option"
-                                {
-                                    named_fields
-                                        .push(quote! { let #field_name = self.#field_name; });
+                                named_fields.push(quote! { let #field_name = self.#field_name; });
 
-                                    let inner_type = match solve_for_inner_type(tp, "Option") {
-                                        Some(t) => t,
-                                        None => {
-                                            let error = syn::Error::new(
-                                                field.ty.span(),
-                                                "Unsupported type for Option<T>",
-                                            );
-                                            errors.push(error.to_compile_error());
-                                            continue;
-                                        }
-                                    };
+                                let inner_type = match solve_for_inner_type(tp, "Option") {
+                                    Some(t) => t,
+                                    None => {
+                                        let error = syn::Error::new(
+                                            field.ty.span(),
+                                            "Unsupported type for Option<T>",
+                                        );
+                                        errors.push(error.to_compile_error());
+                                        continue;
+                                    }
+                                };
 
-                                    if let syn::Type::Path(inner_tp) = &inner_type {
-                                        if is_primitive_type(inner_tp) {
-                                            let field_size = match get_number_size(
-                                                &inner_type,
-                                                &field,
-                                                &mut errors,
-                                            ) {
+                                if let syn::Type::Path(inner_tp) = &inner_type {
+                                    if is_primitive_type(inner_tp) {
+                                        let field_size =
+                                            match get_number_size(&inner_type, &field, &mut errors)
+                                            {
                                                 Some(value) => value,
                                                 None => continue,
                                             };
-                                            bit_sum.push(quote! { bit_sum += 8 * #field_size;});
-                                            field_parsing.push(quote! {
-                                                byte_index = _bit_sum / 8;
-                                                end_byte_index = byte_index + #field_size;
-                                                let #field_name = if bytes[byte_index..end_byte_index] == [0_u8; #field_size] {
-                                                    None
-                                                } else {
-                                                    _bit_sum += 8 * #field_size;
-                                                    Some(<#inner_tp>::from_be_bytes({
-                                                        let slice = &bytes[byte_index..end_byte_index];
-                                                        let mut arr = [0; #field_size];
-                                                        arr.copy_from_slice(slice);
-                                                        arr
-                                                    }))
-                                                };
-                                            });
-                                            field_writing.push(quote! {
-                                                let be_bytes = &#field_name.unwrap_or(0).to_be_bytes();
-                                                bytes.extend_from_slice(be_bytes);
-                                                _bit_sum += be_bytes.len() * 8;
-                                            });
-                                        } else {
-                                            let error = syn::Error::new(
-                                                inner_type.span(),
-                                                "Unsupported type for Option<T>",
-                                            );
-                                            errors.push(error.to_compile_error());
-                                        }
+                                        bit_sum.push(quote! { bit_sum += 8 * #field_size;});
+                                        field_parsing.push(quote! {
+                                            byte_index = _bit_sum / 8;
+                                            end_byte_index = byte_index + #field_size;
+                                            let #field_name = if bytes[byte_index..end_byte_index] == [0_u8; #field_size] {
+                                                None
+                                            } else {
+                                                _bit_sum += 8 * #field_size;
+                                                Some(<#inner_tp>::from_be_bytes({
+                                                    let slice = &bytes[byte_index..end_byte_index];
+                                                    let mut arr = [0; #field_size];
+                                                    arr.copy_from_slice(slice);
+                                                    arr
+                                                }))
+                                            };
+                                        });
+                                        field_writing.push(quote! {
+                                            let be_bytes = &#field_name.unwrap_or(0).to_be_bytes();
+                                            bytes.extend_from_slice(be_bytes);
+                                            _bit_sum += be_bytes.len() * 8;
+                                        });
+                                    } else {
+                                        let error = syn::Error::new(
+                                            inner_type.span(),
+                                            "Unsupported type for Option<T>",
+                                        );
+                                        errors.push(error.to_compile_error());
                                     }
                                 }
                             }
@@ -439,7 +411,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     byte_index = _bit_sum / 8;
                                     let predicted_size = #field_type::field_size();
                                     end_byte_index = usize::min(bytes.len(), byte_index + predicted_size);
-                                    let (#field_name, bytes_read) = #field_type::try_from_be_bytes(&bytes[byte_index..end_byte_index]).unwrap();
+                                    let (#field_name, bytes_read) = #field_type::try_from_be_bytes(&bytes[byte_index..end_byte_index])?;
                                     _bit_sum += bytes_read * 8;
                                 });
                                 field_writing.push(quote_spanned! { field.span() =>
@@ -449,11 +421,10 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 });
                             }
                             _ => {
-                                let mut error_message = alloc::string::String::new();
-                                core::write!(
+                                let mut error_message = String::new();
+                                core::fmt::write(
                                     &mut error_message,
-                                    "Unsupported type for field {}",
-                                    field_name
+                                    format_args!("Unsupported type for field {}", field_name),
                                 )
                                 .unwrap();
                                 let error = syn::Error::new(field.ty.span(), error_message);
@@ -468,11 +439,10 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     let field_type = &f.ty;
                     quote! { #field_ident: #field_type }
                 });
+
                 let expanded = quote! {
                     impl #my_trait_path for #name {
-                        #[cfg(feature = "std")]
                         fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
-
                             if bytes.is_empty() {
                                 return Err("No bytes provided.".into());
                             }
@@ -487,39 +457,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             }, _bit_sum / 8))
                         }
 
-                        #[cfg(not(feature = "std"))]
-                        fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), core::convert::Infallible> {
-                            extern crate alloc;
-
-                            if bytes.is_empty() {
-                                panic!("No bytes provided.");
-                            }
-                            let mut _bit_sum = 0;
-                            let mut byte_index = 0;
-                            let mut end_byte_index = 0;
-                            let buffer_size = bytes.len();
-                            #(#field_parsing)*
-                            Ok((Self {
-                                #( #struct_field_names, )*
-                            }, _bit_sum / 8))
-                        }
-
-                        #[cfg(not(feature = "std"))]
-                        fn to_be_bytes(&self) -> alloc::vec::Vec<u8> {
-                            let mut bytes = alloc::vec::Vec::with_capacity(256);
-                            let mut _bit_sum = 0;
-                            #(
-                                #named_fields
-                                #field_writing
-                            )*
-                            bytes
-                        }
-
-                        #[cfg(feature = "std")]
-                        fn to_be_bytes(&self) -> std::vec::Vec<u8> {
-                            ;
-
-                            let mut bytes = std::vec::Vec::with_capacity(256);
+                        fn to_be_bytes(&self) -> Vec<u8> {
+                            let mut bytes = Vec::with_capacity(256);
                             let mut _bit_sum = 0;
                             #(
                                 #named_fields
@@ -544,7 +483,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             }
                         }
                     }
-
                 };
 
                 let output = quote! {
@@ -584,7 +522,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     };
                     (ident, assigned_value)
                 })
-                .collect::<alloc::vec::Vec<_>>();
+                .collect::<Vec<_>>();
 
             let from_be_bytes_arms = values
                 .iter()
@@ -605,11 +543,10 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 .collect::<Vec<_>>();
 
             let expanded = quote! {
-                impl #my_trait_path for #name {
-                    #[cfg(feature = "std")]
-                    fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
-                        ;
 
+
+                impl #my_trait_path for #name {
+                    fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
                         if bytes.is_empty() {
                             return Err("No bytes provided.".into());
                         }
@@ -620,38 +557,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
                     }
 
-                    #[cfg(not(feature = "std"))]
-                    fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), core::convert::Infallible> {
-                        ;
-
-                        if bytes.is_empty() {
-                            panic!("No bytes provided.");
-                        }
-
-                        let value = bytes[0];
-                        match value {
-                            #(#from_be_bytes_arms)*
-                            _ => panic!("No matching variant found for value {}", value),
-                        }
-                    }
-
-                    #[cfg(not(feature = "std"))]
-                    fn to_be_bytes(&self) -> alloc::vec::Vec<u8> {
-                        ;
-
-                        let mut bytes = alloc::vec::Vec::with_capacity(1);
-                        let val = match self {
-                            #(#to_be_bytes_arms)*
-                        };
-                        bytes.push(val);
-                        bytes
-                    }
-
-                    #[cfg(feature = "std")]
-                    fn to_be_bytes(&self) -> std::vec::Vec<u8> {
-                        ;
-
-                        let mut bytes = std::vec::Vec::with_capacity(1);
+                    fn to_be_bytes(&self) -> Vec<u8> {
+                        let mut bytes = Vec::with_capacity(1);
                         let val = match self {
                             #(#to_be_bytes_arms)*
                         };
@@ -680,10 +587,10 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
 fn parse_write_number(
     field_size: usize,
-    field_parsing: &mut alloc::vec::Vec<quote::__private::TokenStream>,
+    field_parsing: &mut Vec<proc_macro2::TokenStream>,
     field_name: &syn::Ident,
     field_type: &syn::Type,
-    field_writing: &mut alloc::vec::Vec<quote::__private::TokenStream>,
+    field_writing: &mut Vec<proc_macro2::TokenStream>,
 ) {
     field_parsing.push(quote! {
         byte_index = _bit_sum / 8;
@@ -706,7 +613,7 @@ fn parse_write_number(
 fn get_number_size(
     field_type: &syn::Type,
     field: &syn::Field,
-    errors: &mut alloc::vec::Vec<quote::__private::TokenStream>,
+    errors: &mut Vec<proc_macro2::TokenStream>,
 ) -> Option<usize> {
     let field_size = match &field_type {
         syn::Type::Path(tp) if tp.path.is_ident("i8") || tp.path.is_ident("u8") => 1,
@@ -734,7 +641,7 @@ fn get_number_size(
 fn parse_attributes(
     attributes: Vec<syn::Attribute>,
     u8_attribute_present: &mut bool,
-    errors: &mut Vec<quote::__private::TokenStream>,
+    errors: &mut Vec<proc_macro2::TokenStream>,
 ) -> (Option<usize>, Option<usize>, Option<proc_macro2::Ident>) {
     let mut pos = None;
     let mut size = None;
