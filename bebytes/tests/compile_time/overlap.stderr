@@ -1,6 +1,6 @@
 error: U8 attributes must obey the sequence specified by the previous attributes. Expected position 4 but got 3
-  --> tests/compile_time/overlap.rs:13:5
+  --> tests/compile_time/overlap.rs:11:5
    |
-13 | /     #[U8(size(4), pos(3))]
-14 | |     second: u8,
+11 | /     #[U8(size(4), pos(3))]
+12 | |     second: u8,
    | |______________^

@@ -1,13 +1,7 @@
 #![allow(clippy::assign_op_pattern)]
 
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-#[cfg(not(feature = "std"))]
-use core::fmt::Write;
-#[cfg(feature = "std")]
-use std::fmt::Write;
-
 use bebytes::BeBytes;
+
 fn main() {
     let client_setup_response = ArrayedStruct::new(Modes::new(0), [1; 1], [2; 2], [3; 3]);
     let bytes = client_setup_response.to_be_bytes();

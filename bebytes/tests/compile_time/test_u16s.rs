@@ -4,8 +4,6 @@ use bebytes::BeBytes;
 extern crate alloc;
 #[cfg(not(feature = "std"))]
 use core::fmt::Write;
-#[cfg(feature = "std")]
-use std::fmt::Write;
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 struct U16 {
