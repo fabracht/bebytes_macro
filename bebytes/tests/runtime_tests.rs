@@ -5,8 +5,7 @@ use test_case::test_case;
 extern crate alloc;
 #[cfg(not(feature = "std"))]
 use core::fmt::Write;
-#[cfg(feature = "std")]
-use std::fmt::Write;
+
 #[derive(BeBytes, Debug, PartialEq)]
 pub struct ErrorEstimate {
     #[U8(size(1), pos(0))]

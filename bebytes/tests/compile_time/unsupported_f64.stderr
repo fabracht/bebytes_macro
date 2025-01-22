@@ -1,17 +1,17 @@
 error: Unsupported type for U8 attribute
-  --> tests/compile_time/unsupported_f64.rs:14:13
+  --> tests/compile_time/unsupported_f64.rs:12:13
    |
-14 |     second: f64,
+12 |     second: f64,
    |             ^^^
 
 error[E0425]: cannot find value `second` in this scope
-  --> tests/compile_time/unsupported_f64.rs:14:5
+  --> tests/compile_time/unsupported_f64.rs:12:5
    |
-14 |     second: f64,
+12 |     second: f64,
    |     ^^^^^^ not found in this scope
 
 error[E0425]: cannot find value `fourth` in this scope
-  --> tests/compile_time/unsupported_f64.rs:16:5
+  --> tests/compile_time/unsupported_f64.rs:14:5
    |
-16 |     fourth: u8,
+14 |     fourth: u8,
    |     ^^^^^^ not found in this scope
