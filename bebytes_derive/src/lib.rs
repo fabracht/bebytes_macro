@@ -16,8 +16,6 @@ use std::{string::ToString, vec::Vec};
 #[cfg(not(feature = "std"))]
 use alloc::{string::ToString, vec::Vec};
 
-use core::fmt::Write;
-
 const PRIMITIVES: [&str; 17] = [
     "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize", "f32",
     "f64", "bool", "char", "str",
@@ -93,17 +91,17 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             field_limit_check.push(quote! {
                                 if #field_name > #mask as #field_type {
                                     let mut err_msg = String::new();
-                                    core::write!(&mut err_msg, "Value of field {} is out of range (max value: {})",
+                                    core::fmt::write(&mut err_msg, format_args!("Value of field {} is out of range (max value: {})",
                                         stringify!(#field_name),
                                         #mask
-                                    ).unwrap();
+                                    )).unwrap();
                                     panic!("{}", err_msg);
                                 }
                             });
 
                             if pos % 8 != total_size % 8 {
                                 let mut message = String::new();
-                                core::write!(&mut message, "U8 attributes must obey the sequence specified by the previous attributes. Expected position {} but got {}", total_size, pos).unwrap();
+                                core::fmt::write(&mut message, format_args!("U8 attributes must obey the sequence specified by the previous attributes. Expected position {} but got {}", total_size, pos)).unwrap();
                                 errors.push(
                                     syn::Error::new_spanned(&field, message).to_compile_error(),
                                 );
@@ -296,7 +294,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                                 let end_index = byte_index + vec_length;
                                                 if end_index > bytes.len() {
                                                     let mut error_message = String::new();
-                                                    core::write!(&mut error_message, "Not enough bytes to parse a vector of size {}", vec_length).unwrap();
+                                                    core::fmt::write(&mut error_message, format_args!("Not enough bytes to parse a vector of size {}", vec_length)).unwrap();
                                                     panic!("{}", error_message);
                                                 }
                                                 let #field_name = Vec::from(&bytes[byte_index..end_index]);
@@ -424,10 +422,9 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             }
                             _ => {
                                 let mut error_message = String::new();
-                                core::write!(
+                                core::fmt::write(
                                     &mut error_message,
-                                    "Unsupported type for field {}",
-                                    field_name
+                                    format_args!("Unsupported type for field {}", field_name),
                                 )
                                 .unwrap();
                                 let error = syn::Error::new(field.ty.span(), error_message);
@@ -546,6 +543,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 .collect::<Vec<_>>();
 
             let expanded = quote! {
+
+
                 impl #my_trait_path for #name {
                     fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
                         if bytes.is_empty() {
