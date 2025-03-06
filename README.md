@@ -204,23 +204,37 @@ Trying to place a vector anywhere else in the sequence produces a compile time e
 
 ## Nested Fields
 
-In theory, you can nest structures, but beware of padding vectors. I have not implemented, nor tested anything to prevent you from doing it, so just don't put nested structs with vectors in it unless they are occupy the very last position.
+You can nest structures with the BeBytes trait, but there are some important rules to follow:
 
-The problem lies in the fact that the macro will not know how many bytes to consume for the vector, since it is not a fixed size. Here's a simple example:
+### Rules for Safe Nesting
+
+1. **Unbounded Vectors in Nested Structs**
+   - Unbounded vectors (a `Vec<T>` without explicit size constraints) should only be used in the last field of a struct
+   - When a struct containing unbounded vectors is nested inside another struct, it should only be used as the last field
+
+2. **Safe Vector Usage in Nested Structs**
+   - Vectors with explicit size constraints are safe to use anywhere in nested structs
+   - Use either `#[With(size(N))]` or `#[FromField(field_name)]` to specify vector sizes
+
+3. **Why This Matters**
+   The problem is that the macro cannot determine how many bytes to consume for an unbounded vector. When nested, this causes parsing errors, as shown below:
 
 ```rust
+    // ❌ PROBLEMATIC: Nested struct with unbounded vector
     #[derive(Debug, PartialEq, Clone, BeBytes)]
     struct WithTailingVec {
-        tail: Vec<u8>,
+        tail: Vec<u8>, // Unbounded vector
     }
 
     #[derive(Debug, PartialEq, Clone, BeBytes)]
     struct InnocentStruct {
         innocent: u8,
-        mid_tail: WithTailingVec,
+        mid_tail: WithTailingVec, // Nested struct with unbounded vector 
         real_tail: Vec<u8>,
     }
-    fn main() {
+    
+    // This will not deserialize correctly
+    fn problematic_example() {
         let innocent_struct = InnocentStruct {
             innocent: 1,
             mid_tail: WithTailingVec { tail: vec![2, 3] },
@@ -230,15 +244,34 @@ The problem lies in the fact that the macro will not know how many bytes to cons
         println!("InnocentStruct: {:?}", innocent_struct_bytes);
         let re_innocent_struct = InnocentStruct::try_from_be_bytes(&innocent_struct_bytes)?;
         println!("ReInnocentStruct: {:?}", re_innocent_struct);
-        assert_ne!(innocent_struct, re_innocent_struct.0);
+        assert_ne!(innocent_struct, re_innocent_struct.0); // This assertion fails
     }
 ```
 
-Produces the following output:
+Output showing the parsing problem:
 
 ```sh
 InnocentStruct: [1, 2, 3, 4, 5]
 ReInnocentStruct: (InnocentStruct { innocent: 1, mid_tail: WithTailingVec { tail: [2, 3, 4, 5] }, real_tail: [2, 3, 4, 5] }, 1)
+```
+
+### Safe Alternative:
+
+```rust
+    // ✅ SAFE: Using size constraints for vectors in nested structs
+    #[derive(Debug, PartialEq, Clone, BeBytes)]
+    struct SafeNestedVec {
+        size: u8,
+        #[FromField(size)]
+        tail: Vec<u8>, // Size constrained vector
+    }
+
+    #[derive(Debug, PartialEq, Clone, BeBytes)]
+    struct SafeStruct {
+        innocent: u8,
+        nested: SafeNestedVec, // Safe to nest because vector has size constraint
+        more_data: u32,
+    }
 ```
 
 ## Contribute
