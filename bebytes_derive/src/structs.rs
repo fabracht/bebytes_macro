@@ -44,7 +44,6 @@ pub struct StructContext<'a> {
     pub fields: &'a syn::FieldsNamed,
     pub total_size: usize,
     pub last_field: Option<&'a syn::Field>,
-    pub is_last_field: bool,
 }
 
 fn push_field_accessor(field_data: &mut FieldData, field_name: &syn::Ident, needs_owned: bool) {
@@ -353,8 +352,9 @@ fn handle_custom_type(context: &FieldContext, field_data: &mut FieldData) {
         field,
         ..
     } = context;
-
-    push_field_accessor(field_data, field_name, true);
+    // field is needs_owned when type does not implement Copy
+    let needs_owned = !utils::is_copy(field_type);
+    push_field_accessor(field_data, field_name, needs_owned);
 
     field_data.bit_sum.push(quote! {
         bit_sum += 8 * #field_type::field_size();
@@ -451,7 +451,7 @@ pub fn handle_struct(context: StructContext) {
         let is_last = context
             .last_field
             .map(|last| last.ident == field.ident)
-            .unwrap_or(context.is_last_field);
+            .unwrap_or(false);
 
         let context = FieldContext {
             field: &field,
