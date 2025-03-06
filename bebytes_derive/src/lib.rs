@@ -40,7 +40,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
                 let total_size: usize = 0;
                 let last_field = fields.named.last();
-                let is_last_field = false;
 
                 structs::handle_struct(structs::StructContext {
                     field_limit_check: &mut field_limit_check,
@@ -52,7 +51,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     fields: &fields,
                     total_size,
                     last_field,
-                    is_last_field,
                 });
 
                 // If there are any errors, return them immediately without generating code
