@@ -115,7 +115,7 @@ pub(crate) fn is_copy(field_type: &syn::Type) -> bool {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
                             if !args.args.is_empty() {
                                 if let syn::GenericArgument::Type(ty) = &args.args[0] {
-                                    return is_copy(&ty);
+                                    return is_copy(ty);
                                 }
                             }
                         }
@@ -127,7 +127,7 @@ pub(crate) fn is_copy(field_type: &syn::Type) -> bool {
                             if args.args.len() >= 2 {
                                 if let syn::GenericArgument::Type(t) = &args.args[0] {
                                     if let syn::GenericArgument::Type(e) = &args.args[1] {
-                                        return is_copy(&t) && is_copy(&e);
+                                        return is_copy(t) && is_copy(e);
                                     }
                                 }
                             }
@@ -145,7 +145,7 @@ pub(crate) fn is_copy(field_type: &syn::Type) -> bool {
         syn::Type::Array(type_array) => is_copy(&type_array.elem), // Array<T> is Copy if T is Copy
         syn::Type::Tuple(type_tuple) => {
             // A tuple is Copy if all its elements are Copy
-            type_tuple.elems.iter().all(|elem| is_copy(&elem))
+            type_tuple.elems.iter().all(is_copy)
         }
         syn::Type::Paren(type_paren) => is_copy(&type_paren.elem),
         syn::Type::Group(type_group) => is_copy(&type_group.elem),
