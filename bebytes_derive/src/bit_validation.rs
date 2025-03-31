@@ -59,9 +59,9 @@ pub fn validate_field_sequence(fields: &syn::FieldsNamed) -> Result<(), TokenStr
                 if let (Some(pos), Some(size)) = (pos, size) {
                     // Check position sequence
                     if pos % 8 != total_size % 8 {
-                        return Err(syn::Error::new_spanned(field, 
+                        return Err(syn::Error::new_spanned(field,
                             format_args!("U8 attributes must obey the sequence specified by the previous attributes. Expected position {} but got {}", 
-                                total_size, 
+                                total_size,
                                 pos
                             )
                         ).to_compile_error());
@@ -73,21 +73,21 @@ pub fn validate_field_sequence(fields: &syn::FieldsNamed) -> Result<(), TokenStr
                     if let Some(ranges) = current_byte_ranges.get(&byte_idx) {
                         for existing_range in ranges {
                             if new_range.overlaps(existing_range) {
-                                return Err(
-                                    syn::Error::new_spanned(field, 
-                                        format_args!(
-                                            "Bit ranges overlap: positions {}-{} overlap with {}-{}",
-                                            new_range.start,
-                                            new_range.end,
-                                            existing_range.start,
-                                            existing_range.end
-                                        )
-                                    ).to_compile_error()
-                                );
+                                return Err(syn::Error::new_spanned(
+                                    field,
+                                    format_args!(
+                                        "Bit ranges overlap: positions {}-{} overlap with {}-{}",
+                                        new_range.start,
+                                        new_range.end,
+                                        existing_range.start,
+                                        existing_range.end
+                                    ),
+                                )
+                                .to_compile_error());
                             }
                         }
                     }
-                    
+
                     // Add new range to current byte
                     current_byte_ranges
                         .entry(byte_idx)
