@@ -1,11 +1,17 @@
-name: Bump Version
+name: Bump Version bebytes_derive
 
 on:
-  pull_request:
-    types:
-      - closed
-    paths:
-      - "bebytes_derive/**"
+  workflow_dispatch:
+    inputs:
+      version_component:
+        description: 'Version component to bump (major, minor, patch)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
 
 jobs:
   bump_version:
@@ -18,16 +24,10 @@ jobs:
           token: ${{ secrets.PA_TOKEN }}
           fetch-depth: 0
 
-      - name: Extract version component
+      - name: Set version component
         id: extract_version
         run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          VERSION_COMPONENT=$(echo $PR_TITLE | grep -oP '^(major|minor|patch)')
-          if [ -z "$VERSION_COMPONENT" ]; then
-          echo "PR title is not properly formatted or does not contain a semver tag. Please include 'major', 'minor', or 'patch' at the beginning of the title."
-          exit 1
-          fi
-          echo "::set-output name=version_component::$VERSION_COMPONENT"
+          echo "::set-output name=version_component::${{ github.event.inputs.version_component }}"
 
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
