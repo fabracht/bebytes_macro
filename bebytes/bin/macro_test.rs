@@ -242,7 +242,7 @@ struct U128 {
     fourth: u8,
 }
 
-#[derive(BeBytes, Debug, PartialEq, Clone)]
+#[derive(BeBytes, Debug, PartialEq)]
 struct U64 {
     #[U8(size(1), pos(0))]
     first: u8,
@@ -375,12 +375,12 @@ pub struct ArrayedStruct {
     pub client_iv: [u8; 3],
 }
 
-#[derive(BeBytes, Debug, PartialEq, Clone, Copy, Default)]
+#[derive(BeBytes, Debug, PartialEq, Clone, Default)]
 pub struct Modes {
     pub bits: u8,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Mode {
     Closed = 0b0000,
     Unauthenticated = 0b0001,

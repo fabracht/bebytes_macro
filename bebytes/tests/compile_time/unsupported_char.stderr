@@ -3,15 +3,3 @@ error: Unsupported type for U8 attribute
    |
 12 |     second: char,
    |             ^^^^
-
-error[E0425]: cannot find value `second` in this scope
-  --> tests/compile_time/unsupported_char.rs:12:5
-   |
-12 |     second: char,
-   |     ^^^^^^ not found in this scope
-
-error[E0425]: cannot find value `fourth` in this scope
-  --> tests/compile_time/unsupported_char.rs:14:5
-   |
-14 |     fourth: u8,
-   |     ^^^^^^ not found in this scope
