@@ -265,73 +265,73 @@ fn handle_vector(
     push_field_accessor(field_data, field_name, true);
 
     if let syn::Type::Path(tp) = field_type {
-        if let Some(inner_type) = utils::solve_for_inner_type(tp, "Vec") {
+        if let Some(syn::Type::Path(ref inner_tp)) = utils::solve_for_inner_type(tp, "Vec") {
             // Handle vector of primitive types (u8, etc.)
-            if let syn::Type::Path(ref inner_tp) = inner_type {
-                if utils::is_primitive_type(inner_tp) {
-                    match (size, vec_size_ident.clone()) {
-                        (_, Some(ident)) => {
-                            field_data.bit_sum.push(quote! { bit_sum = 4096 * 8; });
-                            field_data.field_parsing.push(quote! {
-                                let vec_length = #ident as usize;
-                                byte_index = _bit_sum / 8;
-                                let end_index = byte_index + vec_length;
-                                if end_index > bytes.len() {
-                                    panic!("Not enough bytes to parse a vector of size {}", vec_length);
-                                }
-                                let #field_name = Vec::from(&bytes[byte_index..end_index]);
-                                _bit_sum += vec_length * 8;
-                            });
-                        }
-                        (Some(s), None) => {
-                            push_bit_sum(field_data, s);
-                            field_data.field_parsing.push(quote! {
-                                let vec_length = #s as usize;
-                                byte_index = _bit_sum / 8;
-                                let end_index = byte_index + vec_length;
-                                let #field_name = Vec::from(&bytes[byte_index..end_index]);
-                                _bit_sum += #s * 8;
-                            });
-                        }
-                        (None, None) => {
-                            if !is_last_field {
-                                let error = syn::Error::new(
+
+            if utils::is_primitive_type(inner_tp) {
+                match (size, vec_size_ident.clone()) {
+                    (_, Some(ident)) => {
+                        field_data.bit_sum.push(quote! { bit_sum = 4096 * 8; });
+                        field_data.field_parsing.push(quote! {
+                            let vec_length = #ident as usize;
+                            byte_index = _bit_sum / 8;
+                            let end_index = byte_index + vec_length;
+                            if end_index > bytes.len() {
+                                panic!("Not enough bytes to parse a vector of size {}", vec_length);
+                            }
+                            let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                            _bit_sum += vec_length * 8;
+                        });
+                    }
+                    (Some(s), None) => {
+                        push_bit_sum(field_data, s);
+                        field_data.field_parsing.push(quote! {
+                            let vec_length = #s as usize;
+                            byte_index = _bit_sum / 8;
+                            let end_index = byte_index + vec_length;
+                            let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                            _bit_sum += #s * 8;
+                        });
+                    }
+                    (None, None) => {
+                        if !is_last_field {
+                            let error = syn::Error::new(
                                     field.ty.span(),
                                     "Unbounded vectors can only be used as padding at the end of a struct",
                                 );
-                                field_data.errors.push(error.to_compile_error());
-                            }
-                            field_data.bit_sum.push(quote! { bit_sum = 4096 * 8; });
-                            field_data.field_parsing.push(quote! {
-                                byte_index = _bit_sum / 8;
-                                let #field_name = Vec::from(&bytes[byte_index..]);
-                                _bit_sum += #field_name.len() * 8;
-                            });
+                            field_data.errors.push(error.to_compile_error());
                         }
+                        field_data.bit_sum.push(quote! { bit_sum = 4096 * 8; });
+                        field_data.field_parsing.push(quote! {
+                            byte_index = _bit_sum / 8;
+                            let #field_name = Vec::from(&bytes[byte_index..]);
+                            _bit_sum += #field_name.len() * 8;
+                        });
                     }
+                }
 
-                    field_data.field_writing.push(quote! {
-                        bytes.extend_from_slice(&#field_name);
-                        _bit_sum += #field_name.len() * 8;
-                    });
-                } else {
-                    // Handle vector of custom types (Vec<CustomType>)
-                    let inner_type_path = &inner_tp.path;
-                    let inner_type_name = quote! { #inner_type_path };
+                field_data.field_writing.push(quote! {
+                    bytes.extend_from_slice(&#field_name);
+                    _bit_sum += #field_name.len() * 8;
+                });
+            } else {
+                // Handle vector of custom types (Vec<CustomType>)
+                let inner_type_path = &inner_tp.path;
+                let inner_type_name = quote! { #inner_type_path };
 
-                    // Get the appropriate endianness methods
-                    let try_from_bytes_method = utils::get_try_from_bytes_method(endianness);
-                    let to_bytes_method = utils::get_to_bytes_method(endianness);
+                // Get the appropriate endianness methods
+                let try_from_bytes_method = utils::get_try_from_bytes_method(endianness);
+                let to_bytes_method = utils::get_to_bytes_method(endianness);
 
-                    // Initialize an empty vector
-                    field_data.field_parsing.push(quote! {
-                        let mut #field_name = Vec::new();
-                    });
+                // Initialize an empty vector
+                field_data.field_parsing.push(quote! {
+                    let mut #field_name = Vec::new();
+                });
 
-                    if !is_last_field {
-                        // For non-last fields, we need size information
-                        if let Some(vec_size) = size {
-                            field_data.field_parsing.push(quote! {
+                if !is_last_field {
+                    // For non-last fields, we need size information
+                    if let Some(vec_size) = size {
+                        field_data.field_parsing.push(quote! {
                                 let mut bytes_consumed = 0;
                                 for _ in 0..#vec_size {
                                     if _bit_sum / 8 + bytes_consumed >= bytes.len() {
@@ -347,8 +347,8 @@ fn handle_vector(
                                 }
                                 _bit_sum += bytes_consumed * 8;
                             });
-                        } else if let Some(ident) = vec_size_ident {
-                            field_data.field_parsing.push(quote! {
+                    } else if let Some(ident) = vec_size_ident {
+                        field_data.field_parsing.push(quote! {
                                 let vec_length = #ident as usize;
                                 let mut bytes_consumed = 0;
                                 for _ in 0..vec_length {
@@ -365,16 +365,16 @@ fn handle_vector(
                                 }
                                 _bit_sum += bytes_consumed * 8;
                             });
-                        } else {
-                            let error = syn::Error::new(
+                    } else {
+                        let error = syn::Error::new(
                                 field.ty.span(),
                                 "Vectors of custom types need size information. Use #[With(size(n))] or #[FromField(field_name)]",
                             );
-                            field_data.errors.push(error.to_compile_error());
-                        }
-                    } else {
-                        // For the last field, we can consume all remaining bytes
-                        field_data.field_parsing.push(quote! {
+                        field_data.errors.push(error.to_compile_error());
+                    }
+                } else {
+                    // For the last field, we can consume all remaining bytes
+                    field_data.field_parsing.push(quote! {
                             let mut bytes_consumed = 0;
                             while _bit_sum / 8 + bytes_consumed < bytes.len() {
                                 match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
@@ -387,17 +387,16 @@ fn handle_vector(
                             }
                             _bit_sum += bytes_consumed * 8;
                         });
-                    }
-
-                    // Serialize the vector
-                    field_data.field_writing.push(quote! {
-                        for item in &#field_name {
-                            let item_bytes = BeBytes::#to_bytes_method(item);
-                            bytes.extend_from_slice(&item_bytes);
-                            _bit_sum += item_bytes.len() * 8;
-                        }
-                    });
                 }
+
+                // Serialize the vector
+                field_data.field_writing.push(quote! {
+                    for item in &#field_name {
+                        let item_bytes = BeBytes::#to_bytes_method(item);
+                        bytes.extend_from_slice(&item_bytes);
+                        _bit_sum += item_bytes.len() * 8;
+                    }
+                });
             }
         }
     }
