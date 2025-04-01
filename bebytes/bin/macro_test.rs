@@ -216,6 +216,9 @@ fn main() {
     let re_i_8 = I8::try_from_be_bytes(&i_8_bytes);
     println!("{:?}", re_i_8);
     assert_eq!(i_8, re_i_8.unwrap().0);
+
+    // Test Dns type
+    test_dns_name();
 }
 
 // Test that both endianness formats work correctly
@@ -285,6 +288,29 @@ fn test_both_endianness() {
     assert_ne!(u32_be, u32_le);
 
     println!("Both endianness formats work correctly!\n");
+}
+
+fn test_dns_name() {
+    let dns_name = DnsName {
+        segments: vec![
+            DnsNameSegment {
+                length: 3,
+                segment: vec![1, 2, 3],
+            },
+            DnsNameSegment {
+                length: 2,
+                segment: vec![4, 5],
+            },
+        ],
+    };
+    let bytes = dns_name.to_be_bytes();
+    println!("DNS Name bytes: {:?}", bytes);
+    let re_dns_name = DnsName::try_from_be_bytes(&bytes);
+    println!("Reconstructed DNS Name: {:?}", re_dns_name);
+    assert_eq!(dns_name, re_dns_name.unwrap().0);
+    let re_dns_name = DnsName::try_from_le_bytes(&bytes);
+    println!("Reconstructed DNS Name (LE): {:?}", re_dns_name);
+    assert_eq!(dns_name, re_dns_name.unwrap().0);
 }
 
 #[derive(BeBytes, Debug, PartialEq)]
@@ -479,4 +505,16 @@ struct WithSizeStruct {
     innocent: u8,
     #[With(size(3))]
     real_tail: Vec<u8>,
+}
+
+#[derive(BeBytes, Debug, Clone, PartialEq)]
+struct DnsNameSegment {
+    length: u8,
+    #[FromField(length)]
+    segment: Vec<u8>,
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct DnsName {
+    segments: Vec<DnsNameSegment>,
 }

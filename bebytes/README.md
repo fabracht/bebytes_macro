@@ -55,10 +55,12 @@ The BeBytes derive macro generates the following methods for your struct:
 - `field_size() -> usize`: A method to calculate the size (in bytes) of the struct.
 
 **Big-endian methods:**
+
 - `try_from_be_bytes(&[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>>`: A method to convert a big-endian byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
 - `to_be_bytes(&self) -> Vec<u8>`: A method to convert the struct into a big-endian byte representation. It returns a `Vec<u8>` containing the serialized bytes.
 
 **Little-endian methods:**
+
 - `try_from_le_bytes(&[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>>`: A method to convert a little-endian byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
 - `to_le_bytes(&self) -> Vec<u8>`: A method to convert the struct into a little-endian byte representation. It returns a `Vec<u8>` containing the serialized bytes.
 
@@ -80,6 +82,7 @@ struct MyStruct {
 ```
 
 The `U8` attribute takes two parameters:
+
 - `size(n)`: The number of bits this field uses
 - `pos(n)`: The bit position where this field starts (from left to right, 0-indexed)
 
@@ -146,13 +149,13 @@ struct SizedVector {
 
 ### 3. From Field
 
-Use `#[From(field_name)]` to read the size from another field:
+Use `#[FromField(field_name)]` to read the size from another field:
 
 ```rust
 #[derive(BeBytes)]
 struct DynamicVector {
     length: u8,
-    #[From(length)]
+    #[FromField(length)]
     data: Vec<u8>,  // Will read 'length' bytes
     footer: u16,
 }
@@ -177,7 +180,7 @@ This example shows how BeBytes can be used to parse a DNS name with dynamic leng
 #[derive(BeBytes, Debug)]
 struct DnsNameSegment {
     length: u8,
-    #[From(length)]
+    #[FromField(length)]
     segment: Vec<u8>,
 }
 
