@@ -14,7 +14,7 @@ To use BeBytes, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "0.7.0"
+bebytes = "0.7.1"
 ```
 
 Then, import the BeBytes trait from the bebytes crate and derive it for your struct:
@@ -191,7 +191,7 @@ BeBytes supports no_std environments through feature flags:
 
 ```toml
 [dependencies]
-bebytes = { version = "0.7.0", default-features = false }
+bebytes = { version = "0.7.1", default-features = false }
 ```
 
 By default, the `std` feature is enabled. Disable it for no_std support.
