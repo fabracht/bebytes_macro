@@ -119,7 +119,7 @@ BeBytes supports:
 
 ## Vector Support
 
-Vectors require special handling since their size is dynamic. BeBytes provides three ways to handle vectors:
+Vectors require special handling since their size is dynamic. BeBytes provides several ways to handle vectors:
 
 ### 1. Last Field
 
@@ -161,6 +161,30 @@ struct DynamicVector {
 }
 ```
 
+### 4. Vectors of Custom Types
+
+BeBytes supports vectors containing custom types that implement the `BeBytes` trait:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct CustomType {
+    id: u16,
+    value: u32,
+}
+
+#[derive(BeBytes, Debug)]
+struct VectorOfCustoms {
+    count: u8,
+    #[FromField(count)]
+    items: Vec<CustomType>,  // Vector of custom structs
+}
+```
+
+For vectors of custom types, the following rules apply:
+- When used as the last field, it will consume all remaining bytes, parsing them as instances of the custom type
+- When used elsewhere, you must specify size information with `#[FromField]` or `#[With]`
+- Each item in the vector is serialized/deserialized using its own BeBytes implementation
+
 ## No-STD Support
 
 BeBytes supports no_std environments through feature flags:
@@ -174,19 +198,43 @@ By default, the `std` feature is enabled. Disable it for no_std support.
 
 ## Example: DNS Name Parsing
 
-This example shows how BeBytes can be used to parse a DNS name with dynamic length segments:
+This example shows how BeBytes can be used to parse a DNS name with dynamic length segments, demonstrating both `#[FromField]` attribute and vectors of custom types:
 
 ```rust
-#[derive(BeBytes, Debug, Clone)]
+#[derive(BeBytes, Debug, Clone, PartialEq)]
 struct DnsNameSegment {
     length: u8,
     #[FromField(length)]
-    segment: Vec<u8>,
+    segment: Vec<u8>,  // Dynamic-length byte sequence
 }
 
-#[derive(BeBytes, Debug)]
+#[derive(BeBytes, Debug, PartialEq)]
 struct DnsName {
-    segments: Vec<DnsNameSegment>,  // Last field with dynamic segments
+    segments: Vec<DnsNameSegment>,  // Vector of custom objects as last field
+}
+
+// Usage example
+fn main() {
+    // Create a DNS name with two segments
+    let dns_name = DnsName {
+        segments: vec![
+            DnsNameSegment {
+                length: 3,
+                segment: vec![b'w', b'w', b'w'],
+            },
+            DnsNameSegment {
+                length: 7,
+                segment: vec![b'e', b'x', b'a', b'm', b'p', b'l', b'e'],
+            },
+        ],
+    };
+    
+    // Serialize to bytes
+    let bytes = dns_name.to_be_bytes();
+    
+    // Deserialize back
+    let (reconstructed, _) = DnsName::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(dns_name, reconstructed);
 }
 ```
 
