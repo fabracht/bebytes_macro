@@ -5,3 +5,9 @@ pub const PRIMITIVES: [&str; 17] = [
 pub const SUPPORTED_PRIMITIVES: [&str; 10] = [
     "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
 ];
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Endianness {
+    Big,
+    Little,
+}

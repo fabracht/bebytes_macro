@@ -46,6 +46,37 @@ fn test_to_be_bytes(input: ErrorEstimate, expected: Vec<u8>) {
     assert_eq!(bytes, expected);
 }
 
+#[test_case(ErrorEstimate { s_bit: 0, z_bit: 1, scale: 0, multiplier: 1 }, vec![2, 1, 0, 0, 0]; "le_input1")]
+#[test_case(ErrorEstimate { s_bit: 1, z_bit: 0, scale: 63, multiplier: 100 }, vec![253, 100, 0, 0, 0]; "le_input2")]
+fn test_to_le_bytes(input: ErrorEstimate, expected: Vec<u8>) {
+    let bytes = input.to_le_bytes();
+    assert_eq!(bytes, expected);
+}
+
+#[test]
+fn test_endian_conversion() {
+    let original = ErrorEstimate { s_bit: 1, z_bit: 0, scale: 63, multiplier: 100 };
+    
+    // Convert to big-endian
+    let be_bytes = original.to_be_bytes();
+    // Read back from big-endian
+    let (from_be, _) = ErrorEstimate::try_from_be_bytes(&be_bytes).unwrap();
+    assert_eq!(original, from_be);
+    
+    // Convert to little-endian
+    let le_bytes = original.to_le_bytes();
+    // Read back from little-endian
+    let (from_le, _) = ErrorEstimate::try_from_le_bytes(&le_bytes).unwrap();
+    assert_eq!(original, from_le);
+    
+    // Ensure the byte representations are different
+    assert_ne!(be_bytes, le_bytes);
+    
+    // But trying to read big-endian data as little-endian should give incorrect results
+    let (wrong_endian, _) = ErrorEstimate::try_from_le_bytes(&be_bytes).unwrap();
+    assert_ne!(original, wrong_endian);
+}
+
 #[test]
 #[should_panic(expected = "Value of field scale is out of range")]
 fn test_value_out_of_range() {
