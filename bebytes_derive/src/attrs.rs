@@ -90,7 +90,8 @@ pub fn parse_from_field_attribute(
             *field = Some(name.to_owned());
             Ok(())
         } else {
-            Err(meta.error("Allowed attributes are `field_name` - Example: #[FromField(field_name)]"))
+            Err(meta
+                .error("Allowed attributes are `field_name` - Example: #[FromField(field_name)]"))
         }
     })
 }
