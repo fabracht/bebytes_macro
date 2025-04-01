@@ -1,6 +1,6 @@
 # BeBytes Derive
 
-BeBytes Derive is a procedural macro crate that provides a custom derive macro for generating serialization and deserialization methods for network structs in Rust. The macro generates code to convert the struct into a byte representation (serialization) and vice versa (deserialization) using big endian order. It aims to simplify the process of working with network protocols and message formats by automating the conversion between Rust structs and byte arrays.
+BeBytes Derive is a procedural macro crate that provides a custom derive macro for generating serialization and deserialization methods for network structs in Rust. The macro generates code to convert the struct into a byte representation (serialization) and vice versa (deserialization) supporting both big endian and little endian byte orders. It aims to simplify the process of working with network protocols and message formats by automating the conversion between Rust structs and byte arrays.
 
 **Note: BeBytes Derive is currently in development and has not been thoroughly tested in production environments. Use it with caution and ensure proper testing and validation in your specific use case.**
 
@@ -27,16 +27,22 @@ struct MyStruct {
 The BeBytes derive macro will generate the following methods for your struct:
 
 - `new(args...) -> Self`: A constructor method to create a new instance of your struct. Arguments come from the fields of your struct.
-- `try_from_be_bytes(&[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>>`: A method to convert a byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
-- `to_be_bytes(&self) -> Vec<u8>`: A method to convert the struct into a byte representation. It returns a `Vec<u8>` containing the serialized bytes.
 - `field_size(&self) -> usize`: A method to calculate the size (in bytes) of the struct.
+
+**Big-endian methods:**
+- `try_from_be_bytes(&[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>>`: A method to convert a big-endian byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
+- `to_be_bytes(&self) -> Vec<u8>`: A method to convert the struct into a big-endian byte representation. It returns a `Vec<u8>` containing the serialized bytes.
+
+**Little-endian methods:**
+- `try_from_le_bytes(&[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>>`: A method to convert a little-endian byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
+- `to_le_bytes(&self) -> Vec<u8>`: A method to convert the struct into a little-endian byte representation. It returns a `Vec<u8>` containing the serialized bytes.
 
 ## Example
 
 Here's an example showcasing the usage of the BeBytes Derive:
 
 ```rust
-use bebytes_macro::BeBytes;
+use bebytes_derive::BeBytes;
 
 #[derive(Debug, BeBytes)]
 struct MyStruct {
@@ -54,14 +60,37 @@ fn main() {
         field1: 1,
         field2: 7,
         field3: 12,
-        field4: 0
+        field4: 0x12345678
     };
 
-    let bytes = my_struct.to_be_bytes();
-    println!("Serialized bytes: {:?}", bytes);
-
-    let (deserialized, bytes_written) = MyStruct::try_from_be_bytes(&bytes).unwrap();
-    println!("Deserialized struct: {:?}", deserialized);
+    // Big endian serialization
+    let be_bytes = my_struct.to_be_bytes();
+    println!("Big endian bytes: {:?}", be_bytes);
+    // Output: [156, 18, 52, 86, 120]
+    
+    // Little endian serialization
+    let le_bytes = my_struct.to_le_bytes();
+    println!("Little endian bytes: {:?}", le_bytes);
+    // Output: [156, 120, 86, 52, 18]
+    
+    // Deserialize from big endian
+    let (be_deserialized, be_bytes_read) = MyStruct::try_from_be_bytes(&be_bytes).unwrap();
+    println!("Deserialized from BE: {:?}, bytes read: {}", be_deserialized, be_bytes_read);
+    
+    // Deserialize from little endian
+    let (le_deserialized, le_bytes_read) = MyStruct::try_from_le_bytes(&le_bytes).unwrap();
+    println!("Deserialized from LE: {:?}, bytes read: {}", le_deserialized, le_bytes_read);
+    
+    // Both should equal the original struct
+    assert_eq!(my_struct.field1, be_deserialized.field1);
+    assert_eq!(my_struct.field2, be_deserialized.field2);
+    assert_eq!(my_struct.field3, be_deserialized.field3);
+    assert_eq!(my_struct.field4, be_deserialized.field4);
+    
+    assert_eq!(my_struct.field1, le_deserialized.field1);
+    assert_eq!(my_struct.field2, le_deserialized.field2);
+    assert_eq!(my_struct.field3, le_deserialized.field3);
+    assert_eq!(my_struct.field4, le_deserialized.field4);
 }
 ```
 

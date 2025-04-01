@@ -44,6 +44,7 @@ pub struct StructContext<'a> {
     pub fields: &'a syn::FieldsNamed,
     pub total_size: usize,
     pub last_field: Option<&'a syn::Field>,
+    pub endianness: crate::consts::Endianness,
 }
 
 fn push_field_accessor(field_data: &mut FieldData, field_name: &syn::Ident, needs_owned: bool) {
@@ -67,7 +68,13 @@ fn push_byte_indices(tokens: &mut Vec<proc_macro2::TokenStream>, field_size: usi
     });
 }
 
-fn handle_u8_field(context: &FieldContext, size: usize, pos: usize, field_data: &mut FieldData) {
+fn handle_u8_field(
+    context: &FieldContext,
+    size: usize,
+    pos: usize,
+    field_data: &mut FieldData,
+    endianness: crate::consts::Endianness,
+) {
     let FieldContext {
         field_name,
         field_type,
@@ -96,6 +103,11 @@ fn handle_u8_field(context: &FieldContext, size: usize, pos: usize, field_data: 
         }
     });
 
+    let from_bytes_method = utils::get_from_bytes_method(endianness);
+    let to_bytes_method = utils::get_to_bytes_method(endianness);
+    let bit_shift_direction = utils::get_u8_bit_shift_direction(size, pos, endianness);
+    let bit_write_shift = utils::get_u8_bit_write_shift(size, pos, endianness);
+
     if number_length > 1 {
         let chunks =
             utils::generate_chunks(number_length, syn::Ident::new("chunk", Span::call_site()));
@@ -104,7 +116,7 @@ fn handle_u8_field(context: &FieldContext, size: usize, pos: usize, field_data: 
             let mut inner_total_size = #pos;
             let mut #field_name = 0 as #field_type;
             bytes.chunks(#number_length).for_each(|chunk| {
-                let u_type = #field_type::from_be_bytes(#chunks);
+                let u_type = #field_type::#from_bytes_method(#chunks);
                 let shift_left = _bit_sum % 8;
                 let left_shifted_u_type = u_type << shift_left;
                 let shift_right = 8 * #number_length - #size;
@@ -127,7 +139,7 @@ fn handle_u8_field(context: &FieldContext, size: usize, pos: usize, field_data: 
             let shift_left = (#number_length * 8) - #size;
             let shift_right = (#pos % 8);
             let shifted_masked_value = (masked_value << shift_left) >> shift_right;
-            let byte_values = #field_type::to_be_bytes(shifted_masked_value);
+            let byte_values = #field_type::#to_bytes_method(shifted_masked_value);
             for i in 0..#number_length {
                 if bytes.len() <= _bit_sum / 8 + i {
                     bytes.resize(_bit_sum / 8 + i + 1, 0);
@@ -138,7 +150,7 @@ fn handle_u8_field(context: &FieldContext, size: usize, pos: usize, field_data: 
         });
     } else {
         field_data.field_parsing.push(quote! {
-            let #field_name = (bytes[_bit_sum / 8] as #field_type >> (7 - (#size + #pos % 8 - 1) as #field_type )) & (#mask as #field_type);
+            let #field_name = (bytes[_bit_sum / 8] as #field_type >> (#bit_shift_direction as usize) as #field_type) & (#mask as #field_type);
             _bit_sum += #size;
         });
 
@@ -154,7 +166,7 @@ fn handle_u8_field(context: &FieldContext, size: usize, pos: usize, field_data: 
             if bytes.len() <= _bit_sum / 8 {
                 bytes.resize(_bit_sum / 8 + 1, 0);
             }
-            bytes[_bit_sum / 8] |= (#field_name as u8) << (7 - (#size - 1) - #pos % 8);
+            bytes[_bit_sum / 8] |= (#field_name as u8) << (#bit_write_shift as usize);
             _bit_sum += #size;
         });
     }
@@ -162,7 +174,11 @@ fn handle_u8_field(context: &FieldContext, size: usize, pos: usize, field_data: 
     field_data.total_size += size;
 }
 
-fn handle_primitive_type(context: &FieldContext, field_data: &mut FieldData) {
+fn handle_primitive_type(
+    context: &FieldContext,
+    field_data: &mut FieldData,
+    endianness: crate::consts::Endianness,
+) {
     let FieldContext {
         field_name,
         field_type,
@@ -181,8 +197,12 @@ fn handle_primitive_type(context: &FieldContext, field_data: &mut FieldData) {
 
     let mut parsing = Vec::new();
     push_byte_indices(&mut parsing, field_size);
+
+    let from_bytes_method = utils::get_from_bytes_method(endianness);
+    let to_bytes_method = utils::get_to_bytes_method(endianness);
+
     parsing.push(quote! {
-        let #field_name = <#field_type>::from_be_bytes({
+        let #field_name = <#field_type>::#from_bytes_method({
             let slice = &bytes[byte_index..end_byte_index];
             let mut arr = [0; #field_size];
             arr.copy_from_slice(slice);
@@ -192,7 +212,7 @@ fn handle_primitive_type(context: &FieldContext, field_data: &mut FieldData) {
     field_data.field_parsing.extend(parsing);
 
     field_data.field_writing.push(quote! {
-        let field_slice = &#field_name.to_be_bytes();
+        let field_slice = &#field_name.#to_bytes_method();
         bytes.extend_from_slice(field_slice);
         _bit_sum += field_slice.len() * 8;
     });
@@ -296,7 +316,11 @@ fn handle_vector(
     }
 }
 
-fn handle_option_type(context: &FieldContext, field_data: &mut FieldData) {
+fn handle_option_type(
+    context: &FieldContext,
+    field_data: &mut FieldData,
+    endianness: crate::consts::Endianness,
+) {
     let FieldContext {
         field_name,
         field_type,
@@ -318,13 +342,16 @@ fn handle_option_type(context: &FieldContext, field_data: &mut FieldData) {
 
                     push_bit_sum(field_data, field_size);
 
+                    let from_bytes_method = utils::get_from_bytes_method(endianness);
+                    let to_bytes_method = utils::get_to_bytes_method(endianness);
+
                     let mut parsing = Vec::new();
                     push_byte_indices(&mut parsing, field_size);
                     parsing.push(quote! {
                         let #field_name = if bytes[byte_index..end_byte_index] == [0_u8; #field_size] {
                             None
                         } else {
-                            Some(<#inner_tp>::from_be_bytes({
+                            Some(<#inner_tp>::#from_bytes_method({
                                 let slice = &bytes[byte_index..end_byte_index];
                                 let mut arr = [0; #field_size];
                                 arr.copy_from_slice(slice);
@@ -335,9 +362,9 @@ fn handle_option_type(context: &FieldContext, field_data: &mut FieldData) {
                     field_data.field_parsing.extend(parsing);
 
                     field_data.field_writing.push(quote! {
-                        let be_bytes = &#field_name.unwrap_or(0).to_be_bytes();
-                        bytes.extend_from_slice(be_bytes);
-                        _bit_sum += be_bytes.len() * 8;
+                        let bytes_data = &#field_name.unwrap_or(0).#to_bytes_method();
+                        bytes.extend_from_slice(bytes_data);
+                        _bit_sum += bytes_data.len() * 8;
                     });
                 }
             }
@@ -345,14 +372,18 @@ fn handle_option_type(context: &FieldContext, field_data: &mut FieldData) {
     }
 }
 
-fn handle_custom_type(context: &FieldContext, field_data: &mut FieldData) {
+fn handle_custom_type(
+    context: &FieldContext,
+    field_data: &mut FieldData,
+    endianness: crate::consts::Endianness,
+) {
     let FieldContext {
         field_name,
         field_type,
         field,
         ..
     } = context;
-    // field is needs_owned when type does not implement Copy
+
     let needs_owned = !utils::is_copy(field_type);
     push_field_accessor(field_data, field_name, needs_owned);
 
@@ -360,20 +391,23 @@ fn handle_custom_type(context: &FieldContext, field_data: &mut FieldData) {
         bit_sum += 8 * #field_type::field_size();
     });
 
+    let try_from_bytes_method = utils::get_try_from_bytes_method(endianness);
+    let to_bytes_method = utils::get_to_bytes_method(endianness);
+
     field_data.field_parsing.push(quote_spanned! { field.span() =>
         byte_index = _bit_sum / 8;
         let predicted_size = #field_type::field_size();
         end_byte_index = usize::min(bytes.len(), byte_index + predicted_size);
-        let (#field_name, bytes_read) = #field_type::try_from_be_bytes(&bytes[byte_index..end_byte_index])?;
+        let (#field_name, bytes_read) = #field_type::#try_from_bytes_method(&bytes[byte_index..end_byte_index])?;
         _bit_sum += bytes_read * 8;
     });
 
     field_data
         .field_writing
         .push(quote_spanned! { field.span() =>
-            let be_bytes = &BeBytes::to_be_bytes(&#field_name);
-            bytes.extend_from_slice(be_bytes);
-            _bit_sum += be_bytes.len() * 8;
+            let bytes_data = &BeBytes::#to_bytes_method(&#field_name);
+            bytes.extend_from_slice(bytes_data);
+            _bit_sum += bytes_data.len() * 8;
         });
 }
 
@@ -453,25 +487,35 @@ pub fn handle_struct(context: StructContext) {
             .map(|last| last.ident == field.ident)
             .unwrap_or(false);
 
-        let context = FieldContext {
+        let field_context = FieldContext {
             field: &field,
             field_name: field.ident.clone().unwrap(),
             field_type: &field.ty,
             is_last_field: is_last,
         };
 
-        match determine_field_type(&context, &field.attrs, &mut field_data.errors) {
+        match determine_field_type(&field_context, &field.attrs, &mut field_data.errors) {
             Some(field_type) => match field_type {
-                FieldType::U8Field(size, pos) => {
-                    handle_u8_field(&context, size, pos, &mut field_data)
+                FieldType::U8Field(size, pos) => handle_u8_field(
+                    &field_context,
+                    size,
+                    pos,
+                    &mut field_data,
+                    context.endianness,
+                ),
+                FieldType::PrimitiveType => {
+                    handle_primitive_type(&field_context, &mut field_data, context.endianness)
                 }
-                FieldType::PrimitiveType => handle_primitive_type(&context, &mut field_data),
-                FieldType::Array(length) => handle_array(&context, length, &mut field_data),
+                FieldType::Array(length) => handle_array(&field_context, length, &mut field_data),
                 FieldType::Vector(size, vec_size_ident) => {
-                    handle_vector(&context, size, vec_size_ident, &mut field_data)
+                    handle_vector(&field_context, size, vec_size_ident, &mut field_data)
                 }
-                FieldType::OptionType => handle_option_type(&context, &mut field_data),
-                FieldType::CustomType => handle_custom_type(&context, &mut field_data),
+                FieldType::OptionType => {
+                    handle_option_type(&field_context, &mut field_data, context.endianness)
+                }
+                FieldType::CustomType => {
+                    handle_custom_type(&field_context, &mut field_data, context.endianness)
+                }
             },
             None => continue,
         }

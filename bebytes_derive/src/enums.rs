@@ -30,7 +30,7 @@ pub fn handle_enum(
         })
         .collect::<Vec<_>>();
 
-    let from_be_bytes_arms = values
+    let from_bytes_arms = values
         .iter()
         .map(|(ident, assigned_value)| {
             quote! {
@@ -39,7 +39,7 @@ pub fn handle_enum(
         })
         .collect::<Vec<_>>();
 
-    let to_be_bytes_arms = values
+    let to_bytes_arms = values
         .iter()
         .map(|(ident, assigned_value)| {
             quote! {
@@ -47,5 +47,7 @@ pub fn handle_enum(
             }
         })
         .collect::<Vec<_>>();
-    (from_be_bytes_arms, to_be_bytes_arms)
+
+    // For enums, the byte representation is the same for both endianness since we're just storing a single byte value
+    (from_bytes_arms, to_bytes_arms)
 }

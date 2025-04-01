@@ -7,7 +7,50 @@ use std::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use crate::consts::{PRIMITIVES, SUPPORTED_PRIMITIVES};
+use crate::consts::{Endianness, PRIMITIVES, SUPPORTED_PRIMITIVES};
+
+pub fn get_from_bytes_method(endianness: Endianness) -> proc_macro2::TokenStream {
+    match endianness {
+        Endianness::Big => quote! { from_be_bytes },
+        Endianness::Little => quote! { from_le_bytes },
+    }
+}
+
+pub fn get_to_bytes_method(endianness: Endianness) -> proc_macro2::TokenStream {
+    match endianness {
+        Endianness::Big => quote! { to_be_bytes },
+        Endianness::Little => quote! { to_le_bytes },
+    }
+}
+
+pub fn get_try_from_bytes_method(endianness: Endianness) -> proc_macro2::TokenStream {
+    match endianness {
+        Endianness::Big => quote! { try_from_be_bytes },
+        Endianness::Little => quote! { try_from_le_bytes },
+    }
+}
+
+pub fn get_u8_bit_shift_direction(
+    size: usize,
+    pos: usize,
+    endianness: Endianness,
+) -> proc_macro2::TokenStream {
+    match endianness {
+        Endianness::Big => quote! { (7_usize - (#size + #pos % 8_usize - 1_usize)) },
+        Endianness::Little => quote! { #pos % 8_usize },
+    }
+}
+
+pub fn get_u8_bit_write_shift(
+    size: usize,
+    pos: usize,
+    endianness: Endianness,
+) -> proc_macro2::TokenStream {
+    match endianness {
+        Endianness::Big => quote! { (7_usize - (#size - 1_usize) - #pos % 8_usize) },
+        Endianness::Little => quote! { #pos % 8_usize },
+    }
+}
 
 pub fn get_number_size(
     field_type: &syn::Type,
