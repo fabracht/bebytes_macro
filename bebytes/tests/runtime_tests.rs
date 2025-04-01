@@ -55,23 +55,28 @@ fn test_to_le_bytes(input: ErrorEstimate, expected: Vec<u8>) {
 
 #[test]
 fn test_endian_conversion() {
-    let original = ErrorEstimate { s_bit: 1, z_bit: 0, scale: 63, multiplier: 100 };
-    
+    let original = ErrorEstimate {
+        s_bit: 1,
+        z_bit: 0,
+        scale: 63,
+        multiplier: 100,
+    };
+
     // Convert to big-endian
     let be_bytes = original.to_be_bytes();
     // Read back from big-endian
     let (from_be, _) = ErrorEstimate::try_from_be_bytes(&be_bytes).unwrap();
     assert_eq!(original, from_be);
-    
+
     // Convert to little-endian
     let le_bytes = original.to_le_bytes();
     // Read back from little-endian
     let (from_le, _) = ErrorEstimate::try_from_le_bytes(&le_bytes).unwrap();
     assert_eq!(original, from_le);
-    
+
     // Ensure the byte representations are different
     assert_ne!(be_bytes, le_bytes);
-    
+
     // But trying to read big-endian data as little-endian should give incorrect results
     let (wrong_endian, _) = ErrorEstimate::try_from_le_bytes(&be_bytes).unwrap();
     assert_ne!(original, wrong_endian);

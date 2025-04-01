@@ -47,7 +47,7 @@ pub fn handle_enum(
             }
         })
         .collect::<Vec<_>>();
-    
+
     // For enums, the byte representation is the same for both endianness since we're just storing a single byte value
     (from_bytes_arms, to_bytes_arms)
 }

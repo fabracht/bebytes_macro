@@ -5,7 +5,7 @@ use bebytes::BeBytes;
 fn main() {
     // Test both endianness formats
     test_both_endianness();
-    
+
     let client_setup_response = ArrayedStruct::new(Modes::new(0), [1; 1], [2; 2], [3; 3]);
     let bytes = client_setup_response.to_be_bytes();
     println!("Bytes len: {}", bytes.len());
@@ -221,63 +221,69 @@ fn main() {
 // Test that both endianness formats work correctly
 fn test_both_endianness() {
     println!("\n=== TESTING BOTH ENDIANNESS FORMATS ===\n");
-    
-    // Test with a simple struct 
+
+    // Test with a simple struct
     let test_struct = U16 {
         first: 1,
         second: 16383,
         fourth: 0,
     };
-    
+
     // Convert to big-endian
     let be_bytes = test_struct.to_be_bytes();
     println!("Big-endian bytes: {:?}", be_bytes);
-    
+
     // Convert to little-endian
     let le_bytes = test_struct.to_le_bytes();
     println!("Little-endian bytes: {:?}", le_bytes);
-    
+
     // They should be different
-    assert_ne!(be_bytes, le_bytes, "Big-endian and little-endian representations should differ");
-    
+    assert_ne!(
+        be_bytes, le_bytes,
+        "Big-endian and little-endian representations should differ"
+    );
+
     // Parse from big-endian
     let (from_be, be_len) = U16::try_from_be_bytes(&be_bytes).unwrap();
     println!("Parsed from BE: {:?}, len: {}", from_be, be_len);
     assert_eq!(test_struct, from_be);
-    
+
     // Parse from little-endian
     let (from_le, le_len) = U16::try_from_le_bytes(&le_bytes).unwrap();
     println!("Parsed from LE: {:?}, len: {}", from_le, le_len);
     assert_eq!(test_struct, from_le);
-    
+
     // Parsing big-endian as little-endian should yield incorrect results
     if let Ok((wrong_endian, _)) = U16::try_from_le_bytes(&be_bytes) {
-        assert_ne!(test_struct, wrong_endian, "Parsing BE bytes as LE should give different results");
+        assert_ne!(
+            test_struct, wrong_endian,
+            "Parsing BE bytes as LE should give different results"
+        );
         println!("BE bytes parsed as LE (incorrectly): {:?}", wrong_endian);
     }
-    
+
     // Test with a medium complexity struct (U32)
     let test_u32 = U32 {
         first: 1,
         second: 32383,
         fourth: 1,
     };
-    
+
     // Test big-endian serialization and deserialization
     let u32_be = test_u32.to_be_bytes();
     println!("U32 BE bytes: {:?}", u32_be);
     let (parsed_u32_be, _) = U32::try_from_be_bytes(&u32_be).unwrap();
     assert_eq!(test_u32, parsed_u32_be);
-    
+
     // Test little-endian serialization and deserialization
     let u32_le = test_u32.to_le_bytes();
     println!("U32 LE bytes: {:?}", u32_le);
     let (parsed_u32_le, _) = U32::try_from_le_bytes(&u32_le).unwrap();
     assert_eq!(test_u32, parsed_u32_le);
-    
+
     // They should be different representations
     assert_ne!(u32_be, u32_le);
-    
+
     println!("Both endianness formats work correctly!\n");
 }
 

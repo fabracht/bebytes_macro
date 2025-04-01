@@ -68,7 +68,13 @@ fn push_byte_indices(tokens: &mut Vec<proc_macro2::TokenStream>, field_size: usi
     });
 }
 
-fn handle_u8_field(context: &FieldContext, size: usize, pos: usize, field_data: &mut FieldData, endianness: crate::consts::Endianness) {
+fn handle_u8_field(
+    context: &FieldContext,
+    size: usize,
+    pos: usize,
+    field_data: &mut FieldData,
+    endianness: crate::consts::Endianness,
+) {
     let FieldContext {
         field_name,
         field_type,
@@ -168,7 +174,11 @@ fn handle_u8_field(context: &FieldContext, size: usize, pos: usize, field_data: 
     field_data.total_size += size;
 }
 
-fn handle_primitive_type(context: &FieldContext, field_data: &mut FieldData, endianness: crate::consts::Endianness) {
+fn handle_primitive_type(
+    context: &FieldContext,
+    field_data: &mut FieldData,
+    endianness: crate::consts::Endianness,
+) {
     let FieldContext {
         field_name,
         field_type,
@@ -187,10 +197,10 @@ fn handle_primitive_type(context: &FieldContext, field_data: &mut FieldData, end
 
     let mut parsing = Vec::new();
     push_byte_indices(&mut parsing, field_size);
-    
+
     let from_bytes_method = utils::get_from_bytes_method(endianness);
     let to_bytes_method = utils::get_to_bytes_method(endianness);
-    
+
     parsing.push(quote! {
         let #field_name = <#field_type>::#from_bytes_method({
             let slice = &bytes[byte_index..end_byte_index];
@@ -200,7 +210,7 @@ fn handle_primitive_type(context: &FieldContext, field_data: &mut FieldData, end
         });
     });
     field_data.field_parsing.extend(parsing);
-    
+
     field_data.field_writing.push(quote! {
         let field_slice = &#field_name.#to_bytes_method();
         bytes.extend_from_slice(field_slice);
@@ -306,7 +316,11 @@ fn handle_vector(
     }
 }
 
-fn handle_option_type(context: &FieldContext, field_data: &mut FieldData, endianness: crate::consts::Endianness) {
+fn handle_option_type(
+    context: &FieldContext,
+    field_data: &mut FieldData,
+    endianness: crate::consts::Endianness,
+) {
     let FieldContext {
         field_name,
         field_type,
@@ -358,14 +372,18 @@ fn handle_option_type(context: &FieldContext, field_data: &mut FieldData, endian
     }
 }
 
-fn handle_custom_type(context: &FieldContext, field_data: &mut FieldData, endianness: crate::consts::Endianness) {
+fn handle_custom_type(
+    context: &FieldContext,
+    field_data: &mut FieldData,
+    endianness: crate::consts::Endianness,
+) {
     let FieldContext {
         field_name,
         field_type,
         field,
         ..
     } = context;
-    
+
     let needs_owned = !utils::is_copy(field_type);
     push_field_accessor(field_data, field_name, needs_owned);
 
@@ -478,16 +496,26 @@ pub fn handle_struct(context: StructContext) {
 
         match determine_field_type(&field_context, &field.attrs, &mut field_data.errors) {
             Some(field_type) => match field_type {
-                FieldType::U8Field(size, pos) => {
-                    handle_u8_field(&field_context, size, pos, &mut field_data, context.endianness)
+                FieldType::U8Field(size, pos) => handle_u8_field(
+                    &field_context,
+                    size,
+                    pos,
+                    &mut field_data,
+                    context.endianness,
+                ),
+                FieldType::PrimitiveType => {
+                    handle_primitive_type(&field_context, &mut field_data, context.endianness)
                 }
-                FieldType::PrimitiveType => handle_primitive_type(&field_context, &mut field_data, context.endianness),
                 FieldType::Array(length) => handle_array(&field_context, length, &mut field_data),
                 FieldType::Vector(size, vec_size_ident) => {
                     handle_vector(&field_context, size, vec_size_ident, &mut field_data)
                 }
-                FieldType::OptionType => handle_option_type(&field_context, &mut field_data, context.endianness),
-                FieldType::CustomType => handle_custom_type(&field_context, &mut field_data, context.endianness),
+                FieldType::OptionType => {
+                    handle_option_type(&field_context, &mut field_data, context.endianness)
+                }
+                FieldType::CustomType => {
+                    handle_custom_type(&field_context, &mut field_data, context.endianness)
+                }
             },
             None => continue,
         }

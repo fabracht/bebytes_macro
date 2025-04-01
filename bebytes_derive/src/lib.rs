@@ -30,15 +30,15 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     let mut field_limit_check = Vec::new();
 
     let mut errors = Vec::new();
-    
+
     // For big-endian implementation
     let mut be_field_parsing = Vec::new();
     let mut be_field_writing = Vec::new();
-    
+
     // For little-endian implementation
     let mut le_field_parsing = Vec::new();
     let mut le_field_writing = Vec::new();
-    
+
     // Common elements
     let mut bit_sum = Vec::new();
     let mut named_fields = Vec::new();
@@ -64,7 +64,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     last_field,
                     endianness: Endianness::Big,
                 });
-                
+
                 // Generate little-endian implementation
                 // We reuse named_fields and bit_sum because they're the same
                 let mut le_named_fields = Vec::new();
@@ -102,7 +102,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             #(#bit_sum)*
                             bit_sum / 8
                         }
-                        
+
                         // Big-endian implementation
                         fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
                             if bytes.is_empty() {
@@ -128,7 +128,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             )*
                             bytes
                         }
-                        
+
                         // Little-endian implementation
                         fn try_from_le_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
                             if bytes.is_empty() {
@@ -184,7 +184,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             }
         },
         Data::Enum(data_enum) => {
-            let (from_be_bytes_arms, to_be_bytes_arms) = enums::handle_enum(errors, data_enum.clone());
+            let (from_be_bytes_arms, to_be_bytes_arms) =
+                enums::handle_enum(errors, data_enum.clone());
             let (from_le_bytes_arms, to_le_bytes_arms) = enums::handle_enum(Vec::new(), data_enum);
 
             let expanded = quote! {
@@ -192,7 +193,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     fn field_size() -> usize {
                         core::mem::size_of::<Self>()
                     }
-                    
+
                     // Big-endian implementation
                     fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
                         if bytes.is_empty() {
@@ -213,7 +214,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         bytes.push(val);
                         bytes
                     }
-                    
+
                     // Little-endian implementation
                     fn try_from_le_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
                         if bytes.is_empty() {

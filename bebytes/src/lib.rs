@@ -33,7 +33,7 @@ pub trait BeBytes {
     fn try_from_be_bytes(bytes: &'_ [u8]) -> core::result::Result<(Self, usize), Infallible>
     where
         Self: Sized;
-        
+
     // Little-endian methods
     #[cfg(feature = "std")]
     fn to_le_bytes(&self) -> std::vec::Vec<u8>;

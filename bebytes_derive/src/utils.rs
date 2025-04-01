@@ -30,14 +30,22 @@ pub fn get_try_from_bytes_method(endianness: Endianness) -> proc_macro2::TokenSt
     }
 }
 
-pub fn get_u8_bit_shift_direction(size: usize, pos: usize, endianness: Endianness) -> proc_macro2::TokenStream {
+pub fn get_u8_bit_shift_direction(
+    size: usize,
+    pos: usize,
+    endianness: Endianness,
+) -> proc_macro2::TokenStream {
     match endianness {
         Endianness::Big => quote! { (7_usize - (#size + #pos % 8_usize - 1_usize)) },
         Endianness::Little => quote! { #pos % 8_usize },
     }
 }
 
-pub fn get_u8_bit_write_shift(size: usize, pos: usize, endianness: Endianness) -> proc_macro2::TokenStream {
+pub fn get_u8_bit_write_shift(
+    size: usize,
+    pos: usize,
+    endianness: Endianness,
+) -> proc_macro2::TokenStream {
     match endianness {
         Endianness::Big => quote! { (7_usize - (#size - 1_usize) - #pos % 8_usize) },
         Endianness::Little => quote! { #pos % 8_usize },
