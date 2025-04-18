@@ -53,3 +53,31 @@ pub trait BeBytes {
     where
         Self: Sized;
 }
+
+pub trait BeBytesWith {
+    fn try_from_be_bytes_with_sizes(
+        bytes: &[u8],
+        sizes: &std::collections::HashMap<&'static str, usize>,
+    ) -> core::result::Result<(Self, usize), std::boxed::Box<dyn std::error::Error>>
+    where
+        Self: Sized + BeBytesMetadata;
+
+    /// Attempts to parse this type from a little-endian byte slice with external size information.
+    /// Used for structs that have fields requiring size information from other structs.
+    fn try_from_le_bytes_with_sizes(
+        bytes: &[u8],
+        sizes: &std::collections::HashMap<&'static str, usize>,
+    ) -> core::result::Result<(Self, usize), std::boxed::Box<dyn std::error::Error>>
+    where
+        Self: Sized + BeBytesMetadata;
+}
+
+pub trait BeBytesMetadata {
+    fn for_field_mappings() -> std::collections::HashMap<&'static str, &'static str> {
+        std::collections::HashMap::new()
+    }
+
+    fn requires_external_sizes() -> std::collections::HashSet<&'static str> {
+        std::collections::HashSet::new()
+    }
+}

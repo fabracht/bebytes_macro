@@ -1,4 +1,4 @@
-use bebytes::BeBytes;
+use bebytes::*;
 
 // This struct contains a bounded vector using FromField
 #[derive(BeBytes, Debug, PartialEq, Clone)]
@@ -40,11 +40,11 @@ fn main() {
         },
         last_field: 5,
     };
-    
+
     let bytes = safe.to_be_bytes();
     let (deserialized, _) = SafeNestedVector::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(safe, deserialized);
-    
+
     // Test fixed size vector nested struct
     let another = AnotherSafeNested {
         some_field: 10,
@@ -53,7 +53,7 @@ fn main() {
         },
         trailing_data: 42,
     };
-    
+
     let bytes = another.to_be_bytes();
     let (deserialized, _) = AnotherSafeNested::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(another, deserialized);

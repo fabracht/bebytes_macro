@@ -1,6 +1,6 @@
 #![allow(clippy::assign_op_pattern)]
 
-use bebytes::BeBytes;
+use bebytes::*;
 
 fn main() {
     // Test both endianness formats

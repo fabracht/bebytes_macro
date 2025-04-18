@@ -12,6 +12,10 @@ keywords = ["serialization", "deserialization", "network", "bytes", "no-std"]
 [[bin]]
 name = "macro_test"
 path = "./bin/macro_test.rs"
+[[bin]]
+name = "simple_test"
+path = "./bin/simple_test.rs"
+
 
 [dependencies]
 bebytes_derive = "0.8.1"

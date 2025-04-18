@@ -1,4 +1,4 @@
-use bebytes::BeBytes;
+use bebytes::*;
 use test_case::test_case;
 
 #[cfg(not(feature = "std"))]

@@ -45,6 +45,7 @@ pub struct StructContext<'a> {
     pub total_size: usize,
     pub last_field: Option<&'a syn::Field>,
     pub endianness: crate::consts::Endianness,
+    pub field_attrs_map: std::collections::HashMap<String, attrs::FieldAttributes>,
 }
 
 fn push_field_accessor(field_data: &mut FieldData, field_name: &syn::Ident, needs_owned: bool) {
@@ -502,11 +503,9 @@ fn determine_field_type(
     attrs: &[syn::Attribute],
     errors: &mut Vec<proc_macro2::TokenStream>,
 ) -> Option<FieldType> {
-    let mut u8_attribute_present = false;
-    let (pos, size, vec_size_ident) =
-        attrs::parse_attributes(attrs.to_vec(), &mut u8_attribute_present, errors);
+    let field_attrs = attrs::extract_field_attributes(attrs, errors);
 
-    if u8_attribute_present {
+    if field_attrs.has_u8_attributes() {
         if let syn::Type::Path(tp) = context.field_type {
             if !utils::is_supported_primitive_type(tp) {
                 let error = syn::Error::new(
@@ -517,8 +516,13 @@ fn determine_field_type(
                 return None;
             }
         }
-        if let (Some(pos), Some(size)) = (pos, size) {
-            return Some(FieldType::U8Field(size, pos));
+
+        if field_attrs.is_bit_field() {
+            // Safe to unwrap because is_bit_field() ensures both are Some
+            return Some(FieldType::U8Field(
+                field_attrs.u8_size.unwrap(),
+                field_attrs.u8_pos.unwrap(),
+            ));
         }
         return None;
     }
@@ -540,7 +544,10 @@ fn determine_field_type(
         syn::Type::Path(tp) if !tp.path.segments.is_empty() => {
             let segment = &tp.path.segments[0];
             match &segment.ident {
-                ident if ident == "Vec" => Some(FieldType::Vector(size, vec_size_ident)),
+                ident if ident == "Vec" => Some(FieldType::Vector(
+                    field_attrs.with_size,
+                    field_attrs.from_field,
+                )),
                 ident if ident == "Option" => Some(FieldType::OptionType),
                 ident if !utils::is_primitive_identity(ident) => Some(FieldType::CustomType),
                 _ => None,
@@ -555,6 +562,15 @@ pub fn handle_struct(context: StructContext) {
     if let Err(validation_error) = crate::bit_validation::validate_field_sequence(context.fields) {
         context.errors.push(validation_error);
         return;
+    }
+
+    // Validate that FromField references point to existing fields
+    if !attrs::validate_from_field_references(
+        context.fields,
+        &context.field_attrs_map,
+        context.errors,
+    ) {
+        return; // Stop processing if there are invalid references
     }
 
     let mut field_data = FieldData {
@@ -612,7 +628,7 @@ pub fn handle_struct(context: StructContext) {
     }
 
     *context.field_limit_check = field_data.field_limit_check;
-    *context.errors = field_data.errors;
+    context.errors.extend(field_data.errors); // Extend instead of replace to preserve errors from validation
     *context.field_parsing = field_data.field_parsing;
     *context.bit_sum = field_data.bit_sum;
     *context.field_writing = field_data.field_writing;

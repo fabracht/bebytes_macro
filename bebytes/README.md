@@ -20,7 +20,7 @@ bebytes = "0.7.1"
 Then, import the BeBytes trait from the bebytes crate and derive it for your struct:
 
 ```rust
-use bebytes::BeBytes;
+use bebytes::*;
 
 #[derive(BeBytes)]
 struct Dummy {
@@ -181,6 +181,7 @@ struct VectorOfCustoms {
 ```
 
 For vectors of custom types, the following rules apply:
+
 - When used as the last field, it will consume all remaining bytes, parsing them as instances of the custom type
 - When used elsewhere, you must specify size information with `#[FromField]` or `#[With]`
 - Each item in the vector is serialized/deserialized using its own BeBytes implementation
@@ -228,10 +229,10 @@ fn main() {
             },
         ],
     };
-    
+
     // Serialize to bytes
     let bytes = dns_name.to_be_bytes();
-    
+
     // Deserialize back
     let (reconstructed, _) = DnsName::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(dns_name, reconstructed);

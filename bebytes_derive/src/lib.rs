@@ -10,6 +10,7 @@ mod enums;
 mod structs;
 mod utils;
 
+use attrs::FieldAttributesMap;
 use proc_macro::TokenStream;
 use quote::{__private::Span, quote};
 use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields};
@@ -27,6 +28,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident.clone();
     let my_trait_path: syn::Path = syn::parse_str("BeBytes").unwrap();
+    let metadata_trait_path: syn::Path = syn::parse_str("BeBytesMetadata").unwrap();
     let mut field_limit_check = Vec::new();
 
     let mut errors = Vec::new();
@@ -51,6 +53,12 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 let total_size: usize = 0;
                 let last_field = fields.named.last();
 
+                // Extract field attributes to analyze relationships
+                let field_attrs_map = attrs::extract_struct_field_attributes(&fields, &mut errors);
+
+                // Generate metadata implementation after field relationships have been extracted
+                let metadata_impl =
+                    generate_metadata_impl(&name, metadata_trait_path, field_attrs_map.clone());
                 // Generate big-endian implementation
                 structs::handle_struct(structs::StructContext {
                     field_limit_check: &mut field_limit_check,
@@ -63,6 +71,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     total_size,
                     last_field,
                     endianness: Endianness::Big,
+                    field_attrs_map: field_attrs_map.clone(),
                 });
 
                 // Generate little-endian implementation
@@ -79,6 +88,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     total_size,
                     last_field,
                     endianness: Endianness::Little,
+                    field_attrs_map,
                 });
 
                 // If there are any errors, return them immediately without generating code
@@ -156,6 +166,30 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
                     }
 
+                    impl BeBytesWith for #name {
+                        // Default implementations for the with_sizes methods
+                        // These will use external size information when provided
+                        fn try_from_be_bytes_with_sizes(
+                            bytes: &[u8],
+                            sizes: &std::collections::HashMap<&'static str, usize>,
+                        ) -> Result<(Self, usize), Box<dyn std::error::Error>>
+                        where
+                            Self: Sized + BeBytesMetadata
+                        {
+                            Self::try_from_be_bytes(bytes)
+                        }
+
+                        fn try_from_le_bytes_with_sizes(
+                            bytes: &[u8],
+                            sizes: &std::collections::HashMap<&'static str, usize>,
+                        ) -> Result<(Self, usize), Box<dyn std::error::Error>>
+                        where
+                            Self: Sized + BeBytesMetadata
+                        {
+                            Self::try_from_le_bytes(bytes)
+                        }
+                    }
+
                     impl #name {
                         #[allow(clippy::too_many_arguments)]
                         pub fn new(#(#constructor_arg_list,)*) -> Self {
@@ -165,6 +199,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             }
                         }
                     }
+
+                    #metadata_impl
                 };
 
                 let output = quote! {
@@ -249,4 +285,37 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             output.into()
         }
     }
+}
+
+fn generate_metadata_impl(
+    name: &syn::Ident,
+    metadata_trait_path: syn::Path,
+    field_attrs_map: FieldAttributesMap,
+) -> Option<proc_macro2::TokenStream> {
+    // Create vectors to collect field mapping relationships
+    let mut requires_sizes = Vec::new();
+
+    // Iterate through the field attributes map to find ForField and FromField pairs
+    for (field_name, attrs) in &field_attrs_map {
+        // If this field has a FromField attribute (getting size from another field)
+        if attrs.has_from_field() {
+            // Add to the list of fields requiring external size information
+            requires_sizes.push(quote! {
+                sizes.insert(#field_name);
+            });
+        }
+    }
+
+    let metadata_impl = {
+        Some(quote! {
+            impl #metadata_trait_path for #name {
+                fn requires_external_sizes() -> std::collections::HashSet<&'static str> {
+                    let mut sizes = std::collections::HashSet::new();
+                    #(#requires_sizes)*
+                    sizes
+                }
+            }
+        })
+    };
+    metadata_impl
 }
