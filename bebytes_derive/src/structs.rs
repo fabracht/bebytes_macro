@@ -248,6 +248,106 @@ fn handle_array(context: &FieldContext, length: usize, field_data: &mut FieldDat
     }
 }
 
+// Helper function to handle primitive type vectors
+fn handle_primitive_vector(
+    field_name: &syn::Ident,
+    field: &syn::Field,
+    is_last_field: bool,
+    size: Option<usize>,
+    vec_size_ident: Option<syn::Ident>,
+    field_data: &mut FieldData,
+) {
+    match (size, vec_size_ident) {
+        (_, Some(ident)) => {
+            field_data.bit_sum.push(quote! { bit_sum = 4096 * 8; });
+            field_data.field_parsing.push(quote! {
+                let vec_length = #ident as usize;
+                byte_index = _bit_sum / 8;
+                let end_index = byte_index + vec_length;
+                if end_index > bytes.len() {
+                    panic!("Not enough bytes to parse a vector of size {}", vec_length);
+                }
+                let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                _bit_sum += vec_length * 8;
+            });
+        }
+        (Some(s), None) => {
+            push_bit_sum(field_data, s);
+            field_data.field_parsing.push(quote! {
+                let vec_length = #s as usize;
+                byte_index = _bit_sum / 8;
+                let end_index = byte_index + vec_length;
+                let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                _bit_sum += #s * 8;
+            });
+        }
+        (None, None) => {
+            if !is_last_field {
+                let error = syn::Error::new(
+                        field.ty.span(),
+                        "Unbounded vectors can only be used as padding at the end of a struct",
+                    );
+                field_data.errors.push(error.to_compile_error());
+            }
+            field_data.bit_sum.push(quote! { bit_sum = 4096 * 8; });
+            field_data.field_parsing.push(quote! {
+                byte_index = _bit_sum / 8;
+                let #field_name = Vec::from(&bytes[byte_index..]);
+                _bit_sum += #field_name.len() * 8;
+            });
+        }
+    }
+
+    field_data.field_writing.push(quote! {
+        bytes.extend_from_slice(&#field_name);
+        _bit_sum += #field_name.len() * 8;
+    });
+}
+
+// Helper function to generate parsing code for custom type vectors
+fn generate_custom_vec_parsing_code(
+    field_name: &syn::Ident,
+    inner_type_name: &proc_macro2::TokenStream,
+    try_from_bytes_method: &proc_macro2::TokenStream,
+    size_info: Option<proc_macro2::TokenStream>, 
+) -> proc_macro2::TokenStream {
+    if let Some(size_expr) = size_info {
+        // Fixed size or size from another field
+        quote! {
+            let mut bytes_consumed = 0;
+            for _ in 0..#size_expr {
+                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
+                    break;
+                }
+                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
+                    Ok((item, consumed)) => {
+                        #field_name.push(item);
+                        bytes_consumed += consumed;
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            _bit_sum += bytes_consumed * 8;
+        }
+    } else {
+        // Last field - consume all remaining bytes
+        quote! {
+            let mut bytes_consumed = 0;
+            while _bit_sum / 8 + bytes_consumed < bytes.len() {
+                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
+                    Ok((item, consumed)) => {
+                        #field_name.push(item);
+                        bytes_consumed += consumed;
+                    }
+                    Err(e) => break, // Stop on error
+                }
+            }
+            _bit_sum += bytes_consumed * 8;
+        }
+    }
+}
+
+// Main vector handling function - now significantly shorter
 fn handle_vector(
     context: &FieldContext,
     size: Option<usize>,
@@ -266,60 +366,20 @@ fn handle_vector(
 
     if let syn::Type::Path(tp) = field_type {
         if let Some(syn::Type::Path(ref inner_tp)) = utils::solve_for_inner_type(tp, "Vec") {
-            // Handle vector of primitive types (u8, etc.)
-
             if utils::is_primitive_type(inner_tp) {
-                match (size, vec_size_ident.clone()) {
-                    (_, Some(ident)) => {
-                        field_data.bit_sum.push(quote! { bit_sum = 4096 * 8; });
-                        field_data.field_parsing.push(quote! {
-                            let vec_length = #ident as usize;
-                            byte_index = _bit_sum / 8;
-                            let end_index = byte_index + vec_length;
-                            if end_index > bytes.len() {
-                                panic!("Not enough bytes to parse a vector of size {}", vec_length);
-                            }
-                            let #field_name = Vec::from(&bytes[byte_index..end_index]);
-                            _bit_sum += vec_length * 8;
-                        });
-                    }
-                    (Some(s), None) => {
-                        push_bit_sum(field_data, s);
-                        field_data.field_parsing.push(quote! {
-                            let vec_length = #s as usize;
-                            byte_index = _bit_sum / 8;
-                            let end_index = byte_index + vec_length;
-                            let #field_name = Vec::from(&bytes[byte_index..end_index]);
-                            _bit_sum += #s * 8;
-                        });
-                    }
-                    (None, None) => {
-                        if !is_last_field {
-                            let error = syn::Error::new(
-                                    field.ty.span(),
-                                    "Unbounded vectors can only be used as padding at the end of a struct",
-                                );
-                            field_data.errors.push(error.to_compile_error());
-                        }
-                        field_data.bit_sum.push(quote! { bit_sum = 4096 * 8; });
-                        field_data.field_parsing.push(quote! {
-                            byte_index = _bit_sum / 8;
-                            let #field_name = Vec::from(&bytes[byte_index..]);
-                            _bit_sum += #field_name.len() * 8;
-                        });
-                    }
-                }
-
-                field_data.field_writing.push(quote! {
-                    bytes.extend_from_slice(&#field_name);
-                    _bit_sum += #field_name.len() * 8;
-                });
+                // Handle vector of primitive types (u8, etc.)
+                handle_primitive_vector(
+                    field_name,
+                    field,
+                    *is_last_field,
+                    size,
+                    vec_size_ident,
+                    field_data,
+                );
             } else {
                 // Handle vector of custom types (Vec<CustomType>)
                 let inner_type_path = &inner_tp.path;
                 let inner_type_name = quote! { #inner_type_path };
-
-                // Get the appropriate endianness methods
                 let try_from_bytes_method = utils::get_try_from_bytes_method(endianness);
                 let to_bytes_method = utils::get_to_bytes_method(endianness);
 
@@ -328,66 +388,30 @@ fn handle_vector(
                     let mut #field_name = Vec::new();
                 });
 
-                if *is_last_field {
-                    // For the last field, we can consume all remaining bytes
-                    field_data.field_parsing.push(quote! {
-                        let mut bytes_consumed = 0;
-                        while _bit_sum / 8 + bytes_consumed < bytes.len() {
-                            match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                Ok((item, consumed)) => {
-                                    #field_name.push(item);
-                                    bytes_consumed += consumed;
-                                }
-                                Err(e) => break, // Stop on error
-                            }
-                        }
-                        _bit_sum += bytes_consumed * 8;
-                    });
+                let size_info = if *is_last_field {
+                    None
+                } else if let Some(vec_size) = size {
+                    Some(quote! { #vec_size })
+                } else if let Some(ident) = vec_size_ident.clone() {
+                    Some(quote! { #ident as usize })
                 } else {
-                    // For non-last fields, we need size information
-                    if let Some(vec_size) = size {
-                        field_data.field_parsing.push(quote! {
-                            let mut bytes_consumed = 0;
-                            for _ in 0..#vec_size {
-                                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
-                                    break;
-                                }
-                                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                    Ok((item, consumed)) => {
-                                        #field_name.push(item);
-                                        bytes_consumed += consumed;
-                                    }
-                                    Err(e) => return Err(e),
-                                }
-                            }
-                            _bit_sum += bytes_consumed * 8;
-                        });
-                    } else if let Some(ident) = vec_size_ident {
-                        field_data.field_parsing.push(quote! {
-                            let vec_length = #ident as usize;
-                            let mut bytes_consumed = 0;
-                            for _ in 0..vec_length {
-                                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
-                                    break;
-                                }
-                                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                    Ok((item, consumed)) => {
-                                        #field_name.push(item);
-                                        bytes_consumed += consumed;
-                                    }
-                                    Err(e) => return Err(e),
-                                }
-                            }
-                            _bit_sum += bytes_consumed * 8;
-                        });
-                    } else {
-                        let error = syn::Error::new(
-                            field.ty.span(),
-                            "Vectors of custom types need size information unless they are the last field. Use #[With(size(n))] or #[FromField(field_name)]",
-                        );
-                        field_data.errors.push(error.to_compile_error());
-                    }
-                }
+                    // Error case - vectors need size unless they're the last field
+                    let error = syn::Error::new(
+                        field.ty.span(),
+                        "Vectors of custom types need size information unless they are the last field. Use #[With(size(n))] or #[FromField(field_name)]",
+                    );
+                    field_data.errors.push(error.to_compile_error());
+                    return;
+                };
+
+                // Generate parsing code
+                let parsing_code = generate_custom_vec_parsing_code(
+                    field_name,
+                    &inner_type_name,
+                    &try_from_bytes_method,
+                    size_info,
+                );
+                field_data.field_parsing.push(parsing_code);
 
                 // Serialize the vector
                 field_data.field_writing.push(quote! {
