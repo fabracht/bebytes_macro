@@ -60,10 +60,7 @@ pub fn validate_field_sequence(fields: &syn::FieldsNamed) -> Result<(), TokenStr
                     // Check position sequence
                     if pos % 8 != total_size % 8 {
                         return Err(syn::Error::new_spanned(field,
-                            format_args!("U8 attributes must obey the sequence specified by the previous attributes. Expected position {} but got {}", 
-                                total_size,
-                                pos
-                            )
+                            format_args!("U8 attributes must obey the sequence specified by the previous attributes. Expected position {total_size} but got {pos}")
                         ).to_compile_error());
                     }
                     // Check for overlaps

@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{attrs, utils};
 use quote::{__private::Span, quote, quote_spanned};
 use syn::spanned::Spanned;
 
@@ -111,7 +111,7 @@ fn handle_u8_field(
 
     if number_length > 1 {
         let chunks =
-            utils::generate_chunks(number_length, syn::Ident::new("chunk", Span::call_site()));
+            utils::generate_chunks(number_length, &syn::Ident::new("chunk", Span::call_site()));
 
         field_data.field_parsing.push(quote! {
             let mut inner_total_size = #pos;
@@ -189,9 +189,8 @@ fn handle_primitive_type(
 
     push_field_accessor(field_data, field_name, false);
 
-    let field_size = match utils::get_number_size(field_type, field, &mut field_data.errors) {
-        Some(value) => value,
-        None => return,
+    let Some(field_size) = utils::get_number_size(field_type, field, &mut field_data.errors) else {
+        return;
     };
 
     push_bit_sum(field_data, field_size);
@@ -329,65 +328,65 @@ fn handle_vector(
                     let mut #field_name = Vec::new();
                 });
 
-                if !is_last_field {
+                if *is_last_field {
+                    // For the last field, we can consume all remaining bytes
+                    field_data.field_parsing.push(quote! {
+                        let mut bytes_consumed = 0;
+                        while _bit_sum / 8 + bytes_consumed < bytes.len() {
+                            match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
+                                Ok((item, consumed)) => {
+                                    #field_name.push(item);
+                                    bytes_consumed += consumed;
+                                }
+                                Err(e) => break, // Stop on error
+                            }
+                        }
+                        _bit_sum += bytes_consumed * 8;
+                    });
+                } else {
                     // For non-last fields, we need size information
                     if let Some(vec_size) = size {
                         field_data.field_parsing.push(quote! {
-                                let mut bytes_consumed = 0;
-                                for _ in 0..#vec_size {
-                                    if _bit_sum / 8 + bytes_consumed >= bytes.len() {
-                                        break;
-                                    }
-                                    match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                        Ok((item, consumed)) => {
-                                            #field_name.push(item);
-                                            bytes_consumed += consumed;
-                                        }
-                                        Err(e) => return Err(e),
-                                    }
-                                }
-                                _bit_sum += bytes_consumed * 8;
-                            });
-                    } else if let Some(ident) = vec_size_ident {
-                        field_data.field_parsing.push(quote! {
-                                let vec_length = #ident as usize;
-                                let mut bytes_consumed = 0;
-                                for _ in 0..vec_length {
-                                    if _bit_sum / 8 + bytes_consumed >= bytes.len() {
-                                        break;
-                                    }
-                                    match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                        Ok((item, consumed)) => {
-                                            #field_name.push(item);
-                                            bytes_consumed += consumed;
-                                        }
-                                        Err(e) => return Err(e),
-                                    }
-                                }
-                                _bit_sum += bytes_consumed * 8;
-                            });
-                    } else {
-                        let error = syn::Error::new(
-                                field.ty.span(),
-                                "Vectors of custom types need size information. Use #[With(size(n))] or #[FromField(field_name)]",
-                            );
-                        field_data.errors.push(error.to_compile_error());
-                    }
-                } else {
-                    // For the last field, we can consume all remaining bytes
-                    field_data.field_parsing.push(quote! {
                             let mut bytes_consumed = 0;
-                            while _bit_sum / 8 + bytes_consumed < bytes.len() {
+                            for _ in 0..#vec_size {
+                                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
+                                    break;
+                                }
                                 match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
                                     Ok((item, consumed)) => {
                                         #field_name.push(item);
                                         bytes_consumed += consumed;
                                     }
-                                    Err(e) => break, // Stop on error
+                                    Err(e) => return Err(e),
                                 }
                             }
                             _bit_sum += bytes_consumed * 8;
                         });
+                    } else if let Some(ident) = vec_size_ident {
+                        field_data.field_parsing.push(quote! {
+                            let vec_length = #ident as usize;
+                            let mut bytes_consumed = 0;
+                            for _ in 0..vec_length {
+                                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
+                                    break;
+                                }
+                                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
+                                    Ok((item, consumed)) => {
+                                        #field_name.push(item);
+                                        bytes_consumed += consumed;
+                                    }
+                                    Err(e) => return Err(e),
+                                }
+                            }
+                            _bit_sum += bytes_consumed * 8;
+                        });
+                    } else {
+                        let error = syn::Error::new(
+                            field.ty.span(),
+                            "Vectors of custom types need size information unless they are the last field. Use #[With(size(n))] or #[FromField(field_name)]",
+                        );
+                        field_data.errors.push(error.to_compile_error());
+                    }
                 }
 
                 // Serialize the vector
@@ -421,11 +420,11 @@ fn handle_option_type(
         if let Some(inner_type) = utils::solve_for_inner_type(tp, "Option") {
             if let syn::Type::Path(inner_tp) = &inner_type {
                 if utils::is_primitive_type(inner_tp) {
-                    let field_size =
-                        match utils::get_number_size(&inner_type, field, &mut field_data.errors) {
-                            Some(value) => value,
-                            None => return,
-                        };
+                    let Some(field_size) =
+                        utils::get_number_size(&inner_type, field, &mut field_data.errors)
+                    else {
+                        return;
+                    };
 
                     push_bit_sum(field_data, field_size);
 
@@ -557,7 +556,7 @@ fn determine_field_type(
     }
 }
 
-pub fn handle_struct(context: StructContext) {
+pub fn handle_struct(context: &mut StructContext) {
     // First validate bit ranges
     if let Err(validation_error) = crate::bit_validation::validate_field_sequence(context.fields) {
         context.errors.push(validation_error);
@@ -586,8 +585,7 @@ pub fn handle_struct(context: StructContext) {
     for field in context.fields.named.clone() {
         let is_last = context
             .last_field
-            .map(|last| last.ident == field.ident)
-            .unwrap_or(false);
+            .is_some_and(|last| last.ident == field.ident);
 
         let field_context = FieldContext {
             field: &field,
@@ -596,8 +594,10 @@ pub fn handle_struct(context: StructContext) {
             is_last_field: is_last,
         };
 
-        match determine_field_type(&field_context, &field.attrs, &mut field_data.errors) {
-            Some(field_type) => match field_type {
+        if let Some(field_type) =
+            determine_field_type(&field_context, &field.attrs, &mut field_data.errors)
+        {
+            match field_type {
                 FieldType::U8Field(size, pos) => handle_u8_field(
                     &field_context,
                     size,
@@ -606,7 +606,7 @@ pub fn handle_struct(context: StructContext) {
                     context.endianness,
                 ),
                 FieldType::PrimitiveType => {
-                    handle_primitive_type(&field_context, &mut field_data, context.endianness)
+                    handle_primitive_type(&field_context, &mut field_data, context.endianness);
                 }
                 FieldType::Array(length) => handle_array(&field_context, length, &mut field_data),
                 FieldType::Vector(size, vec_size_ident) => handle_vector(
@@ -617,13 +617,12 @@ pub fn handle_struct(context: StructContext) {
                     context.endianness,
                 ),
                 FieldType::OptionType => {
-                    handle_option_type(&field_context, &mut field_data, context.endianness)
+                    handle_option_type(&field_context, &mut field_data, context.endianness);
                 }
                 FieldType::CustomType => {
-                    handle_custom_type(&field_context, &mut field_data, context.endianness)
+                    handle_custom_type(&field_context, &mut field_data, context.endianness);
                 }
-            },
-            None => continue,
+            }
         }
     }
 

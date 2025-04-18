@@ -1,7 +1,8 @@
 #![allow(clippy::assign_op_pattern)]
 
-use bebytes::*;
+use bebytes::BeBytes;
 
+#[allow(clippy::too_many_lines)]
 fn main() {
     // Test both endianness formats
     test_both_endianness();
@@ -10,10 +11,10 @@ fn main() {
     let bytes = client_setup_response.to_be_bytes();
     println!("Bytes len: {}", bytes.len());
     for byte in &bytes {
-        print!("{:08b} ", byte);
+        print!("{byte:08b} ");
     }
     let smalls_father1 = ArrayedStruct::try_from_be_bytes(&bytes);
-    println!("\nSmallStrucFather: {:?}", smalls_father1);
+    println!("\nSmallStrucFather: {smalls_father1:?}");
 
     let small_struct = SmallStruct { small: 3 };
     let smalls_father = SmallStructFather {
@@ -23,10 +24,10 @@ fn main() {
     let bytes = smalls_father.to_be_bytes();
     println!("Bytes len: {}", bytes.len());
     for byte in &bytes {
-        print!("{:08b} ", byte);
+        print!("{byte:08b} ");
     }
     let smalls_father1 = SmallStructFather::try_from_be_bytes(&bytes);
-    println!("\nSmallStrucFather: {:?}", smalls_father1);
+    println!("\nSmallStrucFather: {smalls_father1:?}");
 
     let error_estimate = ErrorEstimateMini {
         s_bit: 1,
@@ -37,10 +38,10 @@ fn main() {
     let bytes = error_estimate.to_be_bytes();
     println!("Bytes len: {}", bytes.len());
     for byte in &bytes {
-        print!("{:08b} ", byte);
+        print!("{byte:08b} ");
     }
     let error = ErrorEstimateMini::try_from_be_bytes(&bytes);
-    println!("\nError: {:?}", error);
+    println!("\nError: {error:?}");
     assert_eq!(error_estimate, error.unwrap().0);
     let error_estimate = ErrorEstimate {
         s_bit: 1,
@@ -55,11 +56,11 @@ fn main() {
     let bytes = error_estimate.to_be_bytes();
     println!("Bytes len: {}", bytes.len());
     for byte in &bytes {
-        print!("{:08b} ", byte);
+        print!("{byte:08b} ");
     }
 
     let error = ErrorEstimate::try_from_be_bytes(&bytes);
-    println!("\nError: {:?}", error);
+    println!("\nError: {error:?}");
     assert_eq!(error_estimate, error.unwrap().0);
     let dummy = DummyStruct {
         dummy0: [0, 2],
@@ -69,13 +70,13 @@ fn main() {
     let dummy_bytes = dummy.to_be_bytes();
 
     let re_dummy = DummyStruct::try_from_be_bytes(&dummy_bytes);
-    println!("\ndummy error {:?}", re_dummy);
+    println!("\ndummy error {re_dummy:?}");
     assert_eq!(dummy, re_dummy.unwrap().0);
     let nested = NestedStruct::new(dummy, None, error_estimate);
     let nested_bytes = nested.to_be_bytes();
     println!("Nested bytes:");
     for byte in &nested_bytes {
-        print!("{:08b} ", byte);
+        print!("{byte:08b} ");
     }
     let dummy_enum = DummyEnum::ServerStart;
     let dummy_enum_bytes = dummy_enum.to_be_bytes();
@@ -89,9 +90,9 @@ fn main() {
         fourth: 4,
     };
     let u_8_bytes = u_8.to_be_bytes();
-    println!("{:?}", u_8_bytes);
+    println!("{u_8_bytes:?}");
     let re_u_8 = U8::try_from_be_bytes(&u_8_bytes);
-    println!("{:?}", re_u_8);
+    println!("{re_u_8:?}");
     assert_eq!(u_8, re_u_8.unwrap().0);
 
     let u_16 = U16 {
@@ -101,9 +102,9 @@ fn main() {
     };
     let u_16_bytes = u_16.to_be_bytes();
 
-    println!("{:?}", u_16_bytes);
+    println!("{u_16_bytes:?}");
     let re_u_16 = U16::try_from_be_bytes(&u_16_bytes);
-    println!("{:?}", re_u_16);
+    println!("{re_u_16:?}");
     assert_eq!(u_16, re_u_16.unwrap().0);
 
     let u_32 = U32 {
@@ -113,30 +114,30 @@ fn main() {
     };
     let u_32_bytes = u_32.to_be_bytes();
 
-    println!("{:?}", u_32_bytes);
+    println!("{u_32_bytes:?}");
     let re_u_32 = U32::try_from_be_bytes(&u_32_bytes);
-    println!("{:?}", re_u_32);
+    println!("{re_u_32:?}");
     assert_eq!(u_32, re_u_32.unwrap().0);
 
     let optional = Optional {
         optional_number: Some(5),
     };
     let optional_bytes = optional.to_be_bytes();
-    println!("Optional Some: {:?}", optional_bytes);
+    println!("Optional Some: {optional_bytes:?}");
     let none_optional = Optional {
         optional_number: None,
     };
     let none_optional_bytes = none_optional.to_be_bytes();
-    println!("Optional None: {:?}", none_optional_bytes);
+    println!("Optional None: {none_optional_bytes:?}");
     let with_tailing_vec = WithTailingVec {
         pre_tail: 2,
         tail: vec![2, 3],
         post_tail: 3,
     };
     let with_tailing_vec_bytes = with_tailing_vec.to_be_bytes();
-    println!("WithTailingVec: {:?}", with_tailing_vec_bytes);
+    println!("WithTailingVec: {with_tailing_vec_bytes:?}");
     let re_with_tailing_vec = WithTailingVec::try_from_be_bytes(&with_tailing_vec_bytes);
-    println!("ReWithTailingVec: {:?}", re_with_tailing_vec);
+    println!("ReWithTailingVec: {re_with_tailing_vec:?}");
     assert_eq!(with_tailing_vec, re_with_tailing_vec.unwrap().0);
 
     let with_size_struct = WithSizeStruct {
@@ -144,9 +145,9 @@ fn main() {
         real_tail: vec![2, 3, 4],
     };
     let with_size_struct_bytes = with_size_struct.to_be_bytes();
-    println!("WithSizeStruct: {:?}", with_size_struct_bytes);
+    println!("WithSizeStruct: {with_size_struct_bytes:?}");
     let re_with_size_struct = WithSizeStruct::try_from_be_bytes(&with_size_struct_bytes);
-    println!("ReWithSizeStruct: {:?}", re_with_size_struct);
+    println!("ReWithSizeStruct: {re_with_size_struct:?}");
     assert_eq!(with_size_struct, re_with_size_struct.unwrap().0);
 
     let innocent_struct = InnocentStruct {
@@ -154,9 +155,9 @@ fn main() {
         real_tail: vec![4, 5],
     };
     let innocent_struct_bytes = innocent_struct.to_be_bytes();
-    println!("InnocentStruct: {:?}", innocent_struct_bytes);
+    println!("InnocentStruct: {innocent_struct_bytes:?}");
     let re_innocent_struct = InnocentStruct::try_from_be_bytes(&innocent_struct_bytes);
-    println!("ReInnocentStruct: {:?}", re_innocent_struct);
+    println!("ReInnocentStruct: {re_innocent_struct:?}");
     assert_eq!(innocent_struct, re_innocent_struct.unwrap().0);
 
     let complete_func = CompleteFunctionality::new(
@@ -180,9 +181,9 @@ fn main() {
         vec![1, 2, 3, 4, 5],
     );
     let complete_func_bytes = complete_func.to_be_bytes();
-    println!("CompleteFunctionality: {:?}", complete_func_bytes);
+    println!("CompleteFunctionality: {complete_func_bytes:?}");
     let re_complete_func = CompleteFunctionality::try_from_be_bytes(&complete_func_bytes);
-    println!("ReCompleteFunctionality: {:?}", re_complete_func);
+    println!("ReCompleteFunctionality: {re_complete_func:?}");
     assert_eq!(complete_func, re_complete_func.unwrap().0);
     let u_64 = U64 {
         first: 1,
@@ -190,9 +191,9 @@ fn main() {
         fourth: 1,
     };
     let u_64_bytes = u_64.to_be_bytes();
-    println!("{:?}", u_64_bytes);
+    println!("{u_64_bytes:?}");
     let re_u_64 = U64::try_from_be_bytes(&u_64_bytes);
-    println!("{:?}", re_u_64);
+    println!("{re_u_64:?}");
     assert_eq!(u_64, re_u_64.unwrap().0);
 
     let u_128 = U128 {
@@ -201,9 +202,9 @@ fn main() {
         fourth: 1,
     };
     let u_128_bytes = u_128.to_be_bytes();
-    println!("{:?}", u_128_bytes);
+    println!("{u_128_bytes:?}");
     let re_u_128 = U128::try_from_be_bytes(&u_128_bytes);
-    println!("{:?}", re_u_128);
+    println!("{re_u_128:?}");
     assert_eq!(u_128, re_u_128.unwrap().0);
 
     let i_8 = I8 {
@@ -212,10 +213,10 @@ fn main() {
         fourth: 1,
     };
     let i_8_bytes = i_8.to_be_bytes();
-    println!("{:?}", i_8_bytes);
-    let re_i_8 = I8::try_from_be_bytes(&i_8_bytes);
-    println!("{:?}", re_i_8);
-    assert_eq!(i_8, re_i_8.unwrap().0);
+    println!("{i_8_bytes:?}");
+    let re_signed_8 = I8::try_from_be_bytes(&i_8_bytes);
+    println!("{re_signed_8:?}");
+    assert_eq!(i_8, re_signed_8.unwrap().0);
 
     // Test Dns type
     test_dns_name();
@@ -234,11 +235,11 @@ fn test_both_endianness() {
 
     // Convert to big-endian
     let be_bytes = test_struct.to_be_bytes();
-    println!("Big-endian bytes: {:?}", be_bytes);
+    println!("Big-endian bytes: {be_bytes:?}");
 
     // Convert to little-endian
     let le_bytes = test_struct.to_le_bytes();
-    println!("Little-endian bytes: {:?}", le_bytes);
+    println!("Little-endian bytes: {le_bytes:?}");
 
     // They should be different
     assert_ne!(
@@ -248,13 +249,13 @@ fn test_both_endianness() {
 
     // Parse from big-endian
     let (from_be, be_len) = U16::try_from_be_bytes(&be_bytes).unwrap();
-    println!("Parsed from BE: {:?}, len: {}", from_be, be_len);
+    println!("Parsed from BE: {from_be:?}, len: {be_len}");
     assert_eq!(test_struct, from_be);
 
     // Parse from little-endian
-    let (from_le, le_len) = U16::try_from_le_bytes(&le_bytes).unwrap();
-    println!("Parsed from LE: {:?}, len: {}", from_le, le_len);
-    assert_eq!(test_struct, from_le);
+    let (from_lil, le_len) = U16::try_from_le_bytes(&le_bytes).unwrap();
+    println!("Parsed from LE: {from_lil:?}, len: {le_len}");
+    assert_eq!(test_struct, from_lil);
 
     // Parsing big-endian as little-endian should yield incorrect results
     if let Ok((wrong_endian, _)) = U16::try_from_le_bytes(&be_bytes) {
@@ -262,7 +263,7 @@ fn test_both_endianness() {
             test_struct, wrong_endian,
             "Parsing BE bytes as LE should give different results"
         );
-        println!("BE bytes parsed as LE (incorrectly): {:?}", wrong_endian);
+        println!("BE bytes parsed as LE (incorrectly): {wrong_endian:?}");
     }
 
     // Test with a medium complexity struct (U32)
@@ -274,18 +275,18 @@ fn test_both_endianness() {
 
     // Test big-endian serialization and deserialization
     let u32_be = test_u32.to_be_bytes();
-    println!("U32 BE bytes: {:?}", u32_be);
+    println!("U32 BE bytes: {u32_be:?}");
     let (parsed_u32_be, _) = U32::try_from_be_bytes(&u32_be).unwrap();
     assert_eq!(test_u32, parsed_u32_be);
 
     // Test little-endian serialization and deserialization
-    let u32_le = test_u32.to_le_bytes();
-    println!("U32 LE bytes: {:?}", u32_le);
-    let (parsed_u32_le, _) = U32::try_from_le_bytes(&u32_le).unwrap();
+    let u32_lil = test_u32.to_le_bytes();
+    println!("U32 LE bytes: {u32_lil:?}",);
+    let (parsed_u32_le, _) = U32::try_from_le_bytes(&u32_lil).unwrap();
     assert_eq!(test_u32, parsed_u32_le);
 
     // They should be different representations
-    assert_ne!(u32_be, u32_le);
+    assert_ne!(u32_be, u32_lil);
 
     println!("Both endianness formats work correctly!\n");
 }
@@ -295,21 +296,21 @@ fn test_dns_name() {
         segments: vec![
             DnsNameSegment {
                 length: 3,
-                segment: vec![1, 2, 3],
+                segment: b"www".into(),
             },
             DnsNameSegment {
                 length: 2,
-                segment: vec![4, 5],
+                segment: b"be".into(),
             },
         ],
     };
     let bytes = dns_name.to_be_bytes();
-    println!("DNS Name bytes: {:?}", bytes);
+    println!("DNS Name bytes: {bytes:?}");
     let re_dns_name = DnsName::try_from_be_bytes(&bytes);
-    println!("Reconstructed DNS Name: {:?}", re_dns_name);
+    println!("Reconstructed DNS Name: {re_dns_name:?}");
     assert_eq!(dns_name, re_dns_name.unwrap().0);
     let re_dns_name = DnsName::try_from_le_bytes(&bytes);
-    println!("Reconstructed DNS Name (LE): {:?}", re_dns_name);
+    println!("Reconstructed DNS Name (LE): {re_dns_name:?}");
     assert_eq!(dns_name, re_dns_name.unwrap().0);
 }
 

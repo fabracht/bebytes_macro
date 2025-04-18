@@ -16,6 +16,7 @@ pub fn handle_enum(
         .enumerate()
         .map(|(index, variant)| {
             let ident = &variant.ident;
+            #[allow(clippy::cast_possible_truncation)]
             let mut assigned_value = index as u8;
             if let Some((_, syn::Expr::Lit(expr_lit))) = &variant.discriminant {
                 if let syn::Lit::Int(token) = &expr_lit.lit {
@@ -25,7 +26,7 @@ pub fn handle_enum(
                         0
                     });
                 }
-            };
+            }
             (ident, assigned_value)
         })
         .collect::<Vec<_>>();

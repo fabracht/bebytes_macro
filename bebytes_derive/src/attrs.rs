@@ -6,7 +6,7 @@ use std::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-/// Represents all possible field attributes for BeBytes
+/// Represents all possible field attributes for `BeBytes`
 #[derive(Default, Clone)]
 pub struct FieldAttributes {
     // U8 attributes for bit-level fields
@@ -23,10 +23,6 @@ pub struct FieldAttributes {
 impl FieldAttributes {
     pub fn has_u8_attributes(&self) -> bool {
         self.u8_pos.is_some() || self.u8_size.is_some()
-    }
-
-    pub fn has_from_field(&self) -> bool {
-        self.from_field.is_some()
     }
 
     pub fn is_bit_field(&self) -> bool {
@@ -84,7 +80,7 @@ pub fn extract_struct_field_attributes(
     field_attrs_map
 }
 
-/// Validate that FromField references exist in the struct
+/// Validate that `FromField` references exist in the struct
 pub fn validate_from_field_references(
     fields_named: &syn::FieldsNamed,
     field_attrs_map: &FieldAttributesMap,
@@ -102,10 +98,7 @@ pub fn validate_from_field_references(
                     if !field_attrs_map.contains_key(&from_field_name) {
                         let error = syn::Error::new(
                             field.span(),
-                            format!(
-                                "FromField references non-existent field '{}'",
-                                from_field_name
-                            ),
+                            format!("FromField references non-existent field '{from_field_name}'"),
                         );
                         errors.push(error.to_compile_error());
                         has_errors = true;
@@ -166,14 +159,14 @@ pub fn parse_with_attribute(
     })
 }
 
-/// Parse FromField attribute for linking vector size to another field
+/// Parse `FromField` attribute for linking vector size to another field
 pub fn parse_from_field_attribute(
     attr: &syn::Attribute,
     field: &mut Option<proc_macro2::Ident>,
 ) -> Result<(), syn::Error> {
     attr.parse_nested_meta(|meta| {
         if let Some(name) = meta.path.get_ident().cloned() {
-            *field = Some(name.to_owned());
+            *field = Some(name.clone());
             Ok(())
         } else {
             Err(meta

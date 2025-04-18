@@ -53,7 +53,7 @@ fn generate_struct_expanded_impl(
     let le_named_fields = &gen_data.le_named_fields;
     let le_field_writing = &gen_data.le_field_writing;
     let field_limit_check = &gen_data.field_limit_check;
-    
+
     quote! {
         impl #my_trait_path for #name {
             fn field_size() -> usize {
@@ -128,14 +128,14 @@ fn generate_struct_expanded_impl(
 }
 
 fn generate_enum_expanded_impl(
-    name: &syn::Ident, 
+    name: &syn::Ident,
     from_be_bytes_arms: &[proc_macro2::TokenStream],
     to_be_bytes_arms: &[proc_macro2::TokenStream],
     from_le_bytes_arms: &[proc_macro2::TokenStream],
-    to_le_bytes_arms: &[proc_macro2::TokenStream]
+    to_le_bytes_arms: &[proc_macro2::TokenStream],
 ) -> proc_macro2::TokenStream {
     let my_trait_path: syn::Path = syn::parse_str("BeBytes").unwrap();
-    
+
     quote! {
         impl #my_trait_path for #name {
             fn field_size() -> usize {
@@ -204,7 +204,7 @@ fn process_named_fields(
 
     let total_size: usize = 0;
     let last_field = fields.named.last();
-    
+
     // Extract field attributes to analyze relationships
     let field_attrs_map = attrs::extract_struct_field_attributes(fields, errors);
 
@@ -253,7 +253,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
         Data::Struct(data) => match data.fields {
             Fields::Named(fields) => {
                 let struct_field_names = fields.named.iter().map(|f| &f.ident).collect::<Vec<_>>();
-                
+
                 let gen_data = process_named_fields(&fields, &mut errors);
 
                 // If there are any errors, return them immediately without generating code
@@ -264,11 +264,15 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     .into();
                 }
 
-                let constructor_arg_list = fields.named.iter().map(|f| {
-                    let field_ident = &f.ident;
-                    let field_type = &f.ty;
-                    quote! { #field_ident: #field_type }
-                }).collect::<Vec<_>>();
+                let constructor_arg_list = fields
+                    .named
+                    .iter()
+                    .map(|f| {
+                        let field_ident = &f.ident;
+                        let field_type = &f.ty;
+                        quote! { #field_ident: #field_type }
+                    })
+                    .collect::<Vec<_>>();
 
                 let expanded = generate_struct_expanded_impl(
                     &name,
@@ -305,7 +309,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 &from_le_bytes_arms,
                 &to_le_bytes_arms,
             );
-            
+
             expanded.into()
         }
         Data::Union(_) => {
