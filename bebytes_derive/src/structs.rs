@@ -9,7 +9,7 @@ use std::vec::Vec;
 use alloc::vec::Vec;
 
 enum FieldType {
-    U8Field(usize, usize), // size, position
+    BitsField(usize), // only size, position is auto-calculated
     PrimitiveType,
     Array(usize),                              // array_length
     Vector(Option<usize>, Option<syn::Ident>), // size, vec_size_ident
@@ -68,12 +68,12 @@ fn push_byte_indices(tokens: &mut Vec<proc_macro2::TokenStream>, field_size: usi
     });
 }
 
-fn handle_u8_field(
+fn handle_bits_field(
     context: &FieldContext,
     size: usize,
-    pos: usize,
     field_data: &mut FieldData,
     endianness: crate::consts::Endianness,
+    current_bit_position: &mut usize,
 ) {
     let FieldContext {
         field_name,
@@ -102,6 +102,10 @@ fn handle_u8_field(
             );
         }
     });
+
+    // Auto-calculate position based on current_bit_position
+    let pos = *current_bit_position;
+    *current_bit_position += size;
 
     let from_bytes_method = utils::get_from_bytes_method(endianness);
     let to_bytes_method = utils::get_to_bytes_method(endianness);
@@ -502,23 +506,23 @@ fn determine_field_type(
     attrs: &[syn::Attribute],
     errors: &mut Vec<proc_macro2::TokenStream>,
 ) -> Option<FieldType> {
-    let mut u8_attribute_present = false;
-    let (pos, size, vec_size_ident) =
-        attrs::parse_attributes(attrs.to_vec(), &mut u8_attribute_present, errors);
+    let mut bits_attribute_present = false;
+    let (size, vec_size_ident) =
+        attrs::parse_attributes(attrs.to_vec(), &mut bits_attribute_present, errors);
 
-    if u8_attribute_present {
+    if bits_attribute_present {
         if let syn::Type::Path(tp) = context.field_type {
             if !utils::is_supported_primitive_type(tp) {
                 let error = syn::Error::new(
                     context.field_type.span(),
-                    "Unsupported type for U8 attribute",
+                    "Unsupported type for bits attribute",
                 );
                 errors.push(error.to_compile_error());
                 return None;
             }
         }
-        if let (Some(pos), Some(size)) = (pos, size) {
-            return Some(FieldType::U8Field(size, pos));
+        if let Some(size) = size {
+            return Some(FieldType::BitsField(size));
         }
         return None;
     }
@@ -551,8 +555,9 @@ fn determine_field_type(
 }
 
 pub fn handle_struct(context: StructContext) {
-    // First validate bit ranges
-    if let Err(validation_error) = crate::bit_validation::validate_field_sequence(context.fields) {
+    // First validate byte completeness
+    if let Err(validation_error) = crate::bit_validation::validate_byte_completeness(context.fields)
+    {
         context.errors.push(validation_error);
         return;
     }
@@ -566,6 +571,9 @@ pub fn handle_struct(context: StructContext) {
         named_fields: Vec::new(),
         total_size: context.total_size,
     };
+
+    // Track current bit position for auto-calculation
+    let mut current_bit_position = 0;
 
     for field in context.fields.named.clone() {
         let is_last = context
@@ -582,12 +590,12 @@ pub fn handle_struct(context: StructContext) {
 
         match determine_field_type(&field_context, &field.attrs, &mut field_data.errors) {
             Some(field_type) => match field_type {
-                FieldType::U8Field(size, pos) => handle_u8_field(
+                FieldType::BitsField(size) => handle_bits_field(
                     &field_context,
                     size,
-                    pos,
                     &mut field_data,
                     context.endianness,
+                    &mut current_bit_position,
                 ),
                 FieldType::PrimitiveType => {
                     handle_primitive_type(&field_context, &mut field_data, context.endianness)

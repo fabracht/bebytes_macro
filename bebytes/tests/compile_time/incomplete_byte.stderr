@@ -1,0 +1,11 @@
+error: bits attributes must complete a full byte. Total bits: 7, which is 1 bits short of a complete byte
+  --> tests/compile_time/incomplete_byte.rs:8:23
+   |
+8  |   struct IncompleteByte {
+   |  _______________________^
+9  | |     #[bits(3)]
+10 | |     first: u8,
+11 | |     #[bits(4)]
+...  |
+14 | | }
+   | |_^

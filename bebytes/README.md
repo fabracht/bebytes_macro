@@ -66,45 +66,47 @@ The BeBytes derive macro generates the following methods for your struct:
 
 ## Bit Field Manipulation
 
-BeBytes provides fine-grained control over bit fields through the `U8` attribute:
+BeBytes provides fine-grained control over bit fields through the `bits` attribute:
 
 ```rust
 #[derive(BeBytes, Debug)]
 struct MyStruct {
-    #[U8(size(1), pos(0))]
-    field1: u8,   // 1 bit at position 0
-    #[U8(size(4), pos(1))]
-    field2: u8,   // 4 bits at position 1
-    #[U8(size(3), pos(5))]
-    field3: u8,   // 3 bits at position 5
+    #[bits(1)]
+    field1: u8,   // 1 bit
+    #[bits(4)]
+    field2: u8,   // 4 bits
+    #[bits(3)]
+    field3: u8,   // 3 bits (total: 8 bits = 1 byte)
     field4: u32,  // Regular 4-byte field
 }
 ```
 
-The `U8` attribute takes two parameters:
+The `bits` attribute takes a single parameter:
 
-- `size(n)`: The number of bits this field uses
-- `pos(n)`: The bit position where this field starts (from left to right, 0-indexed)
+- `bits(n)`: The number of bits this field uses
 
-Fields are read/written sequentially and `U8` fields MUST complete a full byte before the next non-`U8` field. This means the sum of all `size` values within a byte group must be 8 (or a multiple of 8 for multi-byte fields).
+Key points:
+- Bit positions are automatically calculated based on field order
+- Bits fields MUST complete a full byte before any non-bits field
+- The sum of all bits within a group must equal 8 (or a multiple of 8)
 
 ### Multi-Byte Bit Fields
 
-BeBytes supports bit manipulation on all unsigned types from `u8` to `u128`:
+BeBytes supports bit manipulation on all integer types from `u8`/`i8` to `u128`/`i128`:
 
 ```rust
 #[derive(BeBytes, Debug)]
 struct U16Example {
-    #[U8(size(1), pos(0))]
-    flag: u8,
-    #[U8(size(14), pos(1))]
-    value: u16,   // 14-bit value spanning across bytes
-    #[U8(size(1), pos(15))]
-    last_flag: u8,
+    #[bits(1)]
+    flag: u8,     // 1 bit
+    #[bits(14)]
+    value: u16,   // 14 bits spanning across bytes
+    #[bits(1)]
+    last_flag: u8,  // 1 bit (total: 16 bits = 2 bytes)
 }
 ```
 
-The same rules apply - all `U8` fields must complete a byte boundary, even when spanning multiple bytes.
+The same rules apply - all bits fields must complete a byte boundary together.
 
 ## Supported Types
 

@@ -7,11 +7,11 @@ use core::fmt::Write;
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 struct U16 {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(14), pos(1))]
+    #[bits(14)]
     second: u16,
-    #[U8(size(1), pos(15))]
+    #[bits(1)]
     fourth: u8,
 }
 

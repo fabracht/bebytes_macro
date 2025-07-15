@@ -6,11 +6,11 @@ use core::fmt::Write;
 
 #[derive(BeBytes, Debug, PartialEq)]
 struct Char {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(6), pos(1))]
+    #[bits(6)]
     second: char,
-    #[U8(size(1), pos(7))]
+    #[bits(1)]
     fourth: u8,
 }
 

@@ -22,7 +22,7 @@ use alloc::vec::Vec;
 
 use consts::Endianness;
 
-#[proc_macro_derive(BeBytes, attributes(U8, With, FromField))]
+#[proc_macro_derive(BeBytes, attributes(bits, With, FromField))]
 pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident.clone();
