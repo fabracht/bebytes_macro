@@ -10,12 +10,10 @@ pub fn validate_byte_completeness(fields: &syn::FieldsNamed) -> Result<(), Token
             if attr.path().is_ident("bits") {
                 // Parse #[bits(N)] where N is the size
                 match attr.parse_args::<syn::LitInt>() {
-                    Ok(lit) => {
-                        match lit.base10_parse::<usize>() {
-                            Ok(n) => total_bits += n,
-                            Err(e) => return Err(e.to_compile_error()),
-                        }
-                    }
+                    Ok(lit) => match lit.base10_parse::<usize>() {
+                        Ok(n) => total_bits += n,
+                        Err(e) => return Err(e.to_compile_error()),
+                    },
                     Err(e) => return Err(e.to_compile_error()),
                 }
             }

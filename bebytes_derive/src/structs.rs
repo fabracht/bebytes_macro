@@ -556,7 +556,8 @@ fn determine_field_type(
 
 pub fn handle_struct(context: StructContext) {
     // First validate byte completeness
-    if let Err(validation_error) = crate::bit_validation::validate_byte_completeness(context.fields) {
+    if let Err(validation_error) = crate::bit_validation::validate_byte_completeness(context.fields)
+    {
         context.errors.push(validation_error);
         return;
     }
