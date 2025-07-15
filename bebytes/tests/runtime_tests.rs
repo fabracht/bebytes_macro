@@ -134,8 +134,7 @@ pub struct DummyStruct {
 fn test_nested_struct(input: NestedStruct, len: usize) {
     let bytes = input.clone().to_be_bytes();
     for byte in bytes.iter() {
-        print!("{:08b} ", *byte);
-        print!("\n");
+        println!("{:08b} ", *byte);
     }
     println!("bytes: {:?}, len: {}", bytes, bytes.len());
     let (nested_struct, written_len) = NestedStruct::try_from_be_bytes(&bytes).unwrap();
