@@ -5,11 +5,12 @@ extern crate alloc;
 use core::fmt::Write;
 
 #[derive(BeBytes, Debug, PartialEq)]
-struct Char {
-    #[U8(size(4), pos(0))]
+struct IncompleteByte {
+    #[bits(3)]
     first: u8,
-    #[U8(size(4), pos(3))]
+    #[bits(4)]
     second: u8,
+    // Total: 7 bits - not a complete byte!
 }
 
 fn main() {}

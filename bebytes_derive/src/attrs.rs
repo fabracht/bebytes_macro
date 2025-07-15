@@ -8,17 +8,16 @@ use alloc::vec::Vec;
 
 pub fn parse_attributes(
     attributes: Vec<syn::Attribute>,
-    u8_attribute_present: &mut bool,
+    bits_attribute_present: &mut bool,
     errors: &mut Vec<proc_macro2::TokenStream>,
-) -> (Option<usize>, Option<usize>, Option<proc_macro2::Ident>) {
-    let mut pos = None;
+) -> (Option<usize>, Option<proc_macro2::Ident>) {
     let mut size = None;
     let mut field = None;
 
     for attr in attributes {
-        if attr.path().is_ident("U8") {
-            *u8_attribute_present = true;
-            if let Err(e) = parse_u8_attribute(&attr, &mut pos, &mut size) {
+        if attr.path().is_ident("bits") {
+            *bits_attribute_present = true;
+            if let Err(e) = parse_bits_attribute(&attr, &mut size) {
                 errors.push(e.to_compile_error());
             }
         } else if attr.path().is_ident("With") {
@@ -32,34 +31,18 @@ pub fn parse_attributes(
         }
     }
 
-    (pos, size, field)
+    (size, field)
 }
 
-pub fn parse_u8_attribute(
+pub fn parse_bits_attribute(
     attr: &syn::Attribute,
-    pos: &mut Option<usize>,
     size: &mut Option<usize>,
 ) -> Result<(), syn::Error> {
-    attr.parse_nested_meta(|meta| {
-        if meta.path.is_ident("pos") {
-            let content;
-            parenthesized!(content in meta.input);
-            let lit: LitInt = content.parse()?;
-            let n: usize = lit.base10_parse()?;
-            *pos = Some(n);
-            Ok(())
-        } else if meta.path.is_ident("size") {
-            let content;
-            parenthesized!(content in meta.input);
-            let lit: LitInt = content.parse()?;
-            let n: usize = lit.base10_parse()?;
-            *size = Some(n);
-            Ok(())
-        } else {
-            Err(meta
-                .error("Allowed attributes are `pos` and `size` - Example: #[U8(pos=1, size=3)]"))
-        }
-    })
+    // Parse #[bits(N)] where N is the size
+    let tokens = attr.parse_args::<LitInt>()?;
+    let n: usize = tokens.base10_parse()?;
+    *size = Some(n);
+    Ok(())
 }
 
 pub fn parse_with_attribute(

@@ -4,7 +4,7 @@ use trybuild::TestCases;
 fn ui_tests() {
     let t = TestCases::new();
     // Failure tests
-    t.compile_fail("tests/compile_time/overlap.rs");
+    t.compile_fail("tests/compile_time/incomplete_byte.rs");
     t.compile_fail("tests/compile_time/unsupported_structure.rs");
     t.compile_fail("tests/compile_time/unsupported_f64.rs");
     t.compile_fail("tests/compile_time/unsupported_char.rs");

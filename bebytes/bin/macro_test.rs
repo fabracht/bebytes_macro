@@ -315,11 +315,11 @@ fn test_dns_name() {
 
 #[derive(BeBytes, Debug, PartialEq)]
 struct I8 {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(6), pos(1))]
+    #[bits(6)]
     second: i8,
-    #[U8(size(1), pos(7))]
+    #[bits(1)]
     fourth: u8,
 }
 
@@ -332,31 +332,31 @@ struct F32 {
 
 #[derive(BeBytes, Debug, PartialEq)]
 struct U128 {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(126), pos(1))]
+    #[bits(126)]
     second: u128,
-    #[U8(size(1), pos(127))]
+    #[bits(1)]
     fourth: u8,
 }
 
 #[derive(BeBytes, Debug, PartialEq)]
 struct U64 {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(62), pos(1))]
+    #[bits(62)]
     second: u64,
-    #[U8(size(1), pos(63))]
+    #[bits(1)]
     fourth: u8,
 }
 
 #[derive(BeBytes, Debug, PartialEq)]
 struct CompleteFunctionality {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(3), pos(1))]
+    #[bits(3)]
     second: u8,
-    #[U8(size(4), pos(4))]
+    #[bits(4)]
     third: u8,
     #[With(size(3))]
     with_size: Vec<u8>,
@@ -375,32 +375,32 @@ struct CompleteFunctionality {
 
 #[derive(BeBytes, Debug, PartialEq)]
 struct U8 {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(3), pos(1))]
+    #[bits(3)]
     second: u8,
-    #[U8(size(4), pos(4))]
+    #[bits(4)]
     third: u8,
     fourth: u8,
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 struct U16 {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(14), pos(1))]
+    #[bits(14)]
     second: u16,
-    #[U8(size(1), pos(15))]
+    #[bits(1)]
     fourth: u8,
 }
 
 #[derive(BeBytes, Debug, PartialEq, Clone)]
 struct U32 {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(30), pos(1))]
+    #[bits(30)]
     second: u32,
-    #[U8(size(1), pos(31))]
+    #[bits(1)]
     fourth: u8,
 }
 
@@ -414,30 +414,30 @@ pub enum DummyEnum {
 #[derive(BeBytes, Debug, PartialEq, Clone)]
 pub struct DummyStruct {
     pub dummy0: [u8; 2],
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     pub dummy1: u8,
-    #[U8(size(7), pos(1))]
+    #[bits(7)]
     pub dummy2: u8,
 }
 
 #[derive(BeBytes, Debug, PartialEq, Clone)]
 pub struct ErrorEstimate {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     pub s_bit: u8,
-    #[U8(size(1), pos(1))]
+    #[bits(1)]
     pub z_bit: u8,
-    #[U8(size(6), pos(2))]
+    #[bits(6)]
     pub scale: u8,
     pub dummy_struct: DummyStruct,
 }
 
 #[derive(BeBytes, Debug, PartialEq)]
 pub struct ErrorEstimateMini {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     pub s_bit: u8,
-    #[U8(size(1), pos(1))]
+    #[bits(1)]
     pub z_bit: u8,
-    #[U8(size(6), pos(2))]
+    #[bits(6)]
     pub scale: u8,
     pub multiplier: u32,
 }
