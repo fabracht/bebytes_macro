@@ -25,13 +25,13 @@ struct FieldContext<'a> {
 }
 
 pub struct FieldData {
-    field_limit_check: Vec<proc_macro2::TokenStream>,
-    errors: Vec<proc_macro2::TokenStream>,
-    field_parsing: Vec<proc_macro2::TokenStream>,
+    pub field_limit_check: Vec<proc_macro2::TokenStream>,
+    pub errors: Vec<proc_macro2::TokenStream>,
+    pub field_parsing: Vec<proc_macro2::TokenStream>,
     pub bit_sum: Vec<proc_macro2::TokenStream>,
-    field_writing: Vec<proc_macro2::TokenStream>,
+    pub field_writing: Vec<proc_macro2::TokenStream>,
     pub named_fields: Vec<proc_macro2::TokenStream>,
-    total_size: usize,
+    pub total_size: usize,
 }
 
 pub struct StructContext<'a> {

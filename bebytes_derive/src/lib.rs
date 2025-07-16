@@ -7,6 +7,7 @@ mod attrs;
 mod bit_validation;
 mod consts;
 mod enums;
+mod functional;
 mod structs;
 mod utils;
 

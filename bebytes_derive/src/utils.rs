@@ -57,27 +57,28 @@ pub fn get_number_size(
     field: &syn::Field,
     errors: &mut Vec<proc_macro2::TokenStream>,
 ) -> Option<usize> {
-    let field_size = match &field_type {
-        syn::Type::Path(tp) if tp.path.is_ident("i8") || tp.path.is_ident("u8") => 1,
-        syn::Type::Path(tp) if tp.path.is_ident("i16") || tp.path.is_ident("u16") => 2,
-        syn::Type::Path(tp)
-            if tp.path.is_ident("i32") || tp.path.is_ident("u32") || tp.path.is_ident("f32") =>
-        {
-            4
-        }
-        syn::Type::Path(tp)
-            if tp.path.is_ident("i64") || tp.path.is_ident("u64") || tp.path.is_ident("f64") =>
-        {
-            8
-        }
-        syn::Type::Path(tp) if tp.path.is_ident("i128") || tp.path.is_ident("u128") => 16,
-        _ => {
+    match get_primitive_type_size(field_type) {
+        Ok(size) => Some(size),
+        Err(_) => {
             let error = syn::Error::new(field.ty.span(), "Unsupported type");
             errors.push(error.to_compile_error());
-            return None;
+            None
         }
-    };
-    Some(field_size)
+    }
+}
+
+/// Get the size of a primitive type in bytes
+pub fn get_primitive_type_size(field_type: &syn::Type) -> Result<usize, syn::Error> {
+    match field_type {
+        syn::Type::Path(tp) if tp.path.is_ident("i8") || tp.path.is_ident("u8") => Ok(1),
+        syn::Type::Path(tp) if tp.path.is_ident("i16") || tp.path.is_ident("u16") => Ok(2),
+        syn::Type::Path(tp)
+            if tp.path.is_ident("i32") || tp.path.is_ident("u32") || tp.path.is_ident("f32") => Ok(4),
+        syn::Type::Path(tp)
+            if tp.path.is_ident("i64") || tp.path.is_ident("u64") || tp.path.is_ident("f64") => Ok(8),
+        syn::Type::Path(tp) if tp.path.is_ident("i128") || tp.path.is_ident("u128") => Ok(16),
+        _ => Err(syn::Error::new_spanned(field_type, "Unsupported type")),
+    }
 }
 
 pub fn solve_for_inner_type(input: &syn::TypePath, identifier: &str) -> Option<syn::Type> {
