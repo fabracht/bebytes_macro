@@ -10,7 +10,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes_derive = "0.2"
+bebytes_derive = "1.1.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -26,7 +26,6 @@ struct MyStruct {
 
 The BeBytes derive macro will generate the following methods for your struct:
 
-- `new(args...) -> Self`: A constructor method to create a new instance of your struct. Arguments come from the fields of your struct.
 - `field_size(&self) -> usize`: A method to calculate the size (in bytes) of the struct.
 
 **Big-endian methods:**
@@ -46,11 +45,11 @@ use bebytes_derive::BeBytes;
 
 #[derive(Debug, BeBytes)]
 struct MyStruct {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     field1: u8,
-    #[U8(size(4), pos(1))]
+    #[bits(4)]
     field2: u8,
-    #[U8(size(3), pos(5))]
+    #[bits(3)]
     field3: u8,
     field4: u32,
 }
@@ -94,24 +93,24 @@ fn main() {
 }
 ```
 
-In this example, we define a struct MyStruct with four fields. The `#[U8]` attribute is used to specify the size and position of the fields for serialization. The BeBytes derive macro generates the serialization and deserialization methods for the struct, allowing us to easily convert it to bytes and back.
+In this example, we define a struct MyStruct with four fields. The `#[bits]` attribute is used to specify bit-level fields. The position is automatically calculated based on declaration order. The BeBytes derive macro generates the serialization and deserialization methods for the struct, allowing us to easily convert it to bytes and back.
 
 ## How it works
 
-The `U8` attribute allows you to define 2 attributes, `pos` and `size`. The position attribute defines the position in current byte where the bits should start. For example, a pos(0), size(4) specifies that the field should take only 4 bits and should start at position 0 from left to right. The macro will displace the bits so that they occupy the correct place in the resulting byte vector when `.to_be_bytes()` is used. So a `4` with pos(0) and size(4):
+The `bits` attribute allows you to define bit-level fields. The attribute takes a single parameter specifying the number of bits the field should occupy. For example, `#[bits(4)]` specifies that the field should take only 4 bits. The position is automatically calculated based on the declaration order of fields. The macro will handle the bit manipulation to ensure correct placement in the resulting byte vector. So a `4` in a field marked with `#[bits(4)]`:
 
 4 => 00000100
 Shifted and masked => 0100
 
 Fields are read/written sequentially in Big Endian order and MUST complete a multiple of 8.
-This means that fields decorated with the `U8` attribute MUST complete a byte before the next non `U8` byte is provided. For example, the struct
+This means that fields decorated with the `bits` attribute MUST complete a byte before the next non-bit field is provided. For example, the struct
 
 ```rust
 #[derive(Debug, BeBytes)]
 struct WrongStruct {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     field1: u8,
-    #[U8(size(4), pos(1))]
+    #[bits(4)]
     field2: u8,
     field3: f32,
 }
@@ -131,11 +130,11 @@ The macro has support for all unsigned types from u8 to u128. These can be used 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 struct U16 {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(14), pos(1))]
+    #[bits(14)]
     second: u16,
-    #[U8(size(1), pos(15))]
+    #[bits(1)]
     fourth: u8,
 }
 ```
@@ -145,11 +144,11 @@ struct U16 {
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 struct U32 {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     first: u8,
-    #[U8(size(30), pos(1))]
+    #[bits(30)]
     second: u32,
-    #[U8(size(1), pos(31))]
+    #[bits(1)]
     fourth: u8,
 }
 ```
@@ -204,9 +203,9 @@ Example:
 ```rust
 pub struct DummyStruct {
     pub dummy0: [u8; 2],
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     pub dummy1: u8,
-    #[U8(size(7), pos(1))]
+    #[bits(7)]
     pub dummy2: u8,
 }
 ```
@@ -218,11 +217,11 @@ Example:
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 pub struct ErrorEstimate {
-    #[U8(size(1), pos(0))]
+    #[bits(1)]
     pub s_bit: u8,
-    #[U8(size(1), pos(1))]
+    #[bits(1)]
     pub z_bit: u8,
-    #[U8(size(6), pos(2))]
+    #[bits(6)]
     pub scale: u8,
     pub dummy_struct: DummyStruct,
     pub padding: Vec<u8>,
