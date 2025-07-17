@@ -103,7 +103,7 @@ impl FieldDataBuilder {
             bit_sum: self.bit_sums,
             field_writing: self.writings,
             named_fields: self.accessors,
-            total_size: 0, // Will be calculated differently
+            total_size: 0,
         }
     }
 }
