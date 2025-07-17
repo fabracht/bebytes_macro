@@ -1,4 +1,3 @@
-
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
@@ -23,4 +22,3 @@ pub fn parse_attributes(
         }
     }
 }
-

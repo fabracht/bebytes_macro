@@ -1,7 +1,6 @@
 use quote::quote;
 use syn::AngleBracketedGenericArguments;
 
-
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
@@ -27,8 +26,6 @@ pub fn get_try_from_bytes_method(endianness: Endianness) -> proc_macro2::TokenSt
         Endianness::Little => quote! { try_from_le_bytes },
     }
 }
-
-
 
 /// Get the size of a primitive type in bytes
 pub fn get_primitive_type_size(field_type: &syn::Type) -> Result<usize, syn::Error> {
@@ -87,7 +84,6 @@ pub fn is_supported_primitive_type(tp: &syn::TypePath) -> bool {
         .iter()
         .any(|&primitive| tp.path.is_ident(primitive))
 }
-
 
 pub(crate) fn is_copy(field_type: &syn::Type) -> bool {
     match field_type {

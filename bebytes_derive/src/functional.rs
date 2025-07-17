@@ -64,7 +64,6 @@ impl FieldProcessResult {
             bit_sum,
         }
     }
-
 }
 
 /// Builder pattern for complex FieldData structures
@@ -179,7 +178,6 @@ pub mod error_utils {
             Err(errors)
         }
     }
-    
 }
 
 /// Pure helper functions to replace mutation-based ones
@@ -216,7 +214,6 @@ pub mod pure_helpers {
         }
     }
 
-
     /// Create primitive type parsing code
     pub fn create_primitive_parsing(
         field_name: &Ident,
@@ -224,86 +221,88 @@ pub mod pure_helpers {
         endianness: crate::consts::Endianness,
     ) -> Result<TokenStream, syn::Error> {
         let type_size = crate::utils::get_primitive_type_size(field_type)?;
-        
+
         match endianness {
-            crate::consts::Endianness::Big => {
-                match type_size {
-                    1 => Ok(quote! {
-                        let #field_name = bytes[byte_index] as #field_type;
-                    }),
-                    2 => Ok(quote! {
-                        let #field_name = #field_type::from_be_bytes([
-                            bytes[byte_index], bytes[byte_index + 1]
-                        ]);
-                    }),
-                    4 => Ok(quote! {
-                        let #field_name = #field_type::from_be_bytes([
-                            bytes[byte_index], bytes[byte_index + 1],
-                            bytes[byte_index + 2], bytes[byte_index + 3]
-                        ]);
-                    }),
-                    8 => Ok(quote! {
-                        let #field_name = #field_type::from_be_bytes([
-                            bytes[byte_index], bytes[byte_index + 1],
-                            bytes[byte_index + 2], bytes[byte_index + 3],
-                            bytes[byte_index + 4], bytes[byte_index + 5],
-                            bytes[byte_index + 6], bytes[byte_index + 7]
-                        ]);
-                    }),
-                    16 => Ok(quote! {
-                        let #field_name = #field_type::from_be_bytes([
-                            bytes[byte_index], bytes[byte_index + 1],
-                            bytes[byte_index + 2], bytes[byte_index + 3],
-                            bytes[byte_index + 4], bytes[byte_index + 5],
-                            bytes[byte_index + 6], bytes[byte_index + 7],
-                            bytes[byte_index + 8], bytes[byte_index + 9],
-                            bytes[byte_index + 10], bytes[byte_index + 11],
-                            bytes[byte_index + 12], bytes[byte_index + 13],
-                            bytes[byte_index + 14], bytes[byte_index + 15]
-                        ]);
-                    }),
-                    _ => Err(syn::Error::new_spanned(field_type, "Unsupported primitive type size")),
-                }
-            }
-            crate::consts::Endianness::Little => {
-                match type_size {
-                    1 => Ok(quote! {
-                        let #field_name = bytes[byte_index] as #field_type;
-                    }),
-                    2 => Ok(quote! {
-                        let #field_name = #field_type::from_le_bytes([
-                            bytes[byte_index], bytes[byte_index + 1]
-                        ]);
-                    }),
-                    4 => Ok(quote! {
-                        let #field_name = #field_type::from_le_bytes([
-                            bytes[byte_index], bytes[byte_index + 1],
-                            bytes[byte_index + 2], bytes[byte_index + 3]
-                        ]);
-                    }),
-                    8 => Ok(quote! {
-                        let #field_name = #field_type::from_le_bytes([
-                            bytes[byte_index], bytes[byte_index + 1],
-                            bytes[byte_index + 2], bytes[byte_index + 3],
-                            bytes[byte_index + 4], bytes[byte_index + 5],
-                            bytes[byte_index + 6], bytes[byte_index + 7]
-                        ]);
-                    }),
-                    16 => Ok(quote! {
-                        let #field_name = #field_type::from_le_bytes([
-                            bytes[byte_index], bytes[byte_index + 1],
-                            bytes[byte_index + 2], bytes[byte_index + 3],
-                            bytes[byte_index + 4], bytes[byte_index + 5],
-                            bytes[byte_index + 6], bytes[byte_index + 7],
-                            bytes[byte_index + 8], bytes[byte_index + 9],
-                            bytes[byte_index + 10], bytes[byte_index + 11],
-                            bytes[byte_index + 12], bytes[byte_index + 13],
-                            bytes[byte_index + 14], bytes[byte_index + 15]
-                        ]);
-                    }),
-                    _ => Err(syn::Error::new_spanned(field_type, "Unsupported primitive type size")),
-                }
-            }
+            crate::consts::Endianness::Big => match type_size {
+                1 => Ok(quote! {
+                    let #field_name = bytes[byte_index] as #field_type;
+                }),
+                2 => Ok(quote! {
+                    let #field_name = #field_type::from_be_bytes([
+                        bytes[byte_index], bytes[byte_index + 1]
+                    ]);
+                }),
+                4 => Ok(quote! {
+                    let #field_name = #field_type::from_be_bytes([
+                        bytes[byte_index], bytes[byte_index + 1],
+                        bytes[byte_index + 2], bytes[byte_index + 3]
+                    ]);
+                }),
+                8 => Ok(quote! {
+                    let #field_name = #field_type::from_be_bytes([
+                        bytes[byte_index], bytes[byte_index + 1],
+                        bytes[byte_index + 2], bytes[byte_index + 3],
+                        bytes[byte_index + 4], bytes[byte_index + 5],
+                        bytes[byte_index + 6], bytes[byte_index + 7]
+                    ]);
+                }),
+                16 => Ok(quote! {
+                    let #field_name = #field_type::from_be_bytes([
+                        bytes[byte_index], bytes[byte_index + 1],
+                        bytes[byte_index + 2], bytes[byte_index + 3],
+                        bytes[byte_index + 4], bytes[byte_index + 5],
+                        bytes[byte_index + 6], bytes[byte_index + 7],
+                        bytes[byte_index + 8], bytes[byte_index + 9],
+                        bytes[byte_index + 10], bytes[byte_index + 11],
+                        bytes[byte_index + 12], bytes[byte_index + 13],
+                        bytes[byte_index + 14], bytes[byte_index + 15]
+                    ]);
+                }),
+                _ => Err(syn::Error::new_spanned(
+                    field_type,
+                    "Unsupported primitive type size",
+                )),
+            },
+            crate::consts::Endianness::Little => match type_size {
+                1 => Ok(quote! {
+                    let #field_name = bytes[byte_index] as #field_type;
+                }),
+                2 => Ok(quote! {
+                    let #field_name = #field_type::from_le_bytes([
+                        bytes[byte_index], bytes[byte_index + 1]
+                    ]);
+                }),
+                4 => Ok(quote! {
+                    let #field_name = #field_type::from_le_bytes([
+                        bytes[byte_index], bytes[byte_index + 1],
+                        bytes[byte_index + 2], bytes[byte_index + 3]
+                    ]);
+                }),
+                8 => Ok(quote! {
+                    let #field_name = #field_type::from_le_bytes([
+                        bytes[byte_index], bytes[byte_index + 1],
+                        bytes[byte_index + 2], bytes[byte_index + 3],
+                        bytes[byte_index + 4], bytes[byte_index + 5],
+                        bytes[byte_index + 6], bytes[byte_index + 7]
+                    ]);
+                }),
+                16 => Ok(quote! {
+                    let #field_name = #field_type::from_le_bytes([
+                        bytes[byte_index], bytes[byte_index + 1],
+                        bytes[byte_index + 2], bytes[byte_index + 3],
+                        bytes[byte_index + 4], bytes[byte_index + 5],
+                        bytes[byte_index + 6], bytes[byte_index + 7],
+                        bytes[byte_index + 8], bytes[byte_index + 9],
+                        bytes[byte_index + 10], bytes[byte_index + 11],
+                        bytes[byte_index + 12], bytes[byte_index + 13],
+                        bytes[byte_index + 14], bytes[byte_index + 15]
+                    ]);
+                }),
+                _ => Err(syn::Error::new_spanned(
+                    field_type,
+                    "Unsupported primitive type size",
+                )),
+            },
         }
     }
 
@@ -314,34 +313,30 @@ pub mod pure_helpers {
         endianness: crate::consts::Endianness,
     ) -> Result<TokenStream, syn::Error> {
         let type_size = crate::utils::get_primitive_type_size(field_type)?;
-        
+
         match endianness {
-            crate::consts::Endianness::Big => {
-                match type_size {
-                    1 => Ok(quote! {
-                        bytes.push(#field_name as u8);
-                        _bit_sum += 8;
-                    }),
-                    _ => Ok(quote! {
-                        let field_slice = &#field_name.to_be_bytes();
-                        bytes.extend_from_slice(field_slice);
-                        _bit_sum += field_slice.len() * 8;
-                    }),
-                }
-            }
-            crate::consts::Endianness::Little => {
-                match type_size {
-                    1 => Ok(quote! {
-                        bytes.push(#field_name as u8);
-                        _bit_sum += 8;
-                    }),
-                    _ => Ok(quote! {
-                        let field_slice = &#field_name.to_le_bytes();
-                        bytes.extend_from_slice(field_slice);
-                        _bit_sum += field_slice.len() * 8;
-                    }),
-                }
-            }
+            crate::consts::Endianness::Big => match type_size {
+                1 => Ok(quote! {
+                    bytes.push(#field_name as u8);
+                    _bit_sum += 8;
+                }),
+                _ => Ok(quote! {
+                    let field_slice = &#field_name.to_be_bytes();
+                    bytes.extend_from_slice(field_slice);
+                    _bit_sum += field_slice.len() * 8;
+                }),
+            },
+            crate::consts::Endianness::Little => match type_size {
+                1 => Ok(quote! {
+                    bytes.push(#field_name as u8);
+                    _bit_sum += 8;
+                }),
+                _ => Ok(quote! {
+                    let field_slice = &#field_name.to_le_bytes();
+                    bytes.extend_from_slice(field_slice);
+                    _bit_sum += field_slice.len() * 8;
+                }),
+            },
         }
     }
 
@@ -367,13 +362,16 @@ pub mod functional_attrs {
     use syn::{parenthesized, LitInt};
 
     /// Parse attributes functionally without side effects
-    pub fn parse_attributes_functional(attributes: &[syn::Attribute]) -> ParseResult<AttributeData> {
+    pub fn parse_attributes_functional(
+        attributes: &[syn::Attribute],
+    ) -> ParseResult<AttributeData> {
         let results: Vec<Result<Option<AttributeData>, syn::Error>> = attributes
             .iter()
             .map(|attr| {
                 if attr.path().is_ident("bits") {
-                    parse_bits_attribute_functional(attr)
-                        .map(|size| Some(AttributeData::new().with_size(size).with_bits_attribute()))
+                    parse_bits_attribute_functional(attr).map(|size| {
+                        Some(AttributeData::new().with_size(size).with_bits_attribute())
+                    })
                 } else if attr.path().is_ident("With") {
                     parse_with_attribute_functional(attr)
                         .map(|size| size.map(|s| AttributeData::new().with_size(s)))
@@ -391,8 +389,7 @@ pub mod functional_attrs {
             .filter_map(|result| result.transpose())
             .collect();
 
-        error_utils::aggregate_results(flattened.into_iter())
-            .map(AttributeData::merge)
+        error_utils::aggregate_results(flattened.into_iter()).map(AttributeData::merge)
     }
 
     /// Parse bits attribute functionally
@@ -402,7 +399,9 @@ pub mod functional_attrs {
     }
 
     /// Parse with attribute functionally
-    pub fn parse_with_attribute_functional(attr: &syn::Attribute) -> Result<Option<usize>, syn::Error> {
+    pub fn parse_with_attribute_functional(
+        attr: &syn::Attribute,
+    ) -> Result<Option<usize>, syn::Error> {
         let mut size = None;
         attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("size") {
@@ -420,14 +419,18 @@ pub mod functional_attrs {
     }
 
     /// Parse from field attribute functionally
-    pub fn parse_from_field_attribute_functional(attr: &syn::Attribute) -> Result<syn::Ident, syn::Error> {
+    pub fn parse_from_field_attribute_functional(
+        attr: &syn::Attribute,
+    ) -> Result<syn::Ident, syn::Error> {
         let mut field = None;
         attr.parse_nested_meta(|meta| {
             if let Some(name) = meta.path.get_ident().cloned() {
                 field = Some(name);
                 Ok(())
             } else {
-                Err(meta.error("Allowed attributes are `field_name` - Example: #[FromField(field_name)]"))
+                Err(meta.error(
+                    "Allowed attributes are `field_name` - Example: #[FromField(field_name)]",
+                ))
             }
         })?;
         field.ok_or_else(|| syn::Error::new_spanned(attr, "Missing field name"))
