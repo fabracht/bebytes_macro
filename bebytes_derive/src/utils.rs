@@ -1,8 +1,5 @@
 use quote::quote;
-use syn::{spanned::Spanned, AngleBracketedGenericArguments};
-
-#[cfg(feature = "std")]
-use std::vec::Vec;
+use syn::AngleBracketedGenericArguments;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -30,54 +27,24 @@ pub fn get_try_from_bytes_method(endianness: Endianness) -> proc_macro2::TokenSt
     }
 }
 
-pub fn get_u8_bit_shift_direction(
-    size: usize,
-    pos: usize,
-    endianness: Endianness,
-) -> proc_macro2::TokenStream {
-    match endianness {
-        Endianness::Big => quote! { (7_usize - (#size + #pos % 8_usize - 1_usize)) },
-        Endianness::Little => quote! { #pos % 8_usize },
-    }
-}
-
-pub fn get_u8_bit_write_shift(
-    size: usize,
-    pos: usize,
-    endianness: Endianness,
-) -> proc_macro2::TokenStream {
-    match endianness {
-        Endianness::Big => quote! { (7_usize - (#size - 1_usize) - #pos % 8_usize) },
-        Endianness::Little => quote! { #pos % 8_usize },
-    }
-}
-
-pub fn get_number_size(
-    field_type: &syn::Type,
-    field: &syn::Field,
-    errors: &mut Vec<proc_macro2::TokenStream>,
-) -> Option<usize> {
-    let field_size = match &field_type {
-        syn::Type::Path(tp) if tp.path.is_ident("i8") || tp.path.is_ident("u8") => 1,
-        syn::Type::Path(tp) if tp.path.is_ident("i16") || tp.path.is_ident("u16") => 2,
+/// Get the size of a primitive type in bytes
+pub fn get_primitive_type_size(field_type: &syn::Type) -> Result<usize, syn::Error> {
+    match field_type {
+        syn::Type::Path(tp) if tp.path.is_ident("i8") || tp.path.is_ident("u8") => Ok(1),
+        syn::Type::Path(tp) if tp.path.is_ident("i16") || tp.path.is_ident("u16") => Ok(2),
         syn::Type::Path(tp)
             if tp.path.is_ident("i32") || tp.path.is_ident("u32") || tp.path.is_ident("f32") =>
         {
-            4
+            Ok(4)
         }
         syn::Type::Path(tp)
             if tp.path.is_ident("i64") || tp.path.is_ident("u64") || tp.path.is_ident("f64") =>
         {
-            8
+            Ok(8)
         }
-        syn::Type::Path(tp) if tp.path.is_ident("i128") || tp.path.is_ident("u128") => 16,
-        _ => {
-            let error = syn::Error::new(field.ty.span(), "Unsupported type");
-            errors.push(error.to_compile_error());
-            return None;
-        }
-    };
-    Some(field_size)
+        syn::Type::Path(tp) if tp.path.is_ident("i128") || tp.path.is_ident("u128") => Ok(16),
+        _ => Err(syn::Error::new_spanned(field_type, "Unsupported type")),
+    }
 }
 
 pub fn solve_for_inner_type(input: &syn::TypePath, identifier: &str) -> Option<syn::Type> {
@@ -116,11 +83,6 @@ pub fn is_supported_primitive_type(tp: &syn::TypePath) -> bool {
     SUPPORTED_PRIMITIVES
         .iter()
         .any(|&primitive| tp.path.is_ident(primitive))
-}
-
-pub fn generate_chunks(n: usize, array_ident: proc_macro2::Ident) -> proc_macro2::TokenStream {
-    let indices: Vec<_> = (0..n).map(|i| quote! { #array_ident[#i] }).collect();
-    quote! { [ #( #indices ),* ] }
 }
 
 pub(crate) fn is_copy(field_type: &syn::Type) -> bool {

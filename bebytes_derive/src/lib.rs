@@ -7,6 +7,7 @@ mod attrs;
 mod bit_validation;
 mod consts;
 mod enums;
+mod functional;
 mod structs;
 mod utils;
 
@@ -48,9 +49,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             Fields::Named(fields) => {
                 let struct_field_names = fields.named.iter().map(|f| &f.ident).collect::<Vec<_>>();
 
-                let total_size: usize = 0;
-                let last_field = fields.named.last();
-
                 // Generate big-endian implementation
                 structs::handle_struct(structs::StructContext {
                     field_limit_check: &mut field_limit_check,
@@ -60,8 +58,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     field_writing: &mut be_field_writing,
                     named_fields: &mut named_fields,
                     fields: &fields,
-                    total_size,
-                    last_field,
                     endianness: Endianness::Big,
                 });
 
@@ -76,8 +72,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     field_writing: &mut le_field_writing,
                     named_fields: &mut le_named_fields,
                     fields: &fields,
-                    total_size,
-                    last_field,
                     endianness: Endianness::Little,
                 });
 
