@@ -1,6 +1,5 @@
-use quote::quote;
 use proc_macro2::TokenStream;
-use syn::{Ident, Error as SynError};
+use syn::{Error as SynError, Ident};
 
 #[cfg(feature = "std")]
 use std::vec::Vec;
@@ -47,7 +46,6 @@ pub struct FieldProcessResult {
     pub writing: TokenStream,
     pub accessor: TokenStream,
     pub bit_sum: TokenStream,
-    pub bits_consumed: usize,
 }
 
 impl FieldProcessResult {
@@ -57,7 +55,6 @@ impl FieldProcessResult {
         writing: TokenStream,
         accessor: TokenStream,
         bit_sum: TokenStream,
-        bits_consumed: usize,
     ) -> Self {
         Self {
             limit_check,
@@ -65,20 +62,9 @@ impl FieldProcessResult {
             writing,
             accessor,
             bit_sum,
-            bits_consumed,
         }
     }
 
-    pub fn empty() -> Self {
-        Self {
-            limit_check: quote! {},
-            parsing: quote! {},
-            writing: quote! {},
-            accessor: quote! {},
-            bit_sum: quote! {},
-            bits_consumed: 0,
-        }
-    }
 }
 
 /// Builder pattern for complex FieldData structures
@@ -193,34 +179,7 @@ pub mod error_utils {
             Err(errors)
         }
     }
-
-    /// Combine multiple results into a single result
-    pub fn combine_results<T>(results: Vec<Result<T, SynError>>) -> ParseResult<Vec<T>> {
-        results.into_iter().fold(Ok(Vec::new()), |acc, result| {
-            match (acc, result) {
-                (Ok(mut vec), Ok(val)) => {
-                    vec.push(val);
-                    Ok(vec)
-                }
-                (Ok(_), Err(e)) => Err(vec![e]),
-                (Err(mut errs), Err(e)) => {
-                    errs.push(e);
-                    Err(errs)
-                }
-                (Err(errs), Ok(_)) => Err(errs),
-            }
-        })
-    }
-
-    /// Convert a single error to the multi-error format
-    pub fn single_error<T>(error: SynError) -> ParseResult<T> {
-        Err(vec![error])
-    }
-
-    /// Convert multiple errors to the multi-error format
-    pub fn multiple_errors<T>(errors: Vec<SynError>) -> ParseResult<T> {
-        Err(errors)
-    }
+    
 }
 
 /// Pure helper functions to replace mutation-based ones
@@ -257,86 +216,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Create bit field parsing code
-    pub fn create_bit_field_parsing(
-        field_name: &Ident,
-        field_type: &syn::Type,
-        size: usize,
-        bit_position: usize,
-        endianness: crate::consts::Endianness,
-    ) -> TokenStream {
-        let byte_position = bit_position / 8;
-        let bit_offset = bit_position % 8;
-        let mask: u128 = (1 << size) - 1;
-
-        match endianness {
-            crate::consts::Endianness::Big => {
-                quote! {
-                    let #field_name = {
-                        let byte_idx = #byte_position;
-                        let bit_offset = #bit_offset;
-                        let mask = #mask as #field_type;
-                        let byte_val = bytes[byte_idx] as #field_type;
-                        (byte_val >> (8 - bit_offset - #size)) & mask
-                    };
-                }
-            }
-            crate::consts::Endianness::Little => {
-                quote! {
-                    let #field_name = {
-                        let byte_idx = #byte_position;
-                        let bit_offset = #bit_offset;
-                        let mask = #mask as #field_type;
-                        let byte_val = bytes[byte_idx] as #field_type;
-                        (byte_val >> bit_offset) & mask
-                    };
-                }
-            }
-        }
-    }
-
-    /// Create bit field writing code
-    pub fn create_bit_field_writing(
-        field_name: &Ident,
-        _field_type: &syn::Type,
-        size: usize,
-        bit_position: usize,
-        endianness: crate::consts::Endianness,
-    ) -> TokenStream {
-        let byte_position = bit_position / 8;
-        let bit_offset = bit_position % 8;
-        let mask: u128 = (1 << size) - 1;
-
-        match endianness {
-            crate::consts::Endianness::Big => {
-                quote! {
-                    {
-                        let byte_idx = #byte_position;
-                        let bit_offset = #bit_offset;
-                        let mask = #mask as u8;
-                        let shift = 8 - bit_offset - #size;
-                        if bytes.len() <= byte_idx {
-                            bytes.resize(byte_idx + 1, 0);
-                        }
-                        bytes[byte_idx] |= ((#field_name as u8) & mask) << shift;
-                    }
-                }
-            }
-            crate::consts::Endianness::Little => {
-                quote! {
-                    {
-                        let byte_idx = #byte_position;
-                        let bit_offset = #bit_offset;
-                        let mask = #mask as u8;
-                        if bytes.len() <= byte_idx {
-                            bytes.resize(byte_idx + 1, 0);
-                        }
-                        bytes[byte_idx] |= ((#field_name as u8) & mask) << bit_offset;
-                    }
-                }
-            }
-        }
-    }
 
     /// Create primitive type parsing code
     pub fn create_primitive_parsing(
@@ -441,9 +320,12 @@ pub mod pure_helpers {
                 match type_size {
                     1 => Ok(quote! {
                         bytes.push(#field_name as u8);
+                        _bit_sum += 8;
                     }),
                     _ => Ok(quote! {
-                        bytes.extend_from_slice(&#field_name.to_be_bytes());
+                        let field_slice = &#field_name.to_be_bytes();
+                        bytes.extend_from_slice(field_slice);
+                        _bit_sum += field_slice.len() * 8;
                     }),
                 }
             }
@@ -451,9 +333,12 @@ pub mod pure_helpers {
                 match type_size {
                     1 => Ok(quote! {
                         bytes.push(#field_name as u8);
+                        _bit_sum += 8;
                     }),
                     _ => Ok(quote! {
-                        bytes.extend_from_slice(&#field_name.to_le_bytes());
+                        let field_slice = &#field_name.to_le_bytes();
+                        bytes.extend_from_slice(field_slice);
+                        _bit_sum += field_slice.len() * 8;
                     }),
                 }
             }
@@ -511,13 +396,13 @@ pub mod functional_attrs {
     }
 
     /// Parse bits attribute functionally
-    fn parse_bits_attribute_functional(attr: &syn::Attribute) -> Result<usize, syn::Error> {
+    pub fn parse_bits_attribute_functional(attr: &syn::Attribute) -> Result<usize, syn::Error> {
         let lit: LitInt = attr.parse_args()?;
         lit.base10_parse()
     }
 
     /// Parse with attribute functionally
-    fn parse_with_attribute_functional(attr: &syn::Attribute) -> Result<Option<usize>, syn::Error> {
+    pub fn parse_with_attribute_functional(attr: &syn::Attribute) -> Result<Option<usize>, syn::Error> {
         let mut size = None;
         attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("size") {
@@ -535,7 +420,7 @@ pub mod functional_attrs {
     }
 
     /// Parse from field attribute functionally
-    fn parse_from_field_attribute_functional(attr: &syn::Attribute) -> Result<syn::Ident, syn::Error> {
+    pub fn parse_from_field_attribute_functional(attr: &syn::Attribute) -> Result<syn::Ident, syn::Error> {
         let mut field = None;
         attr.parse_nested_meta(|meta| {
             if let Some(name) = meta.path.get_ident().cloned() {
@@ -562,7 +447,7 @@ mod tests {
             .with_last_field(true);
 
         assert_eq!(ctx.bit_position, 16);
-        assert_eq!(ctx.is_last_field, true);
+        assert!(ctx.is_last_field);
     }
 
     #[test]
@@ -573,7 +458,6 @@ mod tests {
             quote! { write },
             quote! { access },
             quote! { bit_sum },
-            8,
         );
 
         let builder = FieldDataBuilder::new();
@@ -595,7 +479,7 @@ mod tests {
         let merged = AttributeData::merge(vec![attr1, attr2, attr3]);
 
         assert_eq!(merged.size, Some(8));
-        assert_eq!(merged.is_bits_attribute, true);
+        assert!(merged.is_bits_attribute);
         assert!(merged.field.is_some());
     }
 
@@ -608,7 +492,7 @@ mod tests {
             Err(SynError::new(Span::call_site(), "error2")),
         ];
 
-        let result = error_utils::combine_results(results);
+        let result = error_utils::aggregate_results(results.into_iter());
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().len(), 2);
     }
@@ -616,7 +500,7 @@ mod tests {
     #[test]
     fn test_successful_aggregation() {
         let results = vec![Ok(1), Ok(2), Ok(3)];
-        let result = error_utils::combine_results(results);
+        let result = error_utils::aggregate_results(results.into_iter());
         assert_eq!(result.unwrap(), vec![1, 2, 3]);
     }
 }

@@ -1,5 +1,5 @@
 use crate::*;
-use quote::{__private::Span, quote, quote_spanned};
+use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 
 #[cfg(feature = "std")]
@@ -42,464 +42,10 @@ pub struct StructContext<'a> {
     pub field_writing: &'a mut Vec<proc_macro2::TokenStream>,
     pub named_fields: &'a mut Vec<proc_macro2::TokenStream>,
     pub fields: &'a syn::FieldsNamed,
-    pub total_size: usize,
-    pub last_field: Option<&'a syn::Field>,
     pub endianness: crate::consts::Endianness,
 }
 
-fn push_field_accessor(field_data: &mut FieldData, field_name: &syn::Ident, needs_owned: bool) {
-    let accessor = if needs_owned {
-        quote! { let #field_name = self.#field_name.to_owned(); }
-    } else {
-        quote! { let #field_name = self.#field_name; }
-    };
-    field_data.named_fields.push(accessor);
-}
 
-fn push_bit_sum(field_data: &mut FieldData, size: usize) {
-    field_data.bit_sum.push(quote! { bit_sum += #size * 8; });
-}
-
-fn push_byte_indices(tokens: &mut Vec<proc_macro2::TokenStream>, field_size: usize) {
-    tokens.push(quote! {
-        byte_index = _bit_sum / 8;
-        end_byte_index = byte_index + #field_size;
-        _bit_sum += 8 * #field_size;
-    });
-}
-
-fn handle_bits_field(
-    context: &FieldContext,
-    size: usize,
-    field_data: &mut FieldData,
-    endianness: crate::consts::Endianness,
-    current_bit_position: &mut usize,
-) {
-    let FieldContext {
-        field_name,
-        field_type,
-        field,
-        ..
-    } = context;
-
-    push_field_accessor(field_data, field_name, false);
-
-    let number_length = utils::get_number_size(field_type, field, &mut field_data.errors)
-        .unwrap_or_else(|| {
-            let error = syn::Error::new(field_type.span(), "Type not supported");
-            field_data.errors.push(error.to_compile_error());
-            0
-        });
-
-    field_data.bit_sum.push(quote! {bit_sum += #size;});
-
-    let mask: u128 = (1 << size) - 1;
-    field_data.field_limit_check.push(quote! {
-        if #field_name > #mask as #field_type {
-            panic!("Value of field {} is out of range (max value: {})",
-                stringify!(#field_name),
-                #mask
-            );
-        }
-    });
-
-    // Auto-calculate position based on current_bit_position
-    let pos = *current_bit_position;
-    *current_bit_position += size;
-
-    let from_bytes_method = utils::get_from_bytes_method(endianness);
-    let to_bytes_method = utils::get_to_bytes_method(endianness);
-    let bit_shift_direction = utils::get_u8_bit_shift_direction(size, pos, endianness);
-    let bit_write_shift = utils::get_u8_bit_write_shift(size, pos, endianness);
-
-    if number_length > 1 {
-        let chunks =
-            utils::generate_chunks(number_length, syn::Ident::new("chunk", Span::call_site()));
-
-        field_data.field_parsing.push(quote! {
-            let mut inner_total_size = #pos;
-            let mut #field_name = 0 as #field_type;
-            bytes.chunks(#number_length).for_each(|chunk| {
-                let u_type = #field_type::#from_bytes_method(#chunks);
-                let shift_left = _bit_sum % 8;
-                let left_shifted_u_type = u_type << shift_left;
-                let shift_right = 8 * #number_length - #size;
-                let shifted_u_type = left_shifted_u_type >> shift_right;
-                #field_name = shifted_u_type & #mask as #field_type;
-            });
-            _bit_sum += #size;
-        });
-
-        field_data.field_writing.push(quote! {
-            if #field_name > #mask as #field_type {
-                panic!(
-                    "Value {} for field {} exceeds the maximum allowed value {}.",
-                    #field_name,
-                    stringify!(#field_name),
-                    #mask
-                );
-            }
-            let masked_value = #field_name & #mask as #field_type;
-            let shift_left = (#number_length * 8) - #size;
-            let shift_right = (#pos % 8);
-            let shifted_masked_value = (masked_value << shift_left) >> shift_right;
-            let byte_values = #field_type::#to_bytes_method(shifted_masked_value);
-            for i in 0..#number_length {
-                if bytes.len() <= _bit_sum / 8 + i {
-                    bytes.resize(_bit_sum / 8 + i + 1, 0);
-                }
-                bytes[_bit_sum / 8 + i] |= byte_values[i];
-            }
-            _bit_sum += #size;
-        });
-    } else {
-        field_data.field_parsing.push(quote! {
-            let #field_name = (bytes[_bit_sum / 8] as #field_type >> (#bit_shift_direction as usize) as #field_type) & (#mask as #field_type);
-            _bit_sum += #size;
-        });
-
-        field_data.field_writing.push(quote! {
-            if #field_name > #mask as #field_type {
-                panic!(
-                    "Value {} for field {} exceeds the maximum allowed value {}.",
-                    #field_name,
-                    stringify!(#field_name),
-                    #mask
-                );
-            }
-            if bytes.len() <= _bit_sum / 8 {
-                bytes.resize(_bit_sum / 8 + 1, 0);
-            }
-            bytes[_bit_sum / 8] |= (#field_name as u8) << (#bit_write_shift as usize);
-            _bit_sum += #size;
-        });
-    }
-
-    field_data.total_size += size;
-}
-
-fn handle_primitive_type(
-    context: &FieldContext,
-    field_data: &mut FieldData,
-    endianness: crate::consts::Endianness,
-) {
-    let FieldContext {
-        field_name,
-        field_type,
-        field,
-        ..
-    } = context;
-
-    push_field_accessor(field_data, field_name, false);
-
-    let field_size = match utils::get_number_size(field_type, field, &mut field_data.errors) {
-        Some(value) => value,
-        None => return,
-    };
-
-    push_bit_sum(field_data, field_size);
-
-    let mut parsing = Vec::new();
-    push_byte_indices(&mut parsing, field_size);
-
-    let from_bytes_method = utils::get_from_bytes_method(endianness);
-    let to_bytes_method = utils::get_to_bytes_method(endianness);
-
-    parsing.push(quote! {
-        let #field_name = <#field_type>::#from_bytes_method({
-            let slice = &bytes[byte_index..end_byte_index];
-            let mut arr = [0; #field_size];
-            arr.copy_from_slice(slice);
-            arr
-        });
-    });
-    field_data.field_parsing.extend(parsing);
-
-    field_data.field_writing.push(quote! {
-        let field_slice = &#field_name.#to_bytes_method();
-        bytes.extend_from_slice(field_slice);
-        _bit_sum += field_slice.len() * 8;
-    });
-}
-
-fn handle_array(context: &FieldContext, length: usize, field_data: &mut FieldData) {
-    let FieldContext {
-        field_name,
-        field_type,
-        ..
-    } = context;
-
-    if let syn::Type::Array(tp) = field_type {
-        if let syn::Type::Path(elem) = &*tp.elem {
-            let segments = &elem.path.segments;
-            if segments.len() == 1 && segments[0].ident == "u8" {
-                push_field_accessor(field_data, field_name, true);
-                push_bit_sum(field_data, length);
-
-                field_data.field_parsing.push(quote! {
-                    byte_index = _bit_sum / 8;
-                    let mut #field_name = [0u8; #length];
-                    #field_name.copy_from_slice(&bytes[byte_index..#length + byte_index]);
-                    _bit_sum += 8 * #length;
-                });
-
-                field_data.field_writing.push(quote! {
-                    bytes.extend_from_slice(&#field_name);
-                    _bit_sum += #length * 8;
-                });
-            }
-        }
-    }
-}
-
-fn handle_vector(
-    context: &FieldContext,
-    size: Option<usize>,
-    vec_size_ident: Option<syn::Ident>,
-    field_data: &mut FieldData,
-    endianness: crate::consts::Endianness,
-) {
-    let FieldContext {
-        field_name,
-        field_type,
-        field,
-        is_last_field,
-    } = context;
-
-    push_field_accessor(field_data, field_name, true);
-
-    if let syn::Type::Path(tp) = field_type {
-        if let Some(syn::Type::Path(ref inner_tp)) = utils::solve_for_inner_type(tp, "Vec") {
-            // Handle vector of primitive types (u8, etc.)
-
-            if utils::is_primitive_type(inner_tp) {
-                match (size, vec_size_ident.clone()) {
-                    (_, Some(ident)) => {
-                        field_data.bit_sum.push(quote! { bit_sum = 4096 * 8; });
-                        field_data.field_parsing.push(quote! {
-                            let vec_length = #ident as usize;
-                            byte_index = _bit_sum / 8;
-                            let end_index = byte_index + vec_length;
-                            if end_index > bytes.len() {
-                                panic!("Not enough bytes to parse a vector of size {}", vec_length);
-                            }
-                            let #field_name = Vec::from(&bytes[byte_index..end_index]);
-                            _bit_sum += vec_length * 8;
-                        });
-                    }
-                    (Some(s), None) => {
-                        push_bit_sum(field_data, s);
-                        field_data.field_parsing.push(quote! {
-                            let vec_length = #s as usize;
-                            byte_index = _bit_sum / 8;
-                            let end_index = byte_index + vec_length;
-                            let #field_name = Vec::from(&bytes[byte_index..end_index]);
-                            _bit_sum += #s * 8;
-                        });
-                    }
-                    (None, None) => {
-                        if !is_last_field {
-                            let error = syn::Error::new(
-                                    field.ty.span(),
-                                    "Unbounded vectors can only be used as padding at the end of a struct",
-                                );
-                            field_data.errors.push(error.to_compile_error());
-                        }
-                        field_data.bit_sum.push(quote! { bit_sum = 4096 * 8; });
-                        field_data.field_parsing.push(quote! {
-                            byte_index = _bit_sum / 8;
-                            let #field_name = Vec::from(&bytes[byte_index..]);
-                            _bit_sum += #field_name.len() * 8;
-                        });
-                    }
-                }
-
-                field_data.field_writing.push(quote! {
-                    bytes.extend_from_slice(&#field_name);
-                    _bit_sum += #field_name.len() * 8;
-                });
-            } else {
-                // Handle vector of custom types (Vec<CustomType>)
-                let inner_type_path = &inner_tp.path;
-                let inner_type_name = quote! { #inner_type_path };
-
-                // Get the appropriate endianness methods
-                let try_from_bytes_method = utils::get_try_from_bytes_method(endianness);
-                let to_bytes_method = utils::get_to_bytes_method(endianness);
-
-                // Initialize an empty vector
-                field_data.field_parsing.push(quote! {
-                    let mut #field_name = Vec::new();
-                });
-
-                if !is_last_field {
-                    // For non-last fields, we need size information
-                    if let Some(vec_size) = size {
-                        field_data.field_parsing.push(quote! {
-                                let mut bytes_consumed = 0;
-                                for _ in 0..#vec_size {
-                                    if _bit_sum / 8 + bytes_consumed >= bytes.len() {
-                                        break;
-                                    }
-                                    match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                        Ok((item, consumed)) => {
-                                            #field_name.push(item);
-                                            bytes_consumed += consumed;
-                                        }
-                                        Err(e) => return Err(e),
-                                    }
-                                }
-                                _bit_sum += bytes_consumed * 8;
-                            });
-                    } else if let Some(ident) = vec_size_ident {
-                        field_data.field_parsing.push(quote! {
-                                let vec_length = #ident as usize;
-                                let mut bytes_consumed = 0;
-                                for _ in 0..vec_length {
-                                    if _bit_sum / 8 + bytes_consumed >= bytes.len() {
-                                        break;
-                                    }
-                                    match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                        Ok((item, consumed)) => {
-                                            #field_name.push(item);
-                                            bytes_consumed += consumed;
-                                        }
-                                        Err(e) => return Err(e),
-                                    }
-                                }
-                                _bit_sum += bytes_consumed * 8;
-                            });
-                    } else {
-                        let error = syn::Error::new(
-                                field.ty.span(),
-                                "Vectors of custom types need size information. Use #[With(size(n))] or #[FromField(field_name)]",
-                            );
-                        field_data.errors.push(error.to_compile_error());
-                    }
-                } else {
-                    // For the last field, we can consume all remaining bytes
-                    field_data.field_parsing.push(quote! {
-                            let mut bytes_consumed = 0;
-                            while _bit_sum / 8 + bytes_consumed < bytes.len() {
-                                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                    Ok((item, consumed)) => {
-                                        #field_name.push(item);
-                                        bytes_consumed += consumed;
-                                    }
-                                    Err(e) => break, // Stop on error
-                                }
-                            }
-                            _bit_sum += bytes_consumed * 8;
-                        });
-                }
-
-                // Serialize the vector
-                field_data.field_writing.push(quote! {
-                    for item in &#field_name {
-                        let item_bytes = BeBytes::#to_bytes_method(item);
-                        bytes.extend_from_slice(&item_bytes);
-                        _bit_sum += item_bytes.len() * 8;
-                    }
-                });
-            }
-        }
-    }
-}
-
-fn handle_option_type(
-    context: &FieldContext,
-    field_data: &mut FieldData,
-    endianness: crate::consts::Endianness,
-) {
-    let FieldContext {
-        field_name,
-        field_type,
-        field,
-        ..
-    } = context;
-
-    push_field_accessor(field_data, field_name, false);
-
-    if let syn::Type::Path(tp) = field_type {
-        if let Some(inner_type) = utils::solve_for_inner_type(tp, "Option") {
-            if let syn::Type::Path(inner_tp) = &inner_type {
-                if utils::is_primitive_type(inner_tp) {
-                    let field_size =
-                        match utils::get_number_size(&inner_type, field, &mut field_data.errors) {
-                            Some(value) => value,
-                            None => return,
-                        };
-
-                    push_bit_sum(field_data, field_size);
-
-                    let from_bytes_method = utils::get_from_bytes_method(endianness);
-                    let to_bytes_method = utils::get_to_bytes_method(endianness);
-
-                    let mut parsing = Vec::new();
-                    push_byte_indices(&mut parsing, field_size);
-                    parsing.push(quote! {
-                        let #field_name = if bytes[byte_index..end_byte_index] == [0_u8; #field_size] {
-                            None
-                        } else {
-                            Some(<#inner_tp>::#from_bytes_method({
-                                let slice = &bytes[byte_index..end_byte_index];
-                                let mut arr = [0; #field_size];
-                                arr.copy_from_slice(slice);
-                                arr
-                            }))
-                        };
-                    });
-                    field_data.field_parsing.extend(parsing);
-
-                    field_data.field_writing.push(quote! {
-                        let bytes_data = &#field_name.unwrap_or(0).#to_bytes_method();
-                        bytes.extend_from_slice(bytes_data);
-                        _bit_sum += bytes_data.len() * 8;
-                    });
-                }
-            }
-        }
-    }
-}
-
-fn handle_custom_type(
-    context: &FieldContext,
-    field_data: &mut FieldData,
-    endianness: crate::consts::Endianness,
-) {
-    let FieldContext {
-        field_name,
-        field_type,
-        field,
-        ..
-    } = context;
-
-    let needs_owned = !utils::is_copy(field_type);
-    push_field_accessor(field_data, field_name, needs_owned);
-
-    field_data.bit_sum.push(quote! {
-        bit_sum += 8 * #field_type::field_size();
-    });
-
-    let try_from_bytes_method = utils::get_try_from_bytes_method(endianness);
-    let to_bytes_method = utils::get_to_bytes_method(endianness);
-
-    field_data.field_parsing.push(quote_spanned! { field.span() =>
-        byte_index = _bit_sum / 8;
-        let predicted_size = #field_type::field_size();
-        end_byte_index = usize::min(bytes.len(), byte_index + predicted_size);
-        let (#field_name, bytes_read) = #field_type::#try_from_bytes_method(&bytes[byte_index..end_byte_index])?;
-        _bit_sum += bytes_read * 8;
-    });
-
-    field_data
-        .field_writing
-        .push(quote_spanned! { field.span() =>
-            let bytes_data = &BeBytes::#to_bytes_method(&#field_name);
-            bytes.extend_from_slice(bytes_data);
-            _bit_sum += bytes_data.len() * 8;
-        });
-}
 
 fn determine_field_type(
     context: &FieldContext,
@@ -562,62 +108,55 @@ pub fn handle_struct(context: StructContext) {
         return;
     }
 
-    let mut field_data = FieldData {
-        field_limit_check: Vec::new(),
-        errors: Vec::new(),
-        field_parsing: Vec::new(),
-        bit_sum: Vec::new(),
-        field_writing: Vec::new(),
-        named_fields: Vec::new(),
-        total_size: context.total_size,
-    };
+    // Initialize ProcessingContext for functional approach
+    let processing_ctx = crate::functional::ProcessingContext::new(context.endianness);
+    
+    // Use FieldDataBuilder for functional accumulation
+    let mut builder = crate::functional::FieldDataBuilder::new();
+    let mut errors = Vec::new();
 
     // Track current bit position for auto-calculation
     let mut current_bit_position = 0;
 
-    for field in context.fields.named.clone() {
-        let is_last = context
-            .last_field
-            .map(|last| last.ident == field.ident)
-            .unwrap_or(false);
-
+    for (idx, field) in context.fields.named.iter().enumerate() {
+        let is_last = idx == context.fields.named.len() - 1;
+        
         let field_context = FieldContext {
-            field: &field,
+            field,
             field_name: field.ident.clone().unwrap(),
             field_type: &field.ty,
             is_last_field: is_last,
         };
 
-        match determine_field_type(&field_context, &field.attrs, &mut field_data.errors) {
-            Some(field_type) => match field_type {
-                FieldType::BitsField(size) => handle_bits_field(
+        // Create a new processing context for this field
+        let field_processing_ctx = processing_ctx.clone()
+            .with_bit_position(current_bit_position)
+            .with_last_field(is_last);
+
+        match determine_field_type(&field_context, &field.attrs, &mut errors) {
+            Some(field_type) => {
+                let result = process_field_type(
                     &field_context,
-                    size,
-                    &mut field_data,
-                    context.endianness,
+                    field_type,
+                    &field_processing_ctx,
                     &mut current_bit_position,
-                ),
-                FieldType::PrimitiveType => {
-                    handle_primitive_type(&field_context, &mut field_data, context.endianness)
+                );
+                
+                match result {
+                    Ok(field_result) => {
+                        builder = builder.add_result(field_result);
+                    }
+                    Err(e) => errors.push(e.to_compile_error()),
                 }
-                FieldType::Array(length) => handle_array(&field_context, length, &mut field_data),
-                FieldType::Vector(size, vec_size_ident) => handle_vector(
-                    &field_context,
-                    size,
-                    vec_size_ident,
-                    &mut field_data,
-                    context.endianness,
-                ),
-                FieldType::OptionType => {
-                    handle_option_type(&field_context, &mut field_data, context.endianness)
-                }
-                FieldType::CustomType => {
-                    handle_custom_type(&field_context, &mut field_data, context.endianness)
-                }
-            },
+            }
             None => continue,
         }
     }
+
+    // Build the final FieldData
+    let mut field_data = builder.build();
+    field_data.errors = errors;
+    field_data.total_size = current_bit_position / 8;
 
     *context.field_limit_check = field_data.field_limit_check;
     *context.errors = field_data.errors;
@@ -625,4 +164,560 @@ pub fn handle_struct(context: StructContext) {
     *context.bit_sum = field_data.bit_sum;
     *context.field_writing = field_data.field_writing;
     *context.named_fields = field_data.named_fields;
+}
+
+// New functional field processor
+fn process_field_type(
+    context: &FieldContext,
+    field_type: FieldType,
+    processing_ctx: &crate::functional::ProcessingContext,
+    current_bit_position: &mut usize,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+    match field_type {
+        FieldType::BitsField(size) => {
+            let result = process_bits_field_functional(
+                context,
+                size,
+                processing_ctx,
+                *current_bit_position,
+            )?;
+            *current_bit_position += size;
+            Ok(result)
+        }
+        FieldType::PrimitiveType => {
+            let result = process_primitive_type_functional(context, processing_ctx)?;
+            // Update bit position based on primitive size
+            let field_size = utils::get_primitive_type_size(context.field_type)?;
+            *current_bit_position += field_size * 8;
+            Ok(result)
+        }
+        FieldType::Array(length) => {
+            let result = process_array_functional(context, length, processing_ctx)?;
+            // Arrays are always byte arrays in our case
+            *current_bit_position += length * 8;
+            Ok(result)
+        }
+        FieldType::Vector(size, vec_size_ident) => {
+            let result = process_vector_functional(context, size, vec_size_ident, processing_ctx)?;
+            // Vectors have variable size, but we need to track something for bit field positioning
+            if let Some(s) = size {
+                *current_bit_position += s * 8;
+            }
+            Ok(result)
+        }
+        FieldType::OptionType => {
+            let result = process_option_type_functional(context, processing_ctx)?;
+            // Options of primitives have the size of the primitive
+            if let syn::Type::Path(tp) = context.field_type {
+                if let Some(inner_type) = utils::solve_for_inner_type(tp, "Option") {
+                    let field_size = utils::get_primitive_type_size(&inner_type)?;
+                    *current_bit_position += field_size * 8;
+                }
+            }
+            Ok(result)
+        }
+        FieldType::CustomType => {
+            // For custom types, we can't know the size at compile time
+            // This is OK because bit fields can't come after custom types anyway
+            process_custom_type_functional(context, processing_ctx)
+        }
+    }
+}
+
+// Functional version of handle_bits_field
+fn process_bits_field_functional(
+    context: &FieldContext,
+    size: usize,
+    processing_ctx: &crate::functional::ProcessingContext,
+    bit_position: usize,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+    let field_name = &context.field_name;
+    let field_type = context.field_type;
+    let _field = context.field;
+    
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, false);
+    let bit_sum = crate::functional::pure_helpers::create_bit_sum(size);
+    let limit_check = crate::functional::pure_helpers::create_bit_field_limit_check(field_name, field_type, size);
+    
+    // Get the size of the underlying number type
+    let number_length = utils::get_primitive_type_size(field_type).map_err(|_| {
+        syn::Error::new(field_type.span(), "Type not supported")
+    })?;
+    
+    let pos = bit_position;
+    let mask: u128 = (1 << size) - 1;
+    
+    let (parsing, writing) = if number_length > 1 {
+        // Multi-byte bit field handling
+        let from_bytes_method = utils::get_from_bytes_method(processing_ctx.endianness);
+        let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
+        
+        let parsing = quote! {
+            let byte_start = _bit_sum / 8;
+            if byte_start + #number_length > bytes.len() {
+                return Err("Not enough bytes".into());
+            }
+            let #field_name = {
+                let mut arr = [0u8; #number_length];
+                arr.copy_from_slice(&bytes[byte_start..byte_start + #number_length]);
+                let u_type = #field_type::#from_bytes_method(arr);
+                let shift_left = _bit_sum % 8;
+                let left_shifted_u_type = u_type << shift_left;
+                let shift_right = 8 * #number_length - #size;
+                let shifted_u_type = left_shifted_u_type >> shift_right;
+                shifted_u_type & #mask as #field_type
+            };
+            _bit_sum += #size;
+        };
+        
+        let writing = quote! {
+            if #field_name > #mask as #field_type {
+                panic!(
+                    "Value {} for field {} exceeds the maximum allowed value {}.",
+                    #field_name,
+                    stringify!(#field_name),
+                    #mask
+                );
+            }
+            let masked_value = #field_name & #mask as #field_type;
+            let shift_left = (#number_length * 8) - #size;
+            let shift_right = (#pos % 8);
+            let shifted_masked_value = (masked_value << shift_left) >> shift_right;
+            let byte_values = #field_type::#to_bytes_method(shifted_masked_value);
+            for i in 0..#number_length {
+                if bytes.len() <= _bit_sum / 8 + i {
+                    bytes.resize(_bit_sum / 8 + i + 1, 0);
+                }
+                bytes[_bit_sum / 8 + i] |= byte_values[i];
+            }
+            _bit_sum += #size;
+        };
+        
+        (parsing, writing)
+    } else {
+        // Single byte bit field - generate inline code that uses _bit_sum
+        let mask: u128 = (1 << size) - 1;
+        
+        let parsing = match processing_ctx.endianness {
+            crate::consts::Endianness::Big => {
+                quote! {
+                    let #field_name = {
+                        let byte_idx = _bit_sum / 8;
+                        let bit_offset = _bit_sum % 8;
+                        let mask = #mask as #field_type;
+                        let byte_val = bytes[byte_idx] as #field_type;
+                        (byte_val >> (8 - bit_offset - #size)) & mask
+                    };
+                    _bit_sum += #size;
+                }
+            }
+            crate::consts::Endianness::Little => {
+                quote! {
+                    let #field_name = {
+                        let byte_idx = _bit_sum / 8;
+                        let bit_offset = _bit_sum % 8;
+                        let mask = #mask as #field_type;
+                        let byte_val = bytes[byte_idx] as #field_type;
+                        (byte_val >> bit_offset) & mask
+                    };
+                    _bit_sum += #size;
+                }
+            }
+        };
+        
+        let writing = match processing_ctx.endianness {
+            crate::consts::Endianness::Big => {
+                quote! {
+                    {
+                        let byte_idx = _bit_sum / 8;
+                        let bit_offset = _bit_sum % 8;
+                        let mask = #mask as u8;
+                        let shift = 8 - bit_offset - #size;
+                        if bytes.len() <= byte_idx {
+                            bytes.resize(byte_idx + 1, 0);
+                        }
+                        bytes[byte_idx] |= ((#field_name as u8) & mask) << shift;
+                    }
+                    _bit_sum += #size;
+                }
+            }
+            crate::consts::Endianness::Little => {
+                quote! {
+                    {
+                        let byte_idx = _bit_sum / 8;
+                        let bit_offset = _bit_sum % 8;
+                        let mask = #mask as u8;
+                        if bytes.len() <= byte_idx {
+                            bytes.resize(byte_idx + 1, 0);
+                        }
+                        bytes[byte_idx] |= ((#field_name as u8) & mask) << bit_offset;
+                    }
+                    _bit_sum += #size;
+                }
+            }
+        };
+        
+        (parsing, writing)
+    };
+    
+    Ok(crate::functional::FieldProcessResult::new(
+        limit_check,
+        parsing,
+        writing,
+        accessor,
+        bit_sum,
+    ))
+}
+
+// Functional version of handle_primitive_type
+fn process_primitive_type_functional(
+    context: &FieldContext,
+    processing_ctx: &crate::functional::ProcessingContext,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+    let field_name = &context.field_name;
+    let field_type = context.field_type;
+    
+    let field_size = utils::get_primitive_type_size(field_type)?;
+    
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, false);
+    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(field_size);
+    
+    let parsing_tokens = vec![
+        crate::functional::pure_helpers::create_byte_indices(field_size),
+        crate::functional::pure_helpers::create_primitive_parsing(
+            field_name,
+            field_type,
+            processing_ctx.endianness,
+        )?,
+    ];
+    let parsing = quote! { #(#parsing_tokens)* };
+    
+    let writing = crate::functional::pure_helpers::create_primitive_writing(
+        field_name,
+        field_type,
+        processing_ctx.endianness,
+    )?;
+    
+    Ok(crate::functional::FieldProcessResult::new(
+        quote! {},
+        parsing,
+        writing,
+        accessor,
+        bit_sum,
+    ))
+}
+
+// Functional version of handle_array
+fn process_array_functional(
+    context: &FieldContext,
+    length: usize,
+    _processing_ctx: &crate::functional::ProcessingContext,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+    let field_name = &context.field_name;
+    let field_type = context.field_type;
+    
+    if let syn::Type::Array(tp) = field_type {
+        if let syn::Type::Path(elem) = &*tp.elem {
+            let segments = &elem.path.segments;
+            if segments.len() == 1 && segments[0].ident == "u8" {
+                let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, true);
+                let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(length);
+                
+                let parsing = quote! {
+                    byte_index = _bit_sum / 8;
+                    let mut #field_name = [0u8; #length];
+                    #field_name.copy_from_slice(&bytes[byte_index..#length + byte_index]);
+                    _bit_sum += 8 * #length;
+                };
+                
+                let writing = quote! {
+                    bytes.extend_from_slice(&#field_name);
+                    _bit_sum += #length * 8;
+                };
+                
+                return Ok(crate::functional::FieldProcessResult::new(
+                    quote! {},
+                    parsing,
+                    writing,
+                    accessor,
+                    bit_sum,
+                ));
+            }
+        }
+    }
+    
+    Err(syn::Error::new_spanned(field_type, "Unsupported array type"))
+}
+
+// Functional version of handle_vector
+fn process_vector_functional(
+    context: &FieldContext,
+    size: Option<usize>,
+    vec_size_ident: Option<syn::Ident>,
+    processing_ctx: &crate::functional::ProcessingContext,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+    let field_name = &context.field_name;
+    let field_type = context.field_type;
+    let field = context.field;
+    let is_last_field = context.is_last_field;
+    
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, true);
+    
+    if let syn::Type::Path(tp) = field_type {
+        if let Some(syn::Type::Path(ref inner_tp)) = utils::solve_for_inner_type(tp, "Vec") {
+            if utils::is_primitive_type(inner_tp) {
+                let (bit_sum, parsing, writing) = match (size, vec_size_ident.clone()) {
+                    (_, Some(ident)) => (
+                        quote! { bit_sum = 4096 * 8; },
+                        quote! {
+                            let vec_length = #ident as usize;
+                            byte_index = _bit_sum / 8;
+                            let end_index = byte_index + vec_length;
+                            if end_index > bytes.len() {
+                                panic!("Not enough bytes to parse a vector of size {}", vec_length);
+                            }
+                            let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                            _bit_sum += vec_length * 8;
+                        },
+                        quote! {
+                            bytes.extend_from_slice(&#field_name);
+                            _bit_sum += #field_name.len() * 8;
+                        }
+                    ),
+                    (Some(s), None) => (
+                        crate::functional::pure_helpers::create_byte_bit_sum(s),
+                        quote! {
+                            let vec_length = #s as usize;
+                            byte_index = _bit_sum / 8;
+                            let end_index = byte_index + vec_length;
+                            let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                            _bit_sum += #s * 8;
+                        },
+                        quote! {
+                            bytes.extend_from_slice(&#field_name);
+                            _bit_sum += #field_name.len() * 8;
+                        }
+                    ),
+                    (None, None) => {
+                        if !is_last_field {
+                            return Err(syn::Error::new(
+                                field.ty.span(),
+                                "Unbounded vectors can only be used as padding at the end of a struct",
+                            ));
+                        }
+                        (
+                            quote! { bit_sum = 4096 * 8; },
+                            quote! {
+                                byte_index = _bit_sum / 8;
+                                let #field_name = Vec::from(&bytes[byte_index..]);
+                                _bit_sum += #field_name.len() * 8;
+                            },
+                            quote! {
+                                bytes.extend_from_slice(&#field_name);
+                                _bit_sum += #field_name.len() * 8;
+                            }
+                        )
+                    }
+                };
+                
+                return Ok(crate::functional::FieldProcessResult::new(
+                    quote! {},
+                    parsing,
+                    writing,
+                    accessor,
+                    bit_sum,
+                ));
+            } else {
+                // Handle vector of custom types
+                let inner_type_path = &inner_tp.path;
+                let inner_type_name = quote! { #inner_type_path };
+
+                let try_from_bytes_method = utils::get_try_from_bytes_method(processing_ctx.endianness);
+                let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
+
+                let parsing_init = quote! {
+                    let mut #field_name = Vec::new();
+                };
+
+                let parsing_loop = if !is_last_field {
+                    if let Some(vec_size) = size {
+                        quote! {
+                            let mut bytes_consumed = 0;
+                            for _ in 0..#vec_size {
+                                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
+                                    break;
+                                }
+                                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
+                                    Ok((item, consumed)) => {
+                                        #field_name.push(item);
+                                        bytes_consumed += consumed;
+                                    }
+                                    Err(e) => return Err(e),
+                                }
+                            }
+                            _bit_sum += bytes_consumed * 8;
+                        }
+                    } else if let Some(ident) = vec_size_ident {
+                        quote! {
+                            let vec_length = #ident as usize;
+                            let mut bytes_consumed = 0;
+                            for _ in 0..vec_length {
+                                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
+                                    break;
+                                }
+                                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
+                                    Ok((item, consumed)) => {
+                                        #field_name.push(item);
+                                        bytes_consumed += consumed;
+                                    }
+                                    Err(e) => return Err(e),
+                                }
+                            }
+                            _bit_sum += bytes_consumed * 8;
+                        }
+                    } else {
+                        return Err(syn::Error::new(
+                            field.ty.span(),
+                            "Vectors of custom types need size information. Use #[With(size(n))] or #[FromField(field_name)]",
+                        ));
+                    }
+                } else {
+                    quote! {
+                        let mut bytes_consumed = 0;
+                        while _bit_sum / 8 + bytes_consumed < bytes.len() {
+                            match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
+                                Ok((item, consumed)) => {
+                                    #field_name.push(item);
+                                    bytes_consumed += consumed;
+                                }
+                                Err(e) => break,
+                            }
+                        }
+                        _bit_sum += bytes_consumed * 8;
+                    }
+                };
+
+                let parsing = quote! {
+                    #parsing_init
+                    #parsing_loop
+                };
+
+                let writing = quote! {
+                    for item in &#field_name {
+                        let item_bytes = BeBytes::#to_bytes_method(item);
+                        bytes.extend_from_slice(&item_bytes);
+                        _bit_sum += item_bytes.len() * 8;
+                    }
+                };
+
+                return Ok(crate::functional::FieldProcessResult::new(
+                    quote! {},
+                    parsing,
+                    writing,
+                    accessor,
+                    quote! { bit_sum = 4096 * 8; }, // Variable size
+                ));
+            }
+        }
+    }
+    
+    Err(syn::Error::new_spanned(field_type, "Not a vector type"))
+}
+
+// Functional version of handle_option_type
+fn process_option_type_functional(
+    context: &FieldContext,
+    processing_ctx: &crate::functional::ProcessingContext,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+    let field_name = &context.field_name;
+    let field_type = context.field_type;
+    
+    if let syn::Type::Path(tp) = field_type {
+        if let Some(inner_type) = utils::solve_for_inner_type(tp, "Option") {
+            if let syn::Type::Path(inner_tp) = &inner_type {
+                if utils::is_primitive_type(inner_tp) {
+                    let field_size = utils::get_primitive_type_size(&inner_type)?;
+                    
+                    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, false);
+                    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(field_size);
+                    
+                    let from_bytes_method = utils::get_from_bytes_method(processing_ctx.endianness);
+                    let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
+                    
+                    let parsing = quote! {
+                        byte_index = _bit_sum / 8;
+                        end_byte_index = byte_index + #field_size;
+                        _bit_sum += 8 * #field_size;
+                        let #field_name = if bytes[byte_index..end_byte_index] == [0_u8; #field_size] {
+                            None
+                        } else {
+                            Some(<#inner_tp>::#from_bytes_method({
+                                let slice = &bytes[byte_index..end_byte_index];
+                                let mut arr = [0; #field_size];
+                                arr.copy_from_slice(slice);
+                                arr
+                            }))
+                        };
+                    };
+                    
+                    let writing = quote! {
+                        let bytes_data = &#field_name.unwrap_or(0).#to_bytes_method();
+                        bytes.extend_from_slice(bytes_data);
+                        _bit_sum += bytes_data.len() * 8;
+                    };
+                    
+                    return Ok(crate::functional::FieldProcessResult::new(
+                        quote! {},
+                        parsing,
+                        writing,
+                        accessor,
+                        bit_sum,
+                    ));
+                }
+            }
+        }
+    }
+    
+    Err(syn::Error::new_spanned(field_type, "Unsupported Option type"))
+}
+
+// Functional version of handle_custom_type
+fn process_custom_type_functional(
+    context: &FieldContext,
+    processing_ctx: &crate::functional::ProcessingContext,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+    let field_name = &context.field_name;
+    let field_type = context.field_type;
+    
+    let needs_owned = !utils::is_copy(field_type);
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, needs_owned);
+    
+    let bit_sum = quote! {
+        bit_sum += 8 * #field_type::field_size();
+    };
+    
+    let try_from_bytes_method = utils::get_try_from_bytes_method(processing_ctx.endianness);
+    let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
+    
+    let parsing = quote_spanned! { context.field.span() =>
+        byte_index = _bit_sum / 8;
+        let predicted_size = #field_type::field_size();
+        end_byte_index = usize::min(bytes.len(), byte_index + predicted_size);
+        let (#field_name, bytes_read) = #field_type::#try_from_bytes_method(&bytes[byte_index..end_byte_index])?;
+        _bit_sum += bytes_read * 8;
+    };
+    
+    let writing = quote_spanned! { context.field.span() =>
+        let bytes_data = &BeBytes::#to_bytes_method(&#field_name);
+        bytes.extend_from_slice(bytes_data);
+        _bit_sum += bytes_data.len() * 8;
+    };
+    
+    Ok(crate::functional::FieldProcessResult::new(
+        quote! {},
+        parsing,
+        writing,
+        accessor,
+        bit_sum,
+    ))
 }
