@@ -5,7 +5,7 @@ use bebytes::BeBytes;
 fn main() {
     println!("\n=== BeBytes Serialization Test Suite ===");
     println!("\nShowing side-by-side comparison of original vs deserialized values\n");
-    
+
     demo_endianness();
     demo_bit_fields();
     demo_multi_byte_types();
@@ -16,7 +16,7 @@ fn main() {
     demo_vectors();
     demo_nested_structs();
     demo_complete_functionality();
-    
+
     println!("\n=== All tests completed ===");
 }
 
@@ -29,107 +29,147 @@ fn print_bytes(bytes: &[u8]) -> String {
     format!("[{}] ({} bytes)", hex.join(", "), bytes.len())
 }
 
-fn compare_values<T: std::fmt::Debug + PartialEq>(name: &str, original: &T, decoded: &T, bytes: &[u8]) {
+fn compare_values<T: std::fmt::Debug + PartialEq>(
+    name: &str,
+    original: &T,
+    decoded: &T,
+    bytes: &[u8],
+) {
     let original_str = format!("{:#?}", original);
     let decoded_str = format!("{:#?}", decoded);
-    
+
     println!("\n{} Comparison:", name);
     println!("Serialized: {}", print_bytes(bytes));
     println!("\nORIGINAL                          | DECODED");
     println!("---------------------------------+---------------------------------");
-    
+
     let orig_lines: Vec<&str> = original_str.lines().collect();
     let dec_lines: Vec<&str> = decoded_str.lines().collect();
     let max_lines = orig_lines.len().max(dec_lines.len());
-    
+
     for i in 0..max_lines {
         let orig = orig_lines.get(i).unwrap_or(&"");
         let dec = dec_lines.get(i).unwrap_or(&"");
         println!("{:<33} | {:<33}", orig, dec);
     }
-    
-    println!("\nMatch: {}", if original == decoded { "YES ✓" } else { "NO ✗" });
+
+    println!(
+        "\nMatch: {}",
+        if original == decoded {
+            "YES ✓"
+        } else {
+            "NO ✗"
+        }
+    );
 }
 
-fn compare_enum_values<T: std::fmt::Debug + PartialEq + Copy>(name: &str, original: T, decoded: T) 
-where T: BeBytes
+fn compare_enum_values<T: std::fmt::Debug + PartialEq + Copy>(name: &str, original: T, decoded: T)
+where
+    T: BeBytes,
 {
     let bytes = original.to_be_bytes();
-    
+
     println!("\n{} Comparison:", name);
     println!("Serialized: {}", print_bytes(&bytes));
     println!("\nORIGINAL: {:?}", original);
     println!("DECODED:  {:?}", decoded);
-    println!("Match: {}", if original == decoded { "YES ✓" } else { "NO ✗" });
+    println!(
+        "Match: {}",
+        if original == decoded {
+            "YES ✓"
+        } else {
+            "NO ✗"
+        }
+    );
 }
 
 fn demo_endianness() {
     print_section("1. ENDIANNESS DEMONSTRATION");
-    
+
     let original = U16 {
         first: 1,
         second: 16383,
         fourth: 0,
     };
-    
+
     println!("\nBig-Endian vs Little-Endian:");
     let be_bytes = original.to_be_bytes();
     let le_bytes = original.to_le_bytes();
-    
+
     println!("BE bytes: {}", print_bytes(&be_bytes));
     println!("LE bytes: {}", print_bytes(&le_bytes));
-    
+
     let (decoded_be, _) = U16::try_from_be_bytes(&be_bytes).unwrap();
     let (decoded_le, _) = U16::try_from_le_bytes(&le_bytes).unwrap();
-    
+
     compare_values("U16 (BE)", &original, &decoded_be, &be_bytes);
     compare_values("U16 (LE)", &original, &decoded_le, &le_bytes);
 }
 
 fn demo_bit_fields() {
     print_section("2. BIT FIELD DEMONSTRATION");
-    
+
     let original = U8 {
-        first: 1,   // 1 bit
-        second: 2,  // 3 bits  
-        third: 3,   // 4 bits
-        fourth: 4,  // 8 bits (full byte)
+        first: 1,  // 1 bit
+        second: 2, // 3 bits
+        third: 3,  // 4 bits
+        fourth: 4, // 8 bits (full byte)
     };
-    
+
     let bytes = original.to_be_bytes();
     let (decoded, _) = U8::try_from_be_bytes(&bytes).unwrap();
-    
+
     compare_values("U8", &original, &decoded, &bytes);
-    
+
     println!("\nBit layout breakdown:");
-    println!("first  (1 bit):  {:01b} = {}", original.first, original.first);
-    println!("second (3 bits): {:03b} = {}", original.second, original.second);
-    println!("third  (4 bits): {:04b} = {}", original.third, original.third);
-    println!("fourth (8 bits): {:08b} = {}", original.fourth, original.fourth);
-    
+    println!(
+        "first  (1 bit):  {:01b} = {}",
+        original.first, original.first
+    );
+    println!(
+        "second (3 bits): {:03b} = {}",
+        original.second, original.second
+    );
+    println!(
+        "third  (4 bits): {:04b} = {}",
+        original.third, original.third
+    );
+    println!(
+        "fourth (8 bits): {:08b} = {}",
+        original.fourth, original.fourth
+    );
+
     // Complex bit fields
     let error = ErrorEstimateMini {
         s_bit: 1,
         z_bit: 0,
-        scale: 63,  // 6 bits: 111111
+        scale: 63, // 6 bits: 111111
         multiplier: 3,
     };
-    
+
     let bytes = error.to_be_bytes();
     let (decoded, _) = ErrorEstimateMini::try_from_be_bytes(&bytes).unwrap();
-    
+
     compare_values("ErrorEstimateMini", &error, &decoded, &bytes);
 }
 
 fn demo_multi_byte_types() {
     print_section("3. MULTI-BYTE TYPE DEMONSTRATION");
-    
-    let u16_val = U16 { first: 1, second: 16383, fourth: 0 };
+
+    let u16_val = U16 {
+        first: 1,
+        second: 16383,
+        fourth: 0,
+    };
     let bytes = u16_val.to_be_bytes();
     let (decoded, _) = U16::try_from_be_bytes(&bytes).unwrap();
     compare_values("U16", &u16_val, &decoded, &bytes);
-    
-    let u32_val = U32 { first: 1, second: 32383, fourth: 1 };
+
+    let u32_val = U32 {
+        first: 1,
+        second: 32383,
+        fourth: 1,
+    };
     let bytes = u32_val.to_be_bytes();
     let (decoded, _) = U32::try_from_be_bytes(&bytes).unwrap();
     compare_values("U32", &u32_val, &decoded, &bytes);
@@ -137,26 +177,31 @@ fn demo_multi_byte_types() {
 
 fn demo_enum_serialization() {
     print_section("4. ENUM SERIALIZATION");
-    
+
     println!("\nEnum discriminant mapping:");
     println!("SetupResponse = 0");
     println!("ServerStart   = 1");
     println!("SetupRequest  = 2");
-    
+
     let original = DummyEnum::ServerStart;
     let bytes = original.to_be_bytes();
     let (decoded, _) = DummyEnum::try_from_be_bytes(&bytes).unwrap();
-    
+
     compare_enum_values("DummyEnum", original, decoded);
-    
+
     // Show all variants
     println!("\nAll variants test:");
-    for variant in &[DummyEnum::SetupResponse, DummyEnum::ServerStart, DummyEnum::SetupRequest] {
+    for variant in &[
+        DummyEnum::SetupResponse,
+        DummyEnum::ServerStart,
+        DummyEnum::SetupRequest,
+    ] {
         let bytes = variant.to_be_bytes();
         let (decoded, _) = DummyEnum::try_from_be_bytes(&bytes).unwrap();
-        println!("{:?} -> {} -> {:?} ({})", 
-            variant, 
-            print_bytes(&bytes), 
+        println!(
+            "{:?} -> {} -> {:?} ({})",
+            variant,
+            print_bytes(&bytes),
             decoded,
             if variant == &decoded { "✓" } else { "✗" }
         );
@@ -165,94 +210,160 @@ fn demo_enum_serialization() {
 
 fn demo_enum_bit_packing() {
     print_section("5. ENUM BIT PACKING (Auto-sized)");
-    
+
     println!("\nMinimum bits required:");
-    println!("Status (4 variants)    = {} bits", Status::__BEBYTES_MIN_BITS);
-    println!("Priority (3 variants)  = {} bits", Priority::__BEBYTES_MIN_BITS);
-    println!("LargeEnum (17 variants) = {} bits", LargeEnum::__BEBYTES_MIN_BITS);
-    
+    println!(
+        "Status (4 variants)    = {} bits",
+        Status::__BEBYTES_MIN_BITS
+    );
+    println!(
+        "Priority (3 variants)  = {} bits",
+        Priority::__BEBYTES_MIN_BITS
+    );
+    println!(
+        "LargeEnum (17 variants) = {} bits",
+        LargeEnum::__BEBYTES_MIN_BITS
+    );
+
     let original = PacketHeader {
         version: 15,              // 4 bits: 1111
         status: Status::Running,  // 2 bits: 01
         priority: Priority::High, // 2 bits: 10
     };
-    
+
     let bytes = original.to_be_bytes();
     let (decoded, _) = PacketHeader::try_from_be_bytes(&bytes).unwrap();
-    
+
     println!("\nPacketHeader Comparison:");
     println!("Serialized: {}", print_bytes(&bytes));
     println!("\nORIGINAL:");
-    println!("  version:  {} (0b{:04b})", original.version, original.version);
+    println!(
+        "  version:  {} (0b{:04b})",
+        original.version, original.version
+    );
     println!("  status:   {:?}", original.status);
     println!("  priority: {:?}", original.priority);
     println!("\nDECODED:");
-    println!("  version:  {} (0b{:04b})", decoded.version, decoded.version);
+    println!(
+        "  version:  {} (0b{:04b})",
+        decoded.version, decoded.version
+    );
     println!("  status:   {:?}", decoded.status);
     println!("  priority: {:?}", decoded.priority);
-    println!("\nMatch: {}", 
-        if original.version == decoded.version &&
-           original.status == decoded.status &&
-           original.priority == decoded.priority { "YES ✓" } else { "NO ✗" }
+    println!(
+        "\nMatch: {}",
+        if original.version == decoded.version
+            && original.status == decoded.status
+            && original.priority == decoded.priority
+        {
+            "YES ✓"
+        } else {
+            "NO ✗"
+        }
     );
 }
 
 fn demo_flag_enums() {
     print_section("6. FLAG ENUMS (Bitwise Operations)");
-    
+
     println!("\nFlag values:");
-    println!("FilePermissions::None    = {} (0b{:08b})", FilePermissions::None as u8, FilePermissions::None as u8);
-    println!("FilePermissions::Read    = {} (0b{:08b})", FilePermissions::Read as u8, FilePermissions::Read as u8);
-    println!("FilePermissions::Write   = {} (0b{:08b})", FilePermissions::Write as u8, FilePermissions::Write as u8);
-    println!("FilePermissions::Execute = {} (0b{:08b})", FilePermissions::Execute as u8, FilePermissions::Execute as u8);
-    println!("FilePermissions::Delete  = {} (0b{:08b})", FilePermissions::Delete as u8, FilePermissions::Delete as u8);
-    
+    println!(
+        "FilePermissions::None    = {} (0b{:08b})",
+        FilePermissions::None as u8,
+        FilePermissions::None as u8
+    );
+    println!(
+        "FilePermissions::Read    = {} (0b{:08b})",
+        FilePermissions::Read as u8,
+        FilePermissions::Read as u8
+    );
+    println!(
+        "FilePermissions::Write   = {} (0b{:08b})",
+        FilePermissions::Write as u8,
+        FilePermissions::Write as u8
+    );
+    println!(
+        "FilePermissions::Execute = {} (0b{:08b})",
+        FilePermissions::Execute as u8,
+        FilePermissions::Execute as u8
+    );
+    println!(
+        "FilePermissions::Delete  = {} (0b{:08b})",
+        FilePermissions::Delete as u8,
+        FilePermissions::Delete as u8
+    );
+
     println!("\nFlag combinations:");
     let read_write = FilePermissions::Read | FilePermissions::Write;
     println!("Read | Write = {} (0b{:08b})", read_write, read_write);
-    
-    let all_perms = FilePermissions::Read | FilePermissions::Write | FilePermissions::Execute | FilePermissions::Delete;
+
+    let all_perms = FilePermissions::Read
+        | FilePermissions::Write
+        | FilePermissions::Execute
+        | FilePermissions::Delete;
     println!("All perms    = {} (0b{:08b})", all_perms, all_perms);
-    
+
     let original = SecurityContext {
         user_id: 15,
         group_id: 3,
         permissions: FilePermissions::Read | FilePermissions::Execute,
         network_flags: NetworkFlags::Connected | NetworkFlags::Authenticated,
     };
-    
+
     let bytes = original.to_be_bytes();
     let (decoded, _) = SecurityContext::try_from_be_bytes(&bytes).unwrap();
-    
+
     println!("\nSecurityContext Comparison:");
     println!("Serialized: {}", print_bytes(&bytes));
     println!("\nORIGINAL:");
     println!("  user_id:       {}", original.user_id);
     println!("  group_id:      {}", original.group_id);
-    println!("  permissions:   {} (0b{:08b})", original.permissions, original.permissions);
-    println!("  network_flags: {} (0b{:08b})", original.network_flags, original.network_flags);
+    println!(
+        "  permissions:   {} (0b{:08b})",
+        original.permissions, original.permissions
+    );
+    println!(
+        "  network_flags: {} (0b{:08b})",
+        original.network_flags, original.network_flags
+    );
     println!("\nDECODED:");
     println!("  user_id:       {}", decoded.user_id);
     println!("  group_id:      {}", decoded.group_id);
-    println!("  permissions:   {} (0b{:08b})", decoded.permissions, decoded.permissions);
-    println!("  network_flags: {} (0b{:08b})", decoded.network_flags, decoded.network_flags);
-    println!("\nMatch: {}", 
-        if original.user_id == decoded.user_id &&
-           original.group_id == decoded.group_id &&
-           original.permissions == decoded.permissions &&
-           original.network_flags == decoded.network_flags { "YES ✓" } else { "NO ✗" }
+    println!(
+        "  permissions:   {} (0b{:08b})",
+        decoded.permissions, decoded.permissions
+    );
+    println!(
+        "  network_flags: {} (0b{:08b})",
+        decoded.network_flags, decoded.network_flags
+    );
+    println!(
+        "\nMatch: {}",
+        if original.user_id == decoded.user_id
+            && original.group_id == decoded.group_id
+            && original.permissions == decoded.permissions
+            && original.network_flags == decoded.network_flags
+        {
+            "YES ✓"
+        } else {
+            "NO ✗"
+        }
     );
 }
 
 fn demo_options() {
     print_section("7. OPTION TYPE DEMONSTRATION");
-    
-    let some_val = Optional { optional_number: Some(42) };
+
+    let some_val = Optional {
+        optional_number: Some(42),
+    };
     let bytes = some_val.to_be_bytes();
     let (decoded, _) = Optional::try_from_be_bytes(&bytes).unwrap();
     compare_values("Optional (Some)", &some_val, &decoded, &bytes);
-    
-    let none_val = Optional { optional_number: None };
+
+    let none_val = Optional {
+        optional_number: None,
+    };
     let bytes = none_val.to_be_bytes();
     let (decoded, _) = Optional::try_from_be_bytes(&bytes).unwrap();
     compare_values("Optional (None)", &none_val, &decoded, &bytes);
@@ -260,22 +371,22 @@ fn demo_options() {
 
 fn demo_vectors() {
     print_section("8. VECTOR DEMONSTRATION");
-    
+
     let with_vec = WithTailingVec {
         pre_tail: 3,
         tail: vec![10, 20, 30],
         post_tail: 99,
     };
-    
+
     let bytes = with_vec.to_be_bytes();
     let (decoded, _) = WithTailingVec::try_from_be_bytes(&bytes).unwrap();
     compare_values("WithTailingVec", &with_vec, &decoded, &bytes);
-    
+
     let with_size = WithSizeStruct {
         innocent: 1,
         real_tail: vec![2, 3, 4],
     };
-    
+
     let bytes = with_size.to_be_bytes();
     let (decoded, _) = WithSizeStruct::try_from_be_bytes(&bytes).unwrap();
     compare_values("WithSizeStruct", &with_size, &decoded, &bytes);
@@ -283,26 +394,26 @@ fn demo_vectors() {
 
 fn demo_nested_structs() {
     print_section("9. NESTED STRUCT DEMONSTRATION");
-    
+
     let dummy = DummyStruct {
         dummy0: [0, 2],
         dummy1: 1,
         dummy2: 2,
     };
-    
+
     let error_estimate = ErrorEstimate {
         s_bit: 1,
         z_bit: 0,
         scale: 63,
         dummy_struct: dummy.clone(),
     };
-    
+
     let nested = NestedStruct {
         dummy_struct: dummy,
         optional_number: Some(42),
         error_estimate,
     };
-    
+
     let bytes = nested.to_be_bytes();
     let (decoded, _) = NestedStruct::try_from_be_bytes(&bytes).unwrap();
     compare_values("NestedStruct", &nested, &decoded, &bytes);
@@ -310,7 +421,7 @@ fn demo_nested_structs() {
 
 fn demo_complete_functionality() {
     print_section("10. COMPLETE FUNCTIONALITY EXAMPLE");
-    
+
     let complete = CompleteFunctionality {
         first: 1,
         second: 2,
@@ -318,7 +429,11 @@ fn demo_complete_functionality() {
         with_size: vec![6, 7, 8],
         fourth: 4,
         body: vec![5, 4, 3, 2],
-        u_16: U16 { first: 1, second: 2, fourth: 1 },
+        u_16: U16 {
+            first: 1,
+            second: 2,
+            fourth: 1,
+        },
         arrayed: ArrayedStruct {
             mode: Modes { bits: 1 },
             key_id: [2],
@@ -333,28 +448,48 @@ fn demo_complete_functionality() {
             tail: vec![1, 2, 3, 4],
             post_tail: 5,
         },
-        u_32: U32 { first: 1, second: 57, fourth: 1 },
+        u_32: U32 {
+            first: 1,
+            second: 57,
+            fourth: 1,
+        },
         rattle: vec![1, 2, 3, 4, 5],
     };
-    
+
     let bytes = complete.to_be_bytes();
     println!("\nComplete struct size: {} bytes", bytes.len());
     println!("First 20 bytes: {:?}", &bytes[..20.min(bytes.len())]);
-    
+
     let (decoded, _) = CompleteFunctionality::try_from_be_bytes(&bytes).unwrap();
-    
+
     println!("\nField comparison:");
     println!("first:      {} | {}", complete.first, decoded.first);
     println!("second:     {} | {}", complete.second, decoded.second);
     println!("third:      {} | {}", complete.third, decoded.third);
-    println!("with_size:  {:?} | {:?}", complete.with_size, decoded.with_size);
+    println!(
+        "with_size:  {:?} | {:?}",
+        complete.with_size, decoded.with_size
+    );
     println!("fourth:     {} | {}", complete.fourth, decoded.fourth);
     println!("body:       {:?} | {:?}", complete.body, decoded.body);
-    println!("dummy_enum: {:?} | {:?}", complete.dummy_enum, decoded.dummy_enum);
-    println!("optional:   {:?} | {:?}", complete.optional, decoded.optional);
+    println!(
+        "dummy_enum: {:?} | {:?}",
+        complete.dummy_enum, decoded.dummy_enum
+    );
+    println!(
+        "optional:   {:?} | {:?}",
+        complete.optional, decoded.optional
+    );
     println!("rattle:     {:?} | {:?}", complete.rattle, decoded.rattle);
-    
-    println!("\nMatch: {}", if complete == decoded { "YES ✓" } else { "NO ✗" });
+
+    println!(
+        "\nMatch: {}",
+        if complete == decoded {
+            "YES ✓"
+        } else {
+            "NO ✗"
+        }
+    );
 }
 
 // ============ Test Structures ============
