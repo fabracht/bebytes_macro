@@ -38,20 +38,20 @@ pub fn handle_enum(
                 if let syn::Lit::Int(token) = &expr_lit.lit {
                     // First parse as usize to check the actual value
                     let value: usize = token.base10_parse().unwrap_or_else(|_e| {
-                        let error = syn::Error::new(token.span(), "Failed to parse discriminant value");
+                        let error =
+                            syn::Error::new(token.span(), "Failed to parse discriminant value");
                         errors.push(error.to_compile_error());
                         0
                     });
-                    
+
                     // Check if value exceeds u8 range
                     if value > 255 {
                         let error = syn::Error::new(
                             token.span(),
                             format!(
-                                "Enum discriminant value {} exceeds u8 range (0-255). \
+                                "Enum discriminant value {value} exceeds u8 range (0-255). \
                                 Consider using #[repr(u8)] to make this constraint explicit, \
-                                or ensure all discriminants fit within u8 range.",
-                                value
+                                or ensure all discriminants fit within u8 range."
                             ),
                         );
                         errors.push(error.to_compile_error());
