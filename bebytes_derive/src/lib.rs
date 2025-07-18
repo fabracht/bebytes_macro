@@ -195,10 +195,18 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 }
             });
 
-            let (from_be_bytes_arms, to_be_bytes_arms, min_bits, try_from_arms, discriminants) =
-                enums::handle_enum(errors, data_enum.clone());
-            let (from_le_bytes_arms, to_le_bytes_arms, _, _, _) =
+            let (from_be_bytes_arms, to_be_bytes_arms, min_bits, try_from_arms, discriminants, enum_errors) =
+                enums::handle_enum(Vec::new(), data_enum.clone());
+            let (from_le_bytes_arms, to_le_bytes_arms, _, _, _, _) =
                 enums::handle_enum(Vec::new(), data_enum);
+            
+            // If there are any errors from enum validation, return them
+            if !enum_errors.is_empty() {
+                return quote! {
+                    #(#enum_errors)*
+                }
+                .into();
+            }
 
             let expanded = quote! {
                 impl #name {
