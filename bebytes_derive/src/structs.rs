@@ -252,28 +252,56 @@ fn process_bits_field_functional(
     let number_length = utils::get_primitive_type_size(field_type)
         .map_err(|_| syn::Error::new(field_type.span(), "Type not supported"))?;
 
-    let pos = bit_position;
     let mask: u128 = (1 << size) - 1;
 
     let (parsing, writing) = if number_length > 1 {
-        // Multi-byte bit field handling
+        // Optimized multi-byte bit field handling
         let from_bytes_method = utils::get_from_bytes_method(processing_ctx.endianness);
         let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
 
         let parsing = quote! {
-            let byte_start = _bit_sum / 8;
-            if byte_start + #number_length > bytes.len() {
-                return Err("Not enough bytes".into());
-            }
             let #field_name = {
-                let mut arr = [0u8; #number_length];
-                arr.copy_from_slice(&bytes[byte_start..byte_start + #number_length]);
-                let u_type = #field_type::#from_bytes_method(arr);
-                let shift_left = _bit_sum % 8;
-                let left_shifted_u_type = u_type << shift_left;
-                let shift_right = 8 * #number_length - #size;
-                let shifted_u_type = left_shifted_u_type >> shift_right;
-                shifted_u_type & #mask as #field_type
+                let byte_start = _bit_sum / 8;
+                if byte_start + #number_length > bytes.len() {
+                    return Err("Not enough bytes".into());
+                }
+
+                // Optimized: Use compile-time bit position when available
+                let bit_offset = _bit_sum % 8;
+
+                // Check if we can use compile-time optimization
+                const COMPILE_TIME_ALIGNED: bool = (#bit_position % 8 == 0) && (#size == (#number_length * 8));
+                if COMPILE_TIME_ALIGNED && bit_offset == 0 {
+                    // Compile-time aligned case: direct conversion without bit manipulation
+                    let slice = &bytes[byte_start..byte_start + #number_length];
+                    let mut arr = [0u8; #number_length];
+                    arr.copy_from_slice(slice);
+                    #field_type::#from_bytes_method(arr)
+                } else if bit_offset == 0 && #size == (#number_length * 8) {
+                    // Runtime aligned case: direct conversion without bit manipulation
+                    let slice = &bytes[byte_start..byte_start + #number_length];
+                    let mut arr = [0u8; #number_length];
+                    arr.copy_from_slice(slice);
+                    #field_type::#from_bytes_method(arr)
+                } else {
+                    // Unaligned case: optimized bit extraction
+                    let mut result = 0 as #field_type;
+                    let mut bits_read = 0;
+                    let mut byte_idx = byte_start;
+                    let mut current_bit_offset = bit_offset;
+
+                    while bits_read < #size {
+                        let bits_in_byte = core::cmp::min(8 - current_bit_offset, #size - bits_read);
+                        let byte_val = bytes[byte_idx] as #field_type;
+                        let shifted = (byte_val >> (8 - current_bit_offset - bits_in_byte)) & ((1 << bits_in_byte) - 1);
+                        result = (result << bits_in_byte) | shifted;
+
+                        bits_read += bits_in_byte;
+                        byte_idx += 1;
+                        current_bit_offset = 0;
+                    }
+                    result
+                }
             };
             _bit_sum += #size;
         };
@@ -287,16 +315,49 @@ fn process_bits_field_functional(
                     #mask
                 );
             }
-            let masked_value = #field_name & #mask as #field_type;
-            let shift_left = (#number_length * 8) - #size;
-            let shift_right = (#pos % 8);
-            let shifted_masked_value = (masked_value << shift_left) >> shift_right;
-            let byte_values = #field_type::#to_bytes_method(shifted_masked_value);
-            for i in 0..#number_length {
-                if bytes.len() <= _bit_sum / 8 + i {
-                    bytes.resize(_bit_sum / 8 + i + 1, 0);
+
+            // Optimized: Use compile-time bit position when available
+            let value = #field_name & #mask as #field_type;
+            let byte_start = _bit_sum / 8;
+            let bit_offset = _bit_sum % 8;
+            // Check if we can use compile-time optimization
+            const COMPILE_TIME_ALIGNED: bool = (#bit_position % 8 == 0) && (#size == (#number_length * 8));
+            if COMPILE_TIME_ALIGNED && bit_offset == 0 {
+                // Compile-time aligned case: direct byte insertion
+                let value_bytes = #field_type::#to_bytes_method(value);
+                if bytes.len() < byte_start + #number_length {
+                    bytes.resize(byte_start + #number_length, 0);
                 }
-                bytes[_bit_sum / 8 + i] |= byte_values[i];
+                bytes[byte_start..byte_start + #number_length].copy_from_slice(&value_bytes);
+            } else if bit_offset == 0 && #size == (#number_length * 8) {
+                // Runtime aligned case: direct byte insertion
+                let value_bytes = #field_type::#to_bytes_method(value);
+                if bytes.len() < byte_start + #number_length {
+                    bytes.resize(byte_start + #number_length, 0);
+                }
+                bytes[byte_start..byte_start + #number_length].copy_from_slice(&value_bytes);
+            } else {
+                // Unaligned case: optimized bit insertion
+                let mut remaining_value = value;
+                let mut bits_written = 0;
+                let mut byte_idx = byte_start;
+                let mut current_bit_offset = bit_offset;
+
+                while bits_written < #size {
+                    let bits_in_byte = core::cmp::min(8 - current_bit_offset, #size - bits_written);
+                    let mask = ((1 << bits_in_byte) - 1) as u8;
+                    let shift = #size - bits_written - bits_in_byte;
+                    let byte_bits = ((remaining_value >> shift) & mask as #field_type) as u8;
+
+                    if bytes.len() <= byte_idx {
+                        bytes.resize(byte_idx + 1, 0);
+                    }
+                    bytes[byte_idx] |= byte_bits << (8 - current_bit_offset - bits_in_byte);
+
+                    bits_written += bits_in_byte;
+                    byte_idx += 1;
+                    current_bit_offset = 0;
+                }
             }
             _bit_sum += #size;
         };
@@ -632,6 +693,8 @@ fn process_array_functional(
                 };
 
                 let writing = quote! {
+                    // Optimized: Reserve capacity to avoid multiple reallocations
+                    bytes.reserve(#length);
                     bytes.extend_from_slice(&#field_name);
                     _bit_sum += #length * 8;
                 };
@@ -684,6 +747,8 @@ fn process_vector_functional(
                             _bit_sum += vec_length * 8;
                         },
                         quote! {
+                            // Optimized: Reserve capacity to avoid multiple reallocations
+                            bytes.reserve(#field_name.len());
                             bytes.extend_from_slice(&#field_name);
                             _bit_sum += #field_name.len() * 8;
                         },
@@ -698,6 +763,8 @@ fn process_vector_functional(
                             _bit_sum += #s * 8;
                         },
                         quote! {
+                            // Optimized: Reserve capacity to avoid multiple reallocations
+                            bytes.reserve(#field_name.len());
                             bytes.extend_from_slice(&#field_name);
                             _bit_sum += #field_name.len() * 8;
                         },
@@ -717,6 +784,8 @@ fn process_vector_functional(
                                 _bit_sum += #field_name.len() * 8;
                             },
                             quote! {
+                                // Optimized: Reserve capacity to avoid multiple reallocations
+                                bytes.reserve(#field_name.len());
                                 bytes.extend_from_slice(&#field_name);
                                 _bit_sum += #field_name.len() * 8;
                             },
@@ -808,6 +877,12 @@ fn process_vector_functional(
                 };
 
                 let writing = quote! {
+                    // Optimized: Pre-calculate total size to avoid multiple reallocations
+                    let total_size = #field_name.iter().map(|item| {
+                        BeBytes::#to_bytes_method(item).len()
+                    }).sum::<usize>();
+                    bytes.reserve(total_size);
+
                     for item in &#field_name {
                         let item_bytes = BeBytes::#to_bytes_method(item);
                         bytes.extend_from_slice(&item_bytes);
@@ -868,6 +943,8 @@ fn process_option_type_functional(
 
                     let writing = quote! {
                         let bytes_data = &#field_name.unwrap_or(0).#to_bytes_method();
+                        // Optimized: Reserve capacity to avoid reallocation
+                        bytes.reserve(bytes_data.len());
                         bytes.extend_from_slice(bytes_data);
                         _bit_sum += bytes_data.len() * 8;
                     };
@@ -918,6 +995,8 @@ fn process_custom_type_functional(
 
     let writing = quote_spanned! { context.field.span() =>
         let bytes_data = &BeBytes::#to_bytes_method(&#field_name);
+        // Optimized: Reserve capacity to avoid reallocation
+        bytes.reserve(bytes_data.len());
         bytes.extend_from_slice(bytes_data);
         _bit_sum += bytes_data.len() * 8;
     };
