@@ -16,6 +16,7 @@ fn main() {
     demo_vectors();
     demo_nested_structs();
     demo_complete_functionality();
+    demo_nested_field_access();
 
     println!("\n=== All tests completed ===");
 }
@@ -688,7 +689,6 @@ struct CompleteFunctionality {
 // ============ Enum Bit Packing Examples ============
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-#[repr(u8)]
 enum Status {
     Idle = 0,
     Running = 1,
@@ -697,7 +697,6 @@ enum Status {
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-#[repr(u8)]
 enum Priority {
     Low = 0,
     Medium = 1,
@@ -715,7 +714,6 @@ struct PacketHeader {
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-#[repr(u8)]
 enum LargeEnum {
     V0 = 0,
     V1 = 1,
@@ -751,7 +749,6 @@ struct ComplexPacket {
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 #[bebytes(flags)]
-#[repr(u8)]
 enum FilePermissions {
     None = 0,
     Read = 1,
@@ -762,7 +759,6 @@ enum FilePermissions {
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 #[bebytes(flags)]
-#[repr(u8)]
 enum NetworkFlags {
     Connected = 1,
     Authenticated = 2,
@@ -779,4 +775,213 @@ struct SecurityContext {
     group_id: u8,
     permissions: u8,   // Store FilePermissions flags
     network_flags: u8, // Store NetworkFlags
+}
+
+// ========================
+// Nested Field Access Demo
+// ========================
+
+// 1-Level Nested Field Access Example
+#[derive(BeBytes, Debug, PartialEq, Clone)]
+struct SimpleHeader {
+    version: u8,
+    payload_length: u16,
+    flags: u8,
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct SimplePacket {
+    header: SimpleHeader,
+    #[FromField(header.payload_length)]
+    payload: Vec<u8>,
+    checksum: u16,
+}
+
+// 3-Level Nested Field Access Example
+#[derive(BeBytes, Debug, PartialEq, Clone)]
+struct MetaInfo {
+    protocol_version: u8,
+    total_segments: u32, // Use full u32 instead of bits(24)
+}
+
+#[derive(BeBytes, Debug, PartialEq, Clone)]
+struct ExtendedHeader {
+    magic_number: u32,
+    meta: MetaInfo,
+}
+
+#[derive(BeBytes, Debug, PartialEq, Clone)]
+struct Container {
+    header: ExtendedHeader,
+    sequence_number: u16,
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct ComplexProtocolPacket {
+    container: Container,
+    #[FromField(container.header.meta.total_segments)]
+    segments: Vec<Segment>,
+    trailer: u32,
+}
+
+#[derive(BeBytes, Debug, PartialEq, Clone)]
+struct Segment {
+    #[bits(16)]
+    segment_id: u16,
+    #[bits(16)]
+    segment_size: u16,
+    data: [u8; 4],
+}
+
+fn demo_nested_field_access() {
+    print_section("Nested Field Access");
+
+    // Demo: 1-Level Nested Field Access
+    println!("\n1-Level Nesting: #[FromField(header.payload_length)]");
+    let simple_packet = SimplePacket {
+        header: SimpleHeader {
+            version: 1,
+            payload_length: 5,
+            flags: 0x42,
+        },
+        payload: vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE],
+        checksum: 0x1234,
+    };
+
+    let bytes = simple_packet.to_be_bytes();
+    println!("Serialized: {:02X?} ({} bytes)", bytes, bytes.len());
+
+    let (decoded, _) = SimplePacket::try_from_be_bytes(&bytes).unwrap();
+
+    println!("\nORIGINAL                          | DECODED");
+    println!("---------------------------------+---------------------------------");
+    println!("SimplePacket {{                    | SimplePacket {{");
+    println!("    header: {{                     |     header: {{");
+    println!(
+        "        version: {},               |         version: {},",
+        simple_packet.header.version, decoded.header.version
+    );
+    println!(
+        "        payload_length: {},        |         payload_length: {},",
+        simple_packet.header.payload_length, decoded.header.payload_length
+    );
+    println!(
+        "        flags: 0x{:02X},              |         flags: 0x{:02X},",
+        simple_packet.header.flags, decoded.header.flags
+    );
+    println!("    }},                            |     }},");
+    println!(
+        "    payload: {:02X?},       |     payload: {:02X?},",
+        simple_packet.payload, decoded.payload
+    );
+    println!(
+        "    checksum: 0x{:04X},            |     checksum: 0x{:04X},",
+        simple_packet.checksum, decoded.checksum
+    );
+    println!("}}                                 | }}");
+
+    let match_str = if simple_packet == decoded {
+        "YES ✓"
+    } else {
+        "NO ✗"
+    };
+    println!("\nMatch: {match_str}");
+
+    // Demo: 3-Level Nested Field Access
+    println!("\n3-Level Nesting: #[FromField(container.header.meta.total_segments)]");
+    let complex_packet = ComplexProtocolPacket {
+        container: Container {
+            header: ExtendedHeader {
+                magic_number: 0xDEADBEEF,
+                meta: MetaInfo {
+                    protocol_version: 2,
+                    total_segments: 3,
+                },
+            },
+            sequence_number: 42,
+        },
+        segments: vec![
+            Segment {
+                segment_id: 1,
+                segment_size: 100,
+                data: [0x11, 0x22, 0x33, 0x44],
+            },
+            Segment {
+                segment_id: 2,
+                segment_size: 200,
+                data: [0x55, 0x66, 0x77, 0x88],
+            },
+            Segment {
+                segment_id: 3,
+                segment_size: 300,
+                data: [0x99, 0xAA, 0xBB, 0xCC],
+            },
+        ],
+        trailer: 0xCAFEBABE,
+    };
+
+    let bytes = complex_packet.to_be_bytes();
+    println!(
+        "Serialized: {} bytes (showing first 20: {:02X?}...)",
+        bytes.len(),
+        &bytes[..20.min(bytes.len())]
+    );
+
+    let (decoded, _) = ComplexProtocolPacket::try_from_be_bytes(&bytes).unwrap();
+
+    println!("\nField paths:");
+    println!(
+        "container.header.meta.total_segments = {} (controls segments vec size)",
+        decoded.container.header.meta.total_segments
+    );
+
+    println!("\nORIGINAL                          | DECODED");
+    println!("---------------------------------+---------------------------------");
+    println!("Container {{                       | Container {{");
+    println!(
+        "  header.magic_number: 0x{:08X} |   header.magic_number: 0x{:08X}",
+        complex_packet.container.header.magic_number, decoded.container.header.magic_number
+    );
+    println!(
+        "  header.meta.protocol_ver: {}    |   header.meta.protocol_ver: {}",
+        complex_packet.container.header.meta.protocol_version,
+        decoded.container.header.meta.protocol_version
+    );
+    println!(
+        "  header.meta.total_segments: {} |   header.meta.total_segments: {}",
+        complex_packet.container.header.meta.total_segments,
+        decoded.container.header.meta.total_segments
+    );
+    println!(
+        "  sequence_number: {}            |   sequence_number: {}",
+        complex_packet.container.sequence_number, decoded.container.sequence_number
+    );
+    println!("}}                                 | }}");
+    println!(
+        "segments: [{} items]              | segments: [{} items]",
+        complex_packet.segments.len(),
+        decoded.segments.len()
+    );
+    for i in 0..complex_packet.segments.len() {
+        println!(
+            "  [{}] id={}, size={}            |   [{}] id={}, size={}",
+            i,
+            complex_packet.segments[i].segment_id,
+            complex_packet.segments[i].segment_size,
+            i,
+            decoded.segments[i].segment_id,
+            decoded.segments[i].segment_size
+        );
+    }
+    println!(
+        "trailer: 0x{:08X}              | trailer: 0x{:08X}",
+        complex_packet.trailer, decoded.trailer
+    );
+
+    let match_str = if complex_packet == decoded {
+        "YES ✓"
+    } else {
+        "NO ✗"
+    };
+    println!("\nMatch: {match_str}");
 }

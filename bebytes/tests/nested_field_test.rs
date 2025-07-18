@@ -2,7 +2,6 @@ use bebytes::BeBytes;
 
 #[derive(BeBytes, Debug, PartialEq, Clone)]
 struct DnsHeader {
-    #[bits(16)]
     transaction_id: u16,
     #[bits(1)]
     qr: u8,
@@ -20,13 +19,9 @@ struct DnsHeader {
     z: u8,
     #[bits(4)]
     rcode: u8,
-    #[bits(16)]
     qdcount: u16,
-    #[bits(16)]
     ancount: u16,
-    #[bits(16)]
     nscount: u16,
-    #[bits(16)]
     arcount: u16,
 }
 
@@ -103,15 +98,12 @@ mod tests {
     fn test_deeply_nested_field_access() {
         #[derive(BeBytes, Debug, PartialEq, Clone)]
         struct Counts {
-            #[bits(16)]
             ancount: u16,
-            #[bits(16)]
             qdcount: u16,
         }
 
         #[derive(BeBytes, Debug, PartialEq, Clone)]
         struct NestedHeader {
-            #[bits(16)]
             flags: u16,
             counts: Counts,
         }
@@ -145,4 +137,3 @@ mod tests {
         assert_eq!(deserialized.questions.len(), 2);
     }
 }
-
