@@ -6,17 +6,33 @@ use std::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
+// Type alias for the complex return type
+type EnumHandleResult = (
+    Vec<proc_macro2::TokenStream>,
+    Vec<proc_macro2::TokenStream>,
+    usize,
+    Vec<proc_macro2::TokenStream>,
+    Vec<(syn::Ident, u8)>,
+);
+
 pub fn handle_enum(
     mut errors: Vec<proc_macro2::TokenStream>,
     data_enum: syn::DataEnum,
-) -> (Vec<proc_macro2::TokenStream>, Vec<proc_macro2::TokenStream>) {
+) -> EnumHandleResult {
     let variants = data_enum.variants;
     let values = variants
         .iter()
         .enumerate()
         .map(|(index, variant)| {
             let ident = &variant.ident;
-            let mut assigned_value = index as u8;
+            let mut assigned_value = u8::try_from(index).unwrap_or_else(|_| {
+                let error = syn::Error::new(
+                    ident.span(),
+                    format!("Enum variant index {index} exceeds u8 range"),
+                );
+                errors.push(error.to_compile_error());
+                0
+            });
             if let Some((_, syn::Expr::Lit(expr_lit))) = &variant.discriminant {
                 if let syn::Lit::Int(token) = &expr_lit.lit {
                     assigned_value = token.base10_parse().unwrap_or_else(|_e| {
@@ -25,8 +41,8 @@ pub fn handle_enum(
                         0
                     });
                 }
-            };
-            (ident, assigned_value)
+            }
+            (ident.clone(), assigned_value)
         })
         .collect::<Vec<_>>();
 
@@ -48,6 +64,39 @@ pub fn handle_enum(
         })
         .collect::<Vec<_>>();
 
+    // Calculate minimum bits needed for this enum
+    let max_discriminant = values.iter().map(|(_, value)| *value).max().unwrap_or(0);
+
+    // Calculate minimum bits: ceil(log2(max_discriminant + 1))
+    let min_bits = if max_discriminant == 0 {
+        1 // Even a single variant needs at least 1 bit
+    } else {
+        // Find the position of the highest set bit
+        let mut bits = 0;
+        let mut val = max_discriminant;
+        while val > 0 {
+            bits += 1;
+            val >>= 1;
+        }
+        bits
+    };
+
+    // Generate TryFrom<u8> arms for auto-sized bit fields
+    let try_from_arms = values
+        .iter()
+        .map(|(ident, assigned_value)| {
+            quote! {
+                #assigned_value => Ok(Self::#ident),
+            }
+        })
+        .collect::<Vec<_>>();
+
     // For enums, the byte representation is the same for both endianness since we're just storing a single byte value
-    (from_bytes_arms, to_bytes_arms)
+    (
+        from_bytes_arms,
+        to_bytes_arms,
+        min_bits,
+        try_from_arms,
+        values,
+    )
 }

@@ -14,7 +14,7 @@ To use BeBytes, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "0.7.1"
+bebytes = "1.2.0"
 ```
 
 Then, import the BeBytes trait from the bebytes crate and derive it for your struct:
@@ -108,6 +108,77 @@ struct U16Example {
 
 The same rules apply - all bits fields must complete a byte boundary together.
 
+### Enum Bit Packing
+
+Enums can now be used with the `#[bits()]` attribute for automatic bit-width calculation:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+#[repr(u8)]
+enum Status {
+    Idle = 0,
+    Running = 1,
+    Paused = 2,
+    Stopped = 3,
+}
+
+#[derive(BeBytes)]
+struct PacketHeader {
+    #[bits(4)]
+    version: u8,
+    #[bits()]  // Automatically uses 2 bits (minimum for 4 variants)
+    status: Status,
+    #[bits(2)]
+    flags: u8,
+}
+```
+
+Key features:
+- Automatic bit calculation: `ceil(log2(max_discriminant + 1))`
+- No need to specify bit width in both enum definition and usage
+- Type-safe conversion with generated `TryFrom<u8>` implementation
+- Supports byte-spanning fields automatically
+
+### Flag Enums
+
+BeBytes supports flag-style enums marked with `#[bebytes(flags)]`. These enums automatically implement bitwise operations (`|`, `&`, `^`, `!`) allowing them to be used as bit flags:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
+#[bebytes(flags)]
+#[repr(u8)]
+enum Permissions {
+    None = 0,
+    Read = 1,
+    Write = 2,
+    Execute = 4,
+    Delete = 8,
+}
+
+// Usage
+let read_write = Permissions::Read | Permissions::Write;  // = 3
+let all_perms = Permissions::Read | Permissions::Write | Permissions::Execute | Permissions::Delete;  // = 15
+
+// Check if a flag is set
+assert!(Permissions::Read.contains(Permissions::Read));
+assert!(!Permissions::Read.contains(Permissions::Write));
+
+// Toggle flags
+let perms = Permissions::Read | Permissions::Execute;
+let toggled = perms ^ Permissions::Execute as u8;  // Removes Execute
+
+// Validate flag combinations
+assert_eq!(Permissions::from_bits(7), Some(7));  // Valid: Read|Write|Execute
+assert_eq!(Permissions::from_bits(16), None);    // Invalid: 16 is not a valid flag
+```
+
+Key features:
+- All enum variants must have power-of-2 values (1, 2, 4, 8, etc.)
+- Zero value is allowed for "None" or empty flags
+- Automatic implementation of bitwise operators
+- `contains()` method to check if a flag is set
+- `from_bits()` method to validate flag combinations
+
 ## Supported Types
 
 BeBytes supports:
@@ -115,6 +186,7 @@ BeBytes supports:
 - Primitives: `u8`, `u16`, `u32`, `u64`, `u128`, `i8`, `i16`, `i32`, `i64`, `i128`
 - Arrays: `[u8; N]`, `[u16; N]`, etc.
 - Enums with named fields (serialized as a single byte)
+- Enums with `#[bits()]` for automatic bit-width calculation
 - `Option<T>` where T is a primitive
 - Nested structs that also implement `BeBytes`
 - `Vec<T>` with some restrictions (see below)
@@ -193,7 +265,7 @@ BeBytes supports no_std environments through feature flags:
 
 ```toml
 [dependencies]
-bebytes = { version = "0.7.1", default-features = false }
+bebytes = { version = "1.2.0", default-features = false }
 ```
 
 By default, the `std` feature is enabled. Disable it for no_std support.

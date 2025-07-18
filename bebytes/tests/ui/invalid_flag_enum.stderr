@@ -1,0 +1,5 @@
+error: Flag enum variant 'Flag3' has value 3 which is not a power of 2
+  --> tests/ui/invalid_flag_enum.rs:10:5
+   |
+10 |     Flag3 = 3, // Not a power of 2!
+   |     ^^^^^

@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{attrs, utils};
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 
@@ -10,6 +10,7 @@ use alloc::vec::Vec;
 
 enum FieldType {
     BitsField(usize), // only size, position is auto-calculated
+    AutoBitsField,    // size determined from type's __BEBYTES_MIN_BITS
     PrimitiveType,
     Array(usize),                              // array_length
     Vector(Option<usize>, Option<syn::Ident>), // size, vec_size_ident
@@ -52,23 +53,25 @@ fn determine_field_type(
 ) -> Option<FieldType> {
     let mut bits_attribute_present = false;
     let (size, vec_size_ident) =
-        attrs::parse_attributes(attrs.to_vec(), &mut bits_attribute_present, errors);
+        attrs::parse_attributes(attrs, &mut bits_attribute_present, errors);
 
     if bits_attribute_present {
-        if let syn::Type::Path(tp) = context.field_type {
-            if !utils::is_supported_primitive_type(tp) {
-                let error = syn::Error::new(
-                    context.field_type.span(),
-                    "Unsupported type for bits attribute",
-                );
-                errors.push(error.to_compile_error());
-                return None;
-            }
-        }
         if let Some(size) = size {
+            // Explicit size: #[bits(N)]
+            if let syn::Type::Path(tp) = context.field_type {
+                if !utils::is_supported_primitive_type(tp) {
+                    let error = syn::Error::new(
+                        context.field_type.span(),
+                        "Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) are supported",
+                    );
+                    errors.push(error.to_compile_error());
+                    return None;
+                }
+            }
             return Some(FieldType::BitsField(size));
         }
-        return None;
+        // Auto size: #[bits()] - only valid for types with __BEBYTES_MIN_BITS
+        return Some(FieldType::AutoBitsField);
     }
 
     match context.field_type {
@@ -132,23 +135,20 @@ pub fn handle_struct(context: StructContext) {
             .with_bit_position(current_bit_position)
             .with_last_field(is_last);
 
-        match determine_field_type(&field_context, &field.attrs, &mut errors) {
-            Some(field_type) => {
-                let result = process_field_type(
-                    &field_context,
-                    field_type,
-                    &field_processing_ctx,
-                    &mut current_bit_position,
-                );
+        if let Some(field_type) = determine_field_type(&field_context, &field.attrs, &mut errors) {
+            let result = process_field_type(
+                &field_context,
+                field_type,
+                &field_processing_ctx,
+                &mut current_bit_position,
+            );
 
-                match result {
-                    Ok(field_result) => {
-                        builder = builder.add_result(field_result);
-                    }
-                    Err(e) => errors.push(e.to_compile_error()),
+            match result {
+                Ok(field_result) => {
+                    builder = builder.add_result(field_result);
                 }
+                Err(e) => errors.push(e.to_compile_error()),
             }
-            None => continue,
         }
     }
 
@@ -157,12 +157,14 @@ pub fn handle_struct(context: StructContext) {
     field_data.errors = errors;
     field_data.total_size = current_bit_position / 8;
 
-    *context.field_limit_check = field_data.field_limit_check;
-    *context.errors = field_data.errors;
-    *context.field_parsing = field_data.field_parsing;
-    *context.bit_sum = field_data.bit_sum;
-    *context.field_writing = field_data.field_writing;
-    *context.named_fields = field_data.named_fields;
+    context
+        .field_limit_check
+        .extend(field_data.field_limit_check);
+    context.errors.extend(field_data.errors);
+    context.field_parsing.extend(field_data.field_parsing);
+    context.bit_sum.extend(field_data.bit_sum);
+    context.field_writing.extend(field_data.field_writing);
+    context.named_fields.extend(field_data.named_fields);
 }
 
 // New functional field processor
@@ -182,6 +184,14 @@ fn process_field_type(
             )?;
             *current_bit_position += size;
             Ok(result)
+        }
+        FieldType::AutoBitsField => {
+            // Generate code that references the type's __BEBYTES_MIN_BITS const
+            Ok(process_auto_bits_field_functional(
+                context,
+                processing_ctx,
+                current_bit_position,
+            ))
         }
         FieldType::PrimitiveType => {
             let result = process_primitive_type_functional(context, processing_ctx)?;
@@ -218,7 +228,7 @@ fn process_field_type(
         FieldType::CustomType => {
             // For custom types, we can't know the size at compile time
             // This is OK because bit fields can't come after custom types anyway
-            process_custom_type_functional(context, processing_ctx)
+            Ok(process_custom_type_functional(context, processing_ctx))
         }
     }
 }
@@ -232,7 +242,6 @@ fn process_bits_field_functional(
 ) -> Result<crate::functional::FieldProcessResult, syn::Error> {
     let field_name = &context.field_name;
     let field_type = context.field_type;
-    let _field = context.field;
 
     let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, false);
     let bit_sum = crate::functional::pure_helpers::create_bit_sum(size);
@@ -366,6 +375,198 @@ fn process_bits_field_functional(
         accessor,
         bit_sum,
     ))
+}
+
+// Functional version for auto-sized bit fields (enums with __BEBYTES_MIN_BITS)
+fn process_auto_bits_field_functional(
+    context: &FieldContext,
+    processing_ctx: &crate::functional::ProcessingContext,
+    current_bit_position: &mut usize,
+) -> crate::functional::FieldProcessResult {
+    let field_name = &context.field_name;
+    let field_type = context.field_type;
+
+    // Generate code that uses the type's __BEBYTES_MIN_BITS const
+    let size_const = quote! { <#field_type>::__BEBYTES_MIN_BITS };
+
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, false);
+
+    // For parsing, we need to extract the bits and convert from discriminant
+    let parsing = match processing_ctx.endianness {
+        crate::consts::Endianness::Big => {
+            quote! {
+                let #field_name = {
+                    const SIZE: usize = #size_const;
+                    let byte_idx = _bit_sum / 8;
+                    let bit_offset = _bit_sum % 8;
+
+                    if byte_idx >= bytes.len() {
+                        return Err("Not enough bytes".into());
+                    }
+
+                    let bits = if bit_offset + SIZE <= 8 {
+                        // Fits within a single byte
+                        const MASK: u8 = (1 << SIZE) - 1;
+                        let byte_val = bytes[byte_idx];
+                        (byte_val >> (8 - bit_offset - SIZE)) & MASK
+                    } else {
+                        // Spans two bytes
+                        let bits_from_first = 8 - bit_offset;
+                        let bits_from_second = SIZE - bits_from_first;
+
+                        if byte_idx + 1 >= bytes.len() {
+                            return Err("Not enough bytes".into());
+                        }
+
+                        let first_byte = bytes[byte_idx];
+                        let second_byte = bytes[byte_idx + 1];
+
+                        let first_bits = first_byte & ((1 << bits_from_first) - 1);
+                        let second_bits = second_byte >> (8 - bits_from_second);
+
+                        (first_bits << bits_from_second) | second_bits
+                    };
+
+                    // Convert from discriminant value to enum
+                    #field_type::try_from(bits)?
+                };
+                _bit_sum += #size_const;
+            }
+        }
+        crate::consts::Endianness::Little => {
+            quote! {
+                let #field_name = {
+                    const SIZE: usize = #size_const;
+                    let byte_idx = _bit_sum / 8;
+                    let bit_offset = _bit_sum % 8;
+
+                    if byte_idx >= bytes.len() {
+                        return Err("Not enough bytes".into());
+                    }
+
+                    let bits = if bit_offset + SIZE <= 8 {
+                        // Fits within a single byte
+                        const MASK: u8 = (1 << SIZE) - 1;
+                        let byte_val = bytes[byte_idx];
+                        (byte_val >> bit_offset) & MASK
+                    } else {
+                        // Spans two bytes
+                        let bits_from_first = 8 - bit_offset;
+                        let bits_from_second = SIZE - bits_from_first;
+
+                        if byte_idx + 1 >= bytes.len() {
+                            return Err("Not enough bytes".into());
+                        }
+
+                        let first_byte = bytes[byte_idx];
+                        let second_byte = bytes[byte_idx + 1];
+
+                        let first_bits = (first_byte >> bit_offset) & ((1 << bits_from_first) - 1);
+                        let second_bits = second_byte & ((1 << bits_from_second) - 1);
+
+                        first_bits | (second_bits << bits_from_first)
+                    };
+
+                    // Convert from discriminant value to enum
+                    #field_type::try_from(bits)?
+                };
+                _bit_sum += #size_const;
+            }
+        }
+    };
+
+    // For writing, convert enum to its discriminant value
+    let writing = match processing_ctx.endianness {
+        crate::consts::Endianness::Big => {
+            quote! {
+                {
+                    const SIZE: usize = #size_const;
+                    let byte_idx = _bit_sum / 8;
+                    let bit_offset = _bit_sum % 8;
+
+                    // Convert enum to its discriminant value
+                    let bits = #field_name as u8;
+
+                    if bit_offset + SIZE <= 8 {
+                        // Fits within a single byte
+                        const MASK: u8 = (1 << SIZE) - 1;
+                        let shift = 8 - bit_offset - SIZE;
+
+                        if bytes.len() <= byte_idx {
+                            bytes.resize(byte_idx + 1, 0);
+                        }
+                        bytes[byte_idx] |= (bits & MASK) << shift;
+                    } else {
+                        // Spans two bytes
+                        let bits_in_first = 8 - bit_offset;
+                        let bits_in_second = SIZE - bits_in_first;
+
+                        if bytes.len() <= byte_idx + 1 {
+                            bytes.resize(byte_idx + 2, 0);
+                        }
+
+                        // Write to first byte (lower bits of the value)
+                        let first_mask = (1 << bits_in_first) - 1;
+                        bytes[byte_idx] |= (bits >> bits_in_second) & first_mask;
+
+                        // Write to second byte (upper bits of the value)
+                        let second_mask = (1 << bits_in_second) - 1;
+                        bytes[byte_idx + 1] |= (bits & second_mask) << (8 - bits_in_second);
+                    }
+                }
+                _bit_sum += #size_const;
+            }
+        }
+        crate::consts::Endianness::Little => {
+            quote! {
+                {
+                    const SIZE: usize = #size_const;
+                    let byte_idx = _bit_sum / 8;
+                    let bit_offset = _bit_sum % 8;
+
+                    // Convert enum to its discriminant value
+                    let bits = #field_name as u8;
+
+                    if bit_offset + SIZE <= 8 {
+                        // Fits within a single byte
+                        const MASK: u8 = (1 << SIZE) - 1;
+
+                        if bytes.len() <= byte_idx {
+                            bytes.resize(byte_idx + 1, 0);
+                        }
+                        bytes[byte_idx] |= (bits & MASK) << bit_offset;
+                    } else {
+                        // Spans two bytes
+                        let bits_in_first = 8 - bit_offset;
+                        let bits_in_second = SIZE - bits_in_first;
+
+                        if bytes.len() <= byte_idx + 1 {
+                            bytes.resize(byte_idx + 2, 0);
+                        }
+
+                        // Write to first byte (lower bits of the value)
+                        let first_mask = (1 << bits_in_first) - 1;
+                        bytes[byte_idx] |= (bits & first_mask) << bit_offset;
+
+                        // Write to second byte (upper bits of the value)
+                        let second_mask = (1 << bits_in_second) - 1;
+                        bytes[byte_idx + 1] |= (bits >> bits_in_first) & second_mask;
+                    }
+                }
+                _bit_sum += #size_const;
+            }
+        }
+    };
+
+    // Update compile-time bit position (we don't know the exact size at compile time)
+    // This is a limitation - we'll need to handle this differently
+    *current_bit_position += 8; // Conservative estimate
+
+    // No limit check needed - enum values are checked by type system
+    let limit_check = quote! {};
+    let bit_sum = quote! { bit_sum += #size_const; };
+
+    crate::functional::FieldProcessResult::new(limit_check, parsing, writing, accessor, bit_sum)
 }
 
 // Functional version of handle_primitive_type
@@ -693,7 +894,7 @@ fn process_option_type_functional(
 fn process_custom_type_functional(
     context: &FieldContext,
     processing_ctx: &crate::functional::ProcessingContext,
-) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+) -> crate::functional::FieldProcessResult {
     let field_name = &context.field_name;
     let field_type = context.field_type;
 
@@ -721,11 +922,5 @@ fn process_custom_type_functional(
         _bit_sum += bytes_data.len() * 8;
     };
 
-    Ok(crate::functional::FieldProcessResult::new(
-        quote! {},
-        parsing,
-        writing,
-        accessor,
-        bit_sum,
-    ))
+    crate::functional::FieldProcessResult::new(quote! {}, parsing, writing, accessor, bit_sum)
 }

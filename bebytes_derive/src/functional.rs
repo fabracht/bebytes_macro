@@ -66,7 +66,7 @@ impl FieldProcessResult {
     }
 }
 
-/// Builder pattern for complex FieldData structures
+/// Builder pattern for complex `FieldData` structures
 pub struct FieldDataBuilder {
     limit_checks: Vec<TokenStream>,
     parsings: Vec<TokenStream>,
@@ -142,7 +142,7 @@ impl AttributeData {
         self
     }
 
-    /// Merge multiple AttributeData instances, prioritizing non-None values
+    /// Merge multiple `AttributeData` instances, prioritizing non-`None` values
     pub fn merge(attrs: Vec<Self>) -> Self {
         attrs.into_iter().fold(Self::default(), |mut acc, attr| {
             acc.size = attr.size.or(acc.size);
@@ -155,7 +155,7 @@ impl AttributeData {
 
 /// Error aggregation utilities
 pub mod error_utils {
-    use super::*;
+    use super::{ParseResult, SynError, Vec};
 
     /// Collect results, separating successes from errors
     pub fn aggregate_results<T>(
@@ -182,7 +182,7 @@ pub mod error_utils {
 
 /// Pure helper functions to replace mutation-based ones
 pub mod pure_helpers {
-    use super::*;
+    use super::TokenStream;
     use quote::quote;
     use syn::Ident;
 
@@ -358,8 +358,8 @@ pub mod pure_helpers {
 
 /// Functional attribute parsing
 pub mod functional_attrs {
-    use super::*;
-    use syn::{parenthesized, LitInt};
+    use super::{error_utils, AttributeData, ParseResult, Vec};
+    use syn::{parenthesized, parse::Parser, LitInt};
 
     /// Parse attributes functionally without side effects
     pub fn parse_attributes_functional(
@@ -369,8 +369,12 @@ pub mod functional_attrs {
             .iter()
             .map(|attr| {
                 if attr.path().is_ident("bits") {
-                    parse_bits_attribute_functional(attr).map(|size| {
-                        Some(AttributeData::new().with_size(size).with_bits_attribute())
+                    parse_bits_attribute_functional(attr).map(|size_opt| {
+                        let mut data = AttributeData::new().with_bits_attribute();
+                        if let Some(size) = size_opt {
+                            data = data.with_size(size);
+                        }
+                        Some(data)
                     })
                 } else if attr.path().is_ident("With") {
                     parse_with_attribute_functional(attr)
@@ -384,18 +388,50 @@ pub mod functional_attrs {
             })
             .collect();
 
-        let flattened: Vec<Result<AttributeData, syn::Error>> = results
-            .into_iter()
-            .filter_map(|result| result.transpose())
-            .collect();
+        let flattened: Vec<Result<AttributeData, syn::Error>> =
+            results.into_iter().filter_map(Result::transpose).collect();
 
         error_utils::aggregate_results(flattened.into_iter()).map(AttributeData::merge)
     }
 
     /// Parse bits attribute functionally
-    pub fn parse_bits_attribute_functional(attr: &syn::Attribute) -> Result<usize, syn::Error> {
-        let lit: LitInt = attr.parse_args()?;
-        lit.base10_parse()
+    pub fn parse_bits_attribute_functional(
+        attr: &syn::Attribute,
+    ) -> Result<Option<usize>, syn::Error> {
+        // Check the meta type first
+        match &attr.meta {
+            syn::Meta::Path(_) => {
+                // #[bits] without parentheses - not allowed by Rust for derive macro attributes
+                // This case won't actually be reached due to Rust's validation
+                Ok(None)
+            }
+            syn::Meta::List(list) => {
+                // Check if tokens are empty first
+                if list.tokens.is_empty() {
+                    // #[bits()] with empty parentheses - auto-size
+                    return Ok(None);
+                }
+
+                // Try to parse as integer literal
+                let parser =
+                    syn::punctuated::Punctuated::<LitInt, syn::Token![,]>::parse_terminated;
+                let parsed = parser.parse2(list.tokens.clone())?;
+
+                if let Some(first) = parsed.first() {
+                    // #[bits(N)] with explicit size
+                    Ok(Some(first.base10_parse()?))
+                } else {
+                    Err(syn::Error::new_spanned(
+                        attr,
+                        "Expected integer literal in #[bits(N)]",
+                    ))
+                }
+            }
+            syn::Meta::NameValue(_) => Err(syn::Error::new_spanned(
+                attr,
+                "Expected #[bits(N)] or #[bits()], not name-value style",
+            )),
+        }
     }
 
     /// Parse with attribute functionally
