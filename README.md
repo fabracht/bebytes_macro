@@ -10,7 +10,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "1.2.0"
+bebytes = "1.3.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:

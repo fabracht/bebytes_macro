@@ -13,5 +13,6 @@ enum FlagsWithZero {
 
 fn main() {
     // This should compile fine
-    let _flags = FlagsWithZero::Flag1 | FlagsWithZero::Flag2;
+    let flags = FlagsWithZero::Flag1 | FlagsWithZero::Flag2;
+    println!("Flags: {}", flags);
 }
