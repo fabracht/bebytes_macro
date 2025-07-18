@@ -13,6 +13,7 @@ type EnumHandleResult = (
     usize,
     Vec<proc_macro2::TokenStream>,
     Vec<(syn::Ident, u8)>,
+    Vec<proc_macro2::TokenStream>, // errors
 );
 
 pub fn handle_enum(
@@ -35,11 +36,29 @@ pub fn handle_enum(
             });
             if let Some((_, syn::Expr::Lit(expr_lit))) = &variant.discriminant {
                 if let syn::Lit::Int(token) = &expr_lit.lit {
-                    assigned_value = token.base10_parse().unwrap_or_else(|_e| {
-                        let error = syn::Error::new(token.span(), "Failed to parse token value");
+                    // First parse as usize to check the actual value
+                    let value: usize = token.base10_parse().unwrap_or_else(|_e| {
+                        let error =
+                            syn::Error::new(token.span(), "Failed to parse discriminant value");
                         errors.push(error.to_compile_error());
                         0
                     });
+
+                    // Check if value exceeds u8 range
+                    if value > 255 {
+                        let error = syn::Error::new(
+                            token.span(),
+                            format!(
+                                "Enum discriminant value {value} exceeds u8 range (0-255). \
+                                Consider using #[repr(u8)] to make this constraint explicit, \
+                                or ensure all discriminants fit within u8 range."
+                            ),
+                        );
+                        errors.push(error.to_compile_error());
+                        assigned_value = 0; // Use 0 as fallback to continue compilation
+                    } else {
+                        assigned_value = value as u8;
+                    }
                 }
             }
             (ident.clone(), assigned_value)
@@ -98,5 +117,6 @@ pub fn handle_enum(
         min_bits,
         try_from_arms,
         values,
+        errors,
     )
 }

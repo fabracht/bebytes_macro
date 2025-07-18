@@ -86,6 +86,7 @@ The `bits` attribute takes a single parameter:
 - `bits(n)`: The number of bits this field uses
 
 Key points:
+
 - Bit positions are automatically calculated based on field order
 - Bits fields MUST complete a full byte before any non-bits field
 - The sum of all bits within a group must equal 8 (or a multiple of 8)
@@ -110,11 +111,11 @@ The same rules apply - all bits fields must complete a byte boundary together.
 
 ### Enum Bit Packing
 
-Enums can now be used with the `#[bits()]` attribute for automatic bit-width calculation:
+Enums can be used with the `#[bits()]` attribute for automatic bit-width calculation. While `#[repr(u8)]` is not strictly required, it is recommended as it makes the u8 constraint explicit and provides compile-time guarantees:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
-#[repr(u8)]
+#[repr(u8)]  // Recommended: ensures discriminants fit in u8 at compile time
 enum Status {
     Idle = 0,
     Running = 1,
@@ -134,14 +135,17 @@ struct PacketHeader {
 ```
 
 Key features:
+
 - Automatic bit calculation: `ceil(log2(max_discriminant + 1))`
-- No need to specify bit width in both enum definition and usage
+- No need to specify the bit width in both enum definition and usage
 - Type-safe conversion with generated `TryFrom<u8>` implementation
 - Supports byte-spanning fields automatically
+- Compile-time validation: discriminants exceeding u8 range (255) will produce an error
+- Works without `#[repr(u8)]`, but using it is recommended for clarity and compile-time safety
 
 ### Flag Enums
 
-BeBytes supports flag-style enums marked with `#[bebytes(flags)]`. These enums automatically implement bitwise operations (`|`, `&`, `^`, `!`) allowing them to be used as bit flags:
+BeBytes supports flag-style Enums marked with `#[bebytes(flags)]`. These Enums automatically implement bitwise operations (`|`, `&`, `^`, `!`) allowing them to be used as bit flags:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
@@ -173,7 +177,8 @@ assert_eq!(Permissions::from_bits(16), None);    // Invalid: 16 is not a valid f
 ```
 
 Key features:
-- All enum variants must have power-of-2 values (1, 2, 4, 8, etc.)
+
+- All Enum variants must have power-of-2 values (1, 2, 4, 8, etc.)
 - Zero value is allowed for "None" or empty flags
 - Automatic implementation of bitwise operators
 - `contains()` method to check if a flag is set
@@ -255,6 +260,7 @@ struct VectorOfCustoms {
 ```
 
 For vectors of custom types, the following rules apply:
+
 - When used as the last field, it will consume all remaining bytes, parsing them as instances of the custom type
 - When used elsewhere, you must specify size information with `#[FromField]` or `#[With]`
 - Each item in the vector is serialized/deserialized using its own BeBytes implementation
@@ -302,10 +308,10 @@ fn main() {
             },
         ],
     };
-    
+
     // Serialize to bytes
     let bytes = dns_name.to_be_bytes();
-    
+
     // Deserialize back
     let (reconstructed, _) = DnsName::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(dns_name, reconstructed);

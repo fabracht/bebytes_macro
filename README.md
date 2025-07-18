@@ -183,11 +183,11 @@ Produces `DummyEnum: [2]`
 
 ### Enum Bit Packing
 
-Enums can now be used with the `#[bits()]` attribute for automatic bit-width calculation. When you use `#[bits()]` (with empty parentheses) on an enum field, the macro automatically calculates the minimum number of bits needed to represent all enum variants.
+Enums can be used with the `#[bits()]` attribute for automatic bit-width calculation. When you use `#[bits()]` (with empty parentheses) on an enum field, the macro automatically calculates the minimum number of bits needed to represent all enum variants. While `#[repr(u8)]` is not strictly required, it is recommended as best practice:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
-#[repr(u8)]
+#[repr(u8)]  // Recommended: ensures discriminants fit in u8 at compile time
 enum Status {
     Idle = 0,
     Running = 1,
@@ -251,6 +251,14 @@ struct MixedPacket {
 2. **Type Safety**: The compiler ensures enum values fit in the allocated bits
 3. **Flexibility**: Mix auto-sized enum fields with explicitly-sized integer fields
 4. **Efficiency**: Use exactly the bits needed, no more, no less
+5. **Safety**: Compile-time validation ensures all discriminants fit within u8 range (0-255)
+
+#### Note on `#[repr(u8)]`
+
+While BeBytes will work without `#[repr(u8)]`:
+- Without it: The macro validates at compile time that discriminants fit in u8 range
+- With it: The Rust compiler itself enforces the constraint, providing earlier error detection
+- **Recommendation**: Always use `#[repr(u8)]` for enums with BeBytes for clarity and safety
 
 ### Flag Enums
 
