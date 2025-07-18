@@ -114,7 +114,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
 
                         fn to_be_bytes(&self) -> Vec<u8> {
-                            let mut bytes = Vec::with_capacity(256);
+                            let capacity = Self::field_size();
+                            let mut bytes = Vec::with_capacity(capacity);
                             let mut _bit_sum = 0;
                             #(
                                 #named_fields
@@ -140,7 +141,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
 
                         fn to_le_bytes(&self) -> Vec<u8> {
-                            let mut bytes = Vec::with_capacity(256);
+                            let capacity = Self::field_size();
+                            let mut bytes = Vec::with_capacity(capacity);
                             let mut _bit_sum = 0;
                             #(
                                 #le_named_fields

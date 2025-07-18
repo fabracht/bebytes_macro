@@ -57,7 +57,7 @@ pub fn handle_enum(
                         errors.push(error.to_compile_error());
                         assigned_value = 0; // Use 0 as fallback to continue compilation
                     } else {
-                        assigned_value = value as u8;
+                        assigned_value = u8::try_from(value).unwrap_or(0);
                     }
                 }
             }

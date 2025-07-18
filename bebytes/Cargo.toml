@@ -13,6 +13,10 @@ keywords = ["serialization", "deserialization", "network", "bytes", "no-std"]
 name = "macro_test"
 path = "./bin/macro_test.rs"
 
+[[bin]]
+name = "performance_benchmark"
+path = "./bin/performance_benchmark.rs"
+
 [dependencies]
 bebytes_derive = "1.3.0"
 
