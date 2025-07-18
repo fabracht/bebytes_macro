@@ -23,7 +23,7 @@ use alloc::vec::Vec;
 
 use consts::Endianness;
 
-#[proc_macro_derive(BeBytes, attributes(bits, With, FromField))]
+#[proc_macro_derive(BeBytes, attributes(bits, With, FromField, bebytes))]
 pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident.clone();
@@ -110,7 +110,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             #(#be_field_parsing)*
                             Ok((Self {
                                 #( #struct_field_names, )*
-                            }, _bit_sum / 8))
+                            }, _bit_sum.div_ceil(8)))
                         }
 
                         fn to_be_bytes(&self) -> Vec<u8> {
@@ -136,7 +136,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             #(#le_field_parsing)*
                             Ok((Self {
                                 #( #struct_field_names, )*
-                            }, _bit_sum / 8))
+                            }, _bit_sum.div_ceil(8)))
                         }
 
                         fn to_le_bytes(&self) -> Vec<u8> {
@@ -178,11 +178,45 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             }
         },
         Data::Enum(data_enum) => {
-            let (from_be_bytes_arms, to_be_bytes_arms) =
+            // Check if this is a flags enum
+            let is_flags_enum = input.attrs.iter().any(|attr| {
+                attr.path().is_ident("bebytes") && {
+                    let mut is_flags = false;
+                    if let Ok(()) = attr.parse_nested_meta(|meta| {
+                        if meta.path.is_ident("flags") {
+                            is_flags = true;
+                        }
+                        Ok(())
+                    }) {
+                        is_flags
+                    } else {
+                        false
+                    }
+                }
+            });
+
+            let (from_be_bytes_arms, to_be_bytes_arms, min_bits, try_from_arms, discriminants) =
                 enums::handle_enum(errors, data_enum.clone());
-            let (from_le_bytes_arms, to_le_bytes_arms) = enums::handle_enum(Vec::new(), data_enum);
+            let (from_le_bytes_arms, to_le_bytes_arms, _, _, _) =
+                enums::handle_enum(Vec::new(), data_enum);
 
             let expanded = quote! {
+                impl #name {
+                    /// Minimum number of bits needed to represent all variants
+                    pub const __BEBYTES_MIN_BITS: usize = #min_bits;
+                }
+
+                impl TryFrom<u8> for #name {
+                    type Error = Box<dyn std::error::Error>;
+
+                    fn try_from(value: u8) -> Result<Self, Self::Error> {
+                        match value {
+                            #(#try_from_arms)*
+                            _ => Err(format!("Invalid discriminant value for {}: {}", stringify!(#name), value).into()),
+                        }
+                    }
+                }
+
                 impl #my_trait_path for #name {
                     fn field_size() -> usize {
                         core::mem::size_of::<Self>()
@@ -231,7 +265,150 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     }
                 }
             };
-            expanded.into()
+
+            // Generate bitwise operations for flag enums
+            let bitwise_ops = if is_flags_enum {
+                // Validate that all discriminants are powers of 2
+                let mut validation_errors = Vec::new();
+                let variant_values = discriminants
+                    .iter()
+                    .map(|(_, value)| *value)
+                    .collect::<Vec<_>>();
+
+                for (ident, value) in &discriminants {
+                    if *value != 0 && (*value & (*value - 1)) != 0 {
+                        validation_errors.push(
+                            syn::Error::new(
+                                ident.span(),
+                                format!(
+                                    "Flag enum variant '{}' has value {} which is not a power of 2",
+                                    ident, value
+                                ),
+                            )
+                            .to_compile_error(),
+                        );
+                    }
+                }
+
+                if !validation_errors.is_empty() {
+                    quote! {
+                        #expanded
+                        #(#validation_errors)*
+                    }
+                } else {
+                    quote! {
+                        #expanded
+
+                        // Bitwise operations for flag enums
+                        impl core::ops::BitOr for #name {
+                            type Output = u8;
+
+                            fn bitor(self, rhs: Self) -> Self::Output {
+                                (self as u8) | (rhs as u8)
+                            }
+                        }
+
+                        impl core::ops::BitOr<u8> for #name {
+                            type Output = u8;
+
+                            fn bitor(self, rhs: u8) -> Self::Output {
+                                (self as u8) | rhs
+                            }
+                        }
+
+                        impl core::ops::BitOr<#name> for u8 {
+                            type Output = u8;
+
+                            fn bitor(self, rhs: #name) -> Self::Output {
+                                self | (rhs as u8)
+                            }
+                        }
+
+                        impl core::ops::BitAnd for #name {
+                            type Output = u8;
+
+                            fn bitand(self, rhs: Self) -> Self::Output {
+                                (self as u8) & (rhs as u8)
+                            }
+                        }
+
+                        impl core::ops::BitAnd<u8> for #name {
+                            type Output = u8;
+
+                            fn bitand(self, rhs: u8) -> Self::Output {
+                                (self as u8) & rhs
+                            }
+                        }
+
+                        impl core::ops::BitAnd<#name> for u8 {
+                            type Output = u8;
+
+                            fn bitand(self, rhs: #name) -> Self::Output {
+                                self & (rhs as u8)
+                            }
+                        }
+
+                        impl core::ops::BitXor for #name {
+                            type Output = u8;
+
+                            fn bitxor(self, rhs: Self) -> Self::Output {
+                                (self as u8) ^ (rhs as u8)
+                            }
+                        }
+
+                        impl core::ops::BitXor<u8> for #name {
+                            type Output = u8;
+
+                            fn bitxor(self, rhs: u8) -> Self::Output {
+                                (self as u8) ^ rhs
+                            }
+                        }
+
+                        impl core::ops::BitXor<#name> for u8 {
+                            type Output = u8;
+
+                            fn bitxor(self, rhs: #name) -> Self::Output {
+                                self ^ (rhs as u8)
+                            }
+                        }
+
+                        impl core::ops::Not for #name {
+                            type Output = u8;
+
+                            fn not(self) -> Self::Output {
+                                !(self as u8)
+                            }
+                        }
+
+                        impl #name {
+                            /// Check if this flag value contains the given flag
+                            pub fn contains(self, flag: Self) -> bool {
+                                ((self as u8) & (flag as u8)) == (flag as u8)
+                            }
+
+                            /// Create a flags value from a u8
+                            pub fn from_bits(bits: u8) -> Option<u8> {
+                                // Validate that all bits correspond to valid flags
+                                let mut remaining = bits;
+                                #(
+                                    if (bits & #variant_values) == #variant_values {
+                                        remaining &= !#variant_values;
+                                    }
+                                )*
+                                if remaining == 0 {
+                                    Some(bits)
+                                } else {
+                                    None
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                expanded
+            };
+
+            bitwise_ops.into()
         }
         _ => {
             let error =

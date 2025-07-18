@@ -150,6 +150,37 @@ pub enum DummyEnum {
 }
 ```
 
+### Enum Bit Packing (New in 1.2.0)
+
+Enums can now be used with the `#[bits()]` attribute for automatic bit-width calculation. When you use `#[bits()]` (with empty parentheses) on an enum field, the macro automatically calculates the minimum number of bits needed to represent all enum variants.
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+#[repr(u8)]
+enum Status {
+    Idle = 0,
+    Running = 1,
+    Paused = 2,
+    Stopped = 3,
+}
+
+#[derive(BeBytes)]
+struct PacketHeader {
+    #[bits(4)]
+    version: u8,
+    #[bits()]  // Automatically uses 2 bits (minimum needed for 4 variants)
+    status: Status,
+    #[bits(2)]
+    flags: u8,
+}
+```
+
+The macro:
+- Calculates minimum bits as `ceil(log2(max_discriminant + 1))`
+- Generates a `__BEBYTES_MIN_BITS` constant for each enum
+- Implements `TryFrom<u8>` for safe conversion from discriminant values
+- Handles byte-spanning fields automatically
+
 ## Options
 
 Options are supported, as long as the internal type is a primitive

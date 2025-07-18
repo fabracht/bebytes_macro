@@ -61,9 +61,8 @@ pub fn solve_for_inner_type(input: &syn::TypePath, identifier: &str) -> Option<s
         _ => return None,
     };
 
-    let inner_type = match &args[0] {
-        syn::GenericArgument::Type(t) => t,
-        _ => return None,
+    let syn::GenericArgument::Type(inner_type) = &args[0] else {
+        return None;
     };
 
     Some(inner_type.clone())
@@ -87,8 +86,7 @@ pub fn is_supported_primitive_type(tp: &syn::TypePath) -> bool {
 
 pub(crate) fn is_copy(field_type: &syn::Type) -> bool {
     match field_type {
-        syn::Type::Never(_) => true, // ! is Copy
-        syn::Type::Infer(_) => true, // _ is considered Copy for inference
+        syn::Type::Never(_) | syn::Type::Infer(_) => true, // ! and _ are Copy
 
         syn::Type::Path(type_path) => {
             // Check if it's a known Copy primitive or standard library type
@@ -160,13 +158,13 @@ pub(crate) fn is_copy(field_type: &syn::Type) -> bool {
             type_reference.mutability.is_none()
         }
         // These are generally not Copy
-        syn::Type::BareFn(_) => false,
-        syn::Type::ImplTrait(_) => false,
-        syn::Type::Macro(_) => false,
-        syn::Type::Ptr(_) => false, // Raw pointers are Copy, but we're being conservative
-        syn::Type::Slice(_) => false, // Slices are not sized, so not Copy
-        syn::Type::TraitObject(_) => false,
-        syn::Type::Verbatim(_) => false,
+        syn::Type::BareFn(_)
+        | syn::Type::ImplTrait(_)
+        | syn::Type::Macro(_)
+        | syn::Type::Ptr(_) // Raw pointers are Copy, but we're being conservative
+        | syn::Type::Slice(_) // Slices are not sized, so not Copy
+        | syn::Type::TraitObject(_)
+        | syn::Type::Verbatim(_) => false,
         _ => false, // Conservative default for any other types
     }
 }

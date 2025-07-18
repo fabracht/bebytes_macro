@@ -1,6 +1,6 @@
 [package]
 name = "bebytes"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/fabracht/bebytes_macro"
@@ -14,7 +14,7 @@ name = "macro_test"
 path = "./bin/macro_test.rs"
 
 [dependencies]
-bebytes_derive = "1.1.1"
+bebytes_derive = "1.2.0"
 
 [dev-dependencies]
 trybuild = { version = "1.0.102", features = ["diff"] }

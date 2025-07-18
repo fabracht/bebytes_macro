@@ -10,7 +10,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes_derive = "1.1.0"
+bebytes = "1.2.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -180,6 +180,168 @@ The following code
 ```
 
 Produces `DummyEnum: [2]`
+
+### Enum Bit Packing
+
+Enums can now be used with the `#[bits()]` attribute for automatic bit-width calculation. When you use `#[bits()]` (with empty parentheses) on an enum field, the macro automatically calculates the minimum number of bits needed to represent all enum variants.
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+#[repr(u8)]
+enum Status {
+    Idle = 0,
+    Running = 1,
+    Paused = 2,
+    Stopped = 3,
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct PacketHeader {
+    #[bits(4)]
+    version: u8,
+    #[bits()]  // Automatically uses 2 bits (minimum needed for 4 variants)
+    status: Status,
+    #[bits(2)]
+    flags: u8,
+}
+```
+
+In this example:
+- The `Status` enum has 4 variants, which requires 2 bits to represent (2^2 = 4)
+- Using `#[bits()]` on the `status` field automatically allocates exactly 2 bits
+- The total struct uses 8 bits (4 + 2 + 2), fitting perfectly in 1 byte
+
+#### How It Works
+
+1. **Automatic Bit Calculation**: The macro calculates the minimum bits needed as `ceil(log2(max_discriminant + 1))`
+2. **Compile-Time Constant**: Each enum gets a `__BEBYTES_MIN_BITS` constant that can be used at compile time
+3. **TryFrom Implementation**: The macro generates a `TryFrom<u8>` implementation for safe conversion from discriminant values
+
+#### Example with Different Enum Sizes
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+#[repr(u8)]
+enum TwoVariants {
+    A = 0,
+    B = 1,
+}  // Needs 1 bit
+
+#[derive(BeBytes, Debug, PartialEq)]
+#[repr(u8)]
+enum SeventeenVariants {
+    V0 = 0, V1 = 1, V2 = 2, /* ... */ V16 = 16,
+}  // Needs 5 bits (2^4 = 16 < 17 <= 2^5 = 32)
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct MixedPacket {
+    #[bits(2)]
+    header: u8,
+    #[bits()]  // 1 bit
+    two_var: TwoVariants,
+    #[bits()]  // 5 bits
+    seventeen_var: SeventeenVariants,
+    // Total: 2 + 1 + 5 = 8 bits = 1 byte
+}
+```
+
+#### Benefits
+
+1. **No Redundancy**: You don't need to specify bit width in both the enum definition and struct field
+2. **Type Safety**: The compiler ensures enum values fit in the allocated bits
+3. **Flexibility**: Mix auto-sized enum fields with explicitly-sized integer fields
+4. **Efficiency**: Use exactly the bits needed, no more, no less
+
+### Flag Enums
+
+BeBytes now supports flag-style enums marked with `#[bebytes(flags)]`. These enums automatically implement bitwise operations (`|`, `&`, `^`, `!`) allowing them to be used as bit flags.
+
+```rust
+#[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
+#[bebytes(flags)]
+#[repr(u8)]
+enum Permissions {
+    None = 0,
+    Read = 1,
+    Write = 2,
+    Execute = 4,
+    Delete = 8,
+}
+
+// Usage
+let read_write = Permissions::Read | Permissions::Write;  // = 3
+let all_perms = Permissions::Read | Permissions::Write | Permissions::Execute | Permissions::Delete;  // = 15
+
+// Check if a flag is set
+assert!(Permissions::Read.contains(Permissions::Read));
+assert!(!Permissions::Read.contains(Permissions::Write));
+
+// Toggle flags
+let perms = Permissions::Read | Permissions::Execute;
+let toggled = perms ^ Permissions::Execute as u8;  // Removes Execute
+
+// Validate flag combinations
+assert_eq!(Permissions::from_bits(7), Some(7));  // Valid: Read|Write|Execute
+assert_eq!(Permissions::from_bits(16), None);    // Invalid: 16 is not a valid flag
+```
+
+#### Requirements for Flag Enums
+
+1. **Power of 2 Values**: All enum variants must have discriminant values that are powers of 2 (1, 2, 4, 8, 16, etc.)
+2. **Zero is Allowed**: A variant with value 0 is allowed for "None" or empty flags
+3. **#[repr(u8)]**: Flag enums must use `#[repr(u8)]` representation
+
+#### Generated Methods
+
+For flag enums, the following additional methods are generated:
+
+- **Bitwise Operators**: `BitOr`, `BitAnd`, `BitXor`, `Not` implementations
+- **`contains(self, flag: Self) -> bool`**: Check if a specific flag is set
+- **`from_bits(bits: u8) -> Option<u8>`**: Validate and create a flag combination from raw bits
+
+#### Example: Network Protocol Flags
+
+```rust
+#[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
+#[bebytes(flags)]
+#[repr(u8)]
+enum ProtocolFlags {
+    Encrypted = 1,
+    Compressed = 2,
+    Authenticated = 4,
+    KeepAlive = 8,
+    Priority = 16,
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct NetworkPacket {
+    #[bits(3)]
+    version: u8,
+    #[bits(5)]
+    reserved: u8,
+    flags: u8,  // Store ProtocolFlags combinations
+    payload_size: u16,
+    #[FromField(payload_size)]
+    payload: Vec<u8>,
+}
+
+// Create a packet with multiple flags
+let packet = NetworkPacket {
+    version: 1,
+    reserved: 0,
+    flags: ProtocolFlags::Encrypted | ProtocolFlags::Authenticated | ProtocolFlags::KeepAlive,
+    payload_size: 1024,
+    payload: vec![0; 1024],
+};
+
+// Serialize and deserialize
+let bytes = packet.to_be_bytes();
+let (decoded, _) = NetworkPacket::try_from_be_bytes(&bytes).unwrap();
+
+// Check individual flags
+let has_encryption = (decoded.flags & ProtocolFlags::Encrypted as u8) != 0;
+let has_compression = (decoded.flags & ProtocolFlags::Compressed as u8) != 0;
+```
 
 ## Options
 
