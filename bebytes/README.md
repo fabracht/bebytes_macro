@@ -240,6 +240,43 @@ struct DynamicVector {
 }
 ```
 
+### 3.1 Nested Field Access
+
+You can also reference fields in nested structures using dot notation:
+
+```rust
+#[derive(BeBytes, Clone)]
+struct Header {
+    version: u8,
+    count: u16,
+}
+
+#[derive(BeBytes)]
+struct Packet {
+    header: Header,
+    #[FromField(header.count)]
+    items: Vec<Item>,  // Will read 'header.count' items
+}
+
+// Even deeply nested fields are supported:
+#[derive(BeBytes, Clone)]
+struct ComplexHeader {
+    meta: MetaInfo,
+}
+
+#[derive(BeBytes, Clone)]
+struct MetaInfo {
+    item_count: u32,
+}
+
+#[derive(BeBytes)]
+struct ComplexPacket {
+    header: ComplexHeader,
+    #[FromField(header.meta.item_count)]
+    items: Vec<Item>,  // Will read 'header.meta.item_count' items
+}
+```
+
 ### 4. Vectors of Custom Types
 
 BeBytes supports vectors containing custom types that implement the `BeBytes` trait:
