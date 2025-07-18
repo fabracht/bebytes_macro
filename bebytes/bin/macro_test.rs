@@ -63,9 +63,9 @@ fn compare_values<T: std::fmt::Debug + PartialEq>(
     );
 }
 
-fn compare_enum_values<T: std::fmt::Debug + PartialEq + Copy>(name: &str, original: T, decoded: T)
+fn compare_enum_values<T>(name: &str, original: T, decoded: T)
 where
-    T: BeBytes,
+    T: std::fmt::Debug + PartialEq + Copy + BeBytes,
 {
     let bytes = original.to_be_bytes();
 
