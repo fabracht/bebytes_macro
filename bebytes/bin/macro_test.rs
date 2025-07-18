@@ -21,11 +21,11 @@ fn main() {
 }
 
 fn print_section(title: &str) {
-    println!("\n--- {} ---", title);
+    println!("\n--- {title} ---");
 }
 
 fn print_bytes(bytes: &[u8]) -> String {
-    let hex: Vec<String> = bytes.iter().map(|b| format!("0x{:02X}", b)).collect();
+    let hex: Vec<String> = bytes.iter().map(|b| format!("0x{b:02X}")).collect();
     format!("[{}] ({} bytes)", hex.join(", "), bytes.len())
 }
 
@@ -35,10 +35,10 @@ fn compare_values<T: std::fmt::Debug + PartialEq>(
     decoded: &T,
     bytes: &[u8],
 ) {
-    let original_str = format!("{:#?}", original);
-    let decoded_str = format!("{:#?}", decoded);
+    let original_str = format!("{original:#?}");
+    let decoded_str = format!("{decoded:#?}");
 
-    println!("\n{} Comparison:", name);
+    println!("\n{name} Comparison:");
     println!("Serialized: {}", print_bytes(bytes));
     println!("\nORIGINAL                          | DECODED");
     println!("---------------------------------+---------------------------------");
@@ -50,7 +50,7 @@ fn compare_values<T: std::fmt::Debug + PartialEq>(
     for i in 0..max_lines {
         let orig = orig_lines.get(i).unwrap_or(&"");
         let dec = dec_lines.get(i).unwrap_or(&"");
-        println!("{:<33} | {:<33}", orig, dec);
+        println!("{orig:<33} | {dec:<33}");
     }
 
     println!(
@@ -69,10 +69,10 @@ where
 {
     let bytes = original.to_be_bytes();
 
-    println!("\n{} Comparison:", name);
+    println!("\n{name} Comparison:");
     println!("Serialized: {}", print_bytes(&bytes));
-    println!("\nORIGINAL: {:?}", original);
-    println!("DECODED:  {:?}", decoded);
+    println!("\nORIGINAL: {original:?}");
+    println!("DECODED:  {decoded:?}");
     println!(
         "Match: {}",
         if original == decoded {
@@ -295,13 +295,13 @@ fn demo_flag_enums() {
 
     println!("\nFlag combinations:");
     let read_write = FilePermissions::Read | FilePermissions::Write;
-    println!("Read | Write = {} (0b{:08b})", read_write, read_write);
+    println!("Read | Write = {read_write} (0b{read_write:08b})");
 
     let all_perms = FilePermissions::Read
         | FilePermissions::Write
         | FilePermissions::Execute
         | FilePermissions::Delete;
-    println!("All perms    = {} (0b{:08b})", all_perms, all_perms);
+    println!("All perms    = {all_perms} (0b{all_perms:08b})");
 
     let original = SecurityContext {
         user_id: 15,
