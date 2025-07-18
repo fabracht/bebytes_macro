@@ -29,7 +29,7 @@ fn test_bare_bits_attribute() {
 
     let bytes = original.to_be_bytes();
     println!("Bytes: {:?}", bytes);
-    
+
     // Test roundtrip: deserialize and verify equality
     let (deserialized, _) = TestStruct::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(original, deserialized);
