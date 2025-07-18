@@ -114,7 +114,7 @@ fn benchmark_primitive_serialization() {
         duration.as_nanos() as f64 / ITERATIONS as f64
     );
 
-    println!("Total bytes processed: {}", total_bytes);
+    println!("Total bytes processed: {total_bytes}");
     println!();
 }
 
@@ -185,7 +185,7 @@ fn benchmark_bit_field_operations() {
         duration.as_nanos() as f64 / ITERATIONS as f64
     );
 
-    println!("Total bytes processed: {}", total_bytes);
+    println!("Total bytes processed: {total_bytes}");
     println!();
 }
 
@@ -248,8 +248,8 @@ fn benchmark_enum_operations() {
         let val = SecurityContext {
             user_id: (i % 32) as u8,
             group_id: (i % 8) as u8,
-            permissions: (FilePermissions::Read | FilePermissions::Write) as u8,
-            network_flags: (NetworkFlags::Connected | NetworkFlags::Authenticated) as u8,
+            permissions: (FilePermissions::Read | FilePermissions::Write),
+            network_flags: (NetworkFlags::Connected | NetworkFlags::Authenticated),
         };
         let bytes = val.to_be_bytes();
         total_bytes += bytes.len();
@@ -262,7 +262,7 @@ fn benchmark_enum_operations() {
         duration.as_nanos() as f64 / ITERATIONS as f64
     );
 
-    println!("Total bytes processed: {}", total_bytes);
+    println!("Total bytes processed: {total_bytes}");
     println!();
 }
 
@@ -333,7 +333,7 @@ fn benchmark_vector_operations() {
         duration.as_nanos() as f64 / ITERATIONS as f64
     );
 
-    println!("Total bytes processed: {}", total_bytes);
+    println!("Total bytes processed: {total_bytes}");
     println!();
 }
 
@@ -410,7 +410,7 @@ fn benchmark_nested_structures() {
         duration.as_nanos() as f64 / ITERATIONS as f64
     );
 
-    println!("Total bytes processed: {}", total_bytes);
+    println!("Total bytes processed: {total_bytes}");
     println!();
 }
 
@@ -468,7 +468,7 @@ fn benchmark_array_operations() {
         duration.as_nanos() as f64 / ITERATIONS as f64
     );
 
-    println!("Total bytes processed: {}", total_bytes);
+    println!("Total bytes processed: {total_bytes}");
     println!();
 }
 
@@ -567,7 +567,7 @@ fn benchmark_mixed_scenarios() {
         duration.as_nanos() as f64 / ITERATIONS as f64
     );
 
-    println!("Total bytes processed: {}", total_bytes);
+    println!("Total bytes processed: {total_bytes}");
     println!();
 }
 
