@@ -281,8 +281,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             syn::Error::new(
                                 ident.span(),
                                 format!(
-                                    "Flag enum variant '{}' has value {} which is not a power of 2",
-                                    ident, value
+                                    "Flag enum variant '{ident}' has value {value} which is not a power of 2"
                                 ),
                             )
                             .to_compile_error(),

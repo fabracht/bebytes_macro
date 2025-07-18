@@ -28,7 +28,7 @@ pub fn handle_enum(
             let mut assigned_value = u8::try_from(index).unwrap_or_else(|_| {
                 let error = syn::Error::new(
                     ident.span(),
-                    format!("Enum variant index {} exceeds u8 range", index),
+                    format!("Enum variant index {index} exceeds u8 range"),
                 );
                 errors.push(error.to_compile_error());
                 0
