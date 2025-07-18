@@ -265,13 +265,12 @@ fn process_bits_field_functional(
                 if byte_start + #number_length > bytes.len() {
                     return Err("Not enough bytes".into());
                 }
-                
+
                 // Optimized: Use compile-time bit position when available
                 let bit_offset = _bit_sum % 8;
-                
+
                 // Check if we can use compile-time optimization
                 const COMPILE_TIME_ALIGNED: bool = (#bit_position % 8 == 0) && (#size == (#number_length * 8));
-                
                 if COMPILE_TIME_ALIGNED && bit_offset == 0 {
                     // Compile-time aligned case: direct conversion without bit manipulation
                     let slice = &bytes[byte_start..byte_start + #number_length];
@@ -290,13 +289,13 @@ fn process_bits_field_functional(
                     let mut bits_read = 0;
                     let mut byte_idx = byte_start;
                     let mut current_bit_offset = bit_offset;
-                    
+
                     while bits_read < #size {
                         let bits_in_byte = core::cmp::min(8 - current_bit_offset, #size - bits_read);
                         let byte_val = bytes[byte_idx] as #field_type;
                         let shifted = (byte_val >> (8 - current_bit_offset - bits_in_byte)) & ((1 << bits_in_byte) - 1);
                         result = (result << bits_in_byte) | shifted;
-                        
+
                         bits_read += bits_in_byte;
                         byte_idx += 1;
                         current_bit_offset = 0;
@@ -316,15 +315,13 @@ fn process_bits_field_functional(
                     #mask
                 );
             }
-            
+
             // Optimized: Use compile-time bit position when available
             let value = #field_name & #mask as #field_type;
             let byte_start = _bit_sum / 8;
             let bit_offset = _bit_sum % 8;
-            
             // Check if we can use compile-time optimization
             const COMPILE_TIME_ALIGNED: bool = (#bit_position % 8 == 0) && (#size == (#number_length * 8));
-            
             if COMPILE_TIME_ALIGNED && bit_offset == 0 {
                 // Compile-time aligned case: direct byte insertion
                 let value_bytes = #field_type::#to_bytes_method(value);
@@ -345,18 +342,18 @@ fn process_bits_field_functional(
                 let mut bits_written = 0;
                 let mut byte_idx = byte_start;
                 let mut current_bit_offset = bit_offset;
-                
+
                 while bits_written < #size {
                     let bits_in_byte = core::cmp::min(8 - current_bit_offset, #size - bits_written);
                     let mask = ((1 << bits_in_byte) - 1) as u8;
                     let shift = #size - bits_written - bits_in_byte;
                     let byte_bits = ((remaining_value >> shift) & mask as #field_type) as u8;
-                    
+
                     if bytes.len() <= byte_idx {
                         bytes.resize(byte_idx + 1, 0);
                     }
                     bytes[byte_idx] |= byte_bits << (8 - current_bit_offset - bits_in_byte);
-                    
+
                     bits_written += bits_in_byte;
                     byte_idx += 1;
                     current_bit_offset = 0;
@@ -885,7 +882,7 @@ fn process_vector_functional(
                         BeBytes::#to_bytes_method(item).len()
                     }).sum::<usize>();
                     bytes.reserve(total_size);
-                    
+
                     for item in &#field_name {
                         let item_bytes = BeBytes::#to_bytes_method(item);
                         bytes.extend_from_slice(&item_bytes);
