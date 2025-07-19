@@ -118,7 +118,7 @@ impl Default for FieldDataBuilder {
 #[derive(Debug, Default, Clone)]
 pub struct AttributeData {
     pub size: Option<usize>,
-    pub field: Option<Ident>,
+    pub field: Option<Vec<Ident>>,
     pub is_bits_attribute: bool,
 }
 
@@ -132,7 +132,7 @@ impl AttributeData {
         self
     }
 
-    pub fn with_field(mut self, field: Ident) -> Self {
+    pub fn with_field(mut self, field: Vec<Ident>) -> Self {
         self.field = Some(field);
         self
     }
@@ -457,19 +457,36 @@ pub mod functional_attrs {
     /// Parse from field attribute functionally
     pub fn parse_from_field_attribute_functional(
         attr: &syn::Attribute,
-    ) -> Result<syn::Ident, syn::Error> {
-        let mut field = None;
-        attr.parse_nested_meta(|meta| {
-            if let Some(name) = meta.path.get_ident().cloned() {
-                field = Some(name);
-                Ok(())
-            } else {
-                Err(meta.error(
-                    "Allowed attributes are `field_name` - Example: #[FromField(field_name)]",
+    ) -> Result<Vec<syn::Ident>, syn::Error> {
+        let field_path: Vec<syn::Ident>;
+
+        // Parse the attribute content as a token stream
+        match &attr.meta {
+            syn::Meta::List(list) => {
+                // Parse tokens inside FromField(...)
+                let tokens = list.tokens.clone();
+                let parser = syn::punctuated::Punctuated::<syn::Ident, syn::Token![.]>::parse_separated_nonempty;
+                match parser.parse2(tokens) {
+                    Ok(punctuated) => {
+                        // Convert punctuated list to Vec<Ident>
+                        field_path = punctuated.into_iter().collect();
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    "Expected #[FromField(field_name)] or #[FromField(header.qdcount)]",
                 ))
             }
-        })?;
-        field.ok_or_else(|| syn::Error::new_spanned(attr, "Missing field name"))
+        }
+
+        if field_path.is_empty() {
+            Err(syn::Error::new_spanned(attr, "Missing field name or path"))
+        } else {
+            Ok(field_path)
+        }
     }
 }
 
@@ -513,7 +530,7 @@ mod tests {
     fn test_attribute_data_merge() {
         let attr1 = AttributeData::new().with_size(8);
         let attr2 = AttributeData::new().with_bits_attribute();
-        let attr3 = AttributeData::new().with_field(Ident::new("test", Span::call_site()));
+        let attr3 = AttributeData::new().with_field(vec![Ident::new("test", Span::call_site())]);
 
         let merged = AttributeData::merge(vec![attr1, attr2, attr3]);
 

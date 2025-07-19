@@ -12,8 +12,8 @@ enum FieldType {
     BitsField(usize), // only size, position is auto-calculated
     AutoBitsField,    // size determined from type's __BEBYTES_MIN_BITS
     PrimitiveType,
-    Array(usize),                              // array_length
-    Vector(Option<usize>, Option<syn::Ident>), // size, vec_size_ident
+    Array(usize),                                   // array_length
+    Vector(Option<usize>, Option<Vec<syn::Ident>>), // size, vec_size_ident
     OptionType,
     CustomType,
 }
@@ -270,8 +270,7 @@ fn process_bits_field_functional(
                 let bit_offset = _bit_sum % 8;
 
                 // Check if we can use compile-time optimization
-                const COMPILE_TIME_ALIGNED: bool = (#bit_position % 8 == 0) && (#size == (#number_length * 8));
-                if COMPILE_TIME_ALIGNED && bit_offset == 0 {
+                if bit_offset == 0 && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
                     // Compile-time aligned case: direct conversion without bit manipulation
                     let slice = &bytes[byte_start..byte_start + #number_length];
                     let mut arr = [0u8; #number_length];
@@ -321,8 +320,7 @@ fn process_bits_field_functional(
             let byte_start = _bit_sum / 8;
             let bit_offset = _bit_sum % 8;
             // Check if we can use compile-time optimization
-            const COMPILE_TIME_ALIGNED: bool = (#bit_position % 8 == 0) && (#size == (#number_length * 8));
-            if COMPILE_TIME_ALIGNED && bit_offset == 0 {
+            if bit_offset == 0 && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
                 // Compile-time aligned case: direct byte insertion
                 let value_bytes = #field_type::#to_bytes_method(value);
                 if bytes.len() < byte_start + #number_length {
@@ -720,7 +718,7 @@ fn process_array_functional(
 fn process_vector_functional(
     context: &FieldContext,
     size: Option<usize>,
-    vec_size_ident: Option<syn::Ident>,
+    vec_size_ident: Option<Vec<syn::Ident>>,
     processing_ctx: &crate::functional::ProcessingContext,
 ) -> Result<crate::functional::FieldProcessResult, syn::Error> {
     let field_name = &context.field_name;
@@ -734,25 +732,37 @@ fn process_vector_functional(
         if let Some(syn::Type::Path(ref inner_tp)) = utils::solve_for_inner_type(tp, "Vec") {
             if utils::is_primitive_type(inner_tp) {
                 let (bit_sum, parsing, writing) = match (size, vec_size_ident.clone()) {
-                    (_, Some(ident)) => (
-                        quote! { bit_sum = 4096 * 8; },
-                        quote! {
-                            let vec_length = #ident as usize;
-                            byte_index = _bit_sum / 8;
-                            let end_index = byte_index + vec_length;
-                            if end_index > bytes.len() {
-                                panic!("Not enough bytes to parse a vector of size {}", vec_length);
-                            }
-                            let #field_name = Vec::from(&bytes[byte_index..end_index]);
-                            _bit_sum += vec_length * 8;
-                        },
-                        quote! {
-                            // Optimized: Reserve capacity to avoid multiple reallocations
-                            bytes.reserve(#field_name.len());
-                            bytes.extend_from_slice(&#field_name);
-                            _bit_sum += #field_name.len() * 8;
-                        },
-                    ),
+                    (_, Some(ident_path)) => {
+                        // Generate field access path for parsing (no self prefix)
+                        let field_access_parse = if ident_path.len() == 1 {
+                            let ident = &ident_path[0];
+                            quote!(#ident)
+                        } else {
+                            let first = &ident_path[0];
+                            let rest = &ident_path[1..];
+                            rest.iter()
+                                .fold(quote!(#first), |acc, segment| quote!(#acc.#segment))
+                        };
+                        (
+                            quote! { bit_sum = 4096 * 8; },
+                            quote! {
+                                let vec_length = #field_access_parse as usize;
+                                byte_index = _bit_sum / 8;
+                                let end_index = byte_index + vec_length;
+                                if end_index > bytes.len() {
+                                    panic!("Not enough bytes to parse a vector of size {}", vec_length);
+                                }
+                                let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                                _bit_sum += vec_length * 8;
+                            },
+                            quote! {
+                                // Optimized: Reserve capacity to avoid multiple reallocations
+                                bytes.reserve(#field_name.len());
+                                bytes.extend_from_slice(&#field_name);
+                                _bit_sum += #field_name.len() * 8;
+                            },
+                        )
+                    }
                     (Some(s), None) => (
                         crate::functional::pure_helpers::create_byte_bit_sum(s),
                         quote! {
@@ -831,9 +841,19 @@ fn process_vector_functional(
                             }
                             _bit_sum += bytes_consumed * 8;
                         }
-                    } else if let Some(ident) = vec_size_ident {
+                    } else if let Some(ident_path) = vec_size_ident {
+                        // Generate field access path for parsing (no self prefix)
+                        let field_access_parse = if ident_path.len() == 1 {
+                            let ident = &ident_path[0];
+                            quote!(#ident)
+                        } else {
+                            let first = &ident_path[0];
+                            let rest = &ident_path[1..];
+                            rest.iter()
+                                .fold(quote!(#first), |acc, segment| quote!(#acc.#segment))
+                        };
                         quote! {
-                            let vec_length = #ident as usize;
+                            let vec_length = #field_access_parse as usize;
                             let mut bytes_consumed = 0;
                             for _ in 0..vec_length {
                                 if _bit_sum / 8 + bytes_consumed >= bytes.len() {
