@@ -93,20 +93,13 @@ pub(crate) fn is_copy(field_type: &syn::Type) -> bool {
             if let Some(ident) = type_path.path.get_ident() {
                 let name = ident.to_string();
                 match name.as_str() {
-                    // Primitives that are Copy
+                    // Types that are Copy
                     "bool" | "char" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "i8"
-                    | "i16" | "i32" | "i64" | "i128" | "isize" | "f32" | "f64" => true,
+                    | "i16" | "i32" | "i64" | "i128" | "isize" | "f32" | "f64" | "NonZero"
+                    | "NonZeroU8" | "NonZeroU16" | "NonZeroU32" | "NonZeroU64" | "NonZeroU128"
+                    | "NonZeroUsize" | "NonZeroI8" | "NonZeroI16" | "NonZeroI32" | "NonZeroI64"
+                    | "NonZeroI128" | "NonZeroIsize" => true,
 
-                    // Standard library types known to be Copy
-                    "NonZero" | "NonZeroU8" | "NonZeroU16" | "NonZeroU32" | "NonZeroU64"
-                    | "NonZeroU128" | "NonZeroUsize" | "NonZeroI8" | "NonZeroI16"
-                    | "NonZeroI32" | "NonZeroI64" | "NonZeroI128" | "NonZeroIsize" => true,
-
-                    // Types that are not Copy
-                    "String" | "Vec" | "Box" | "Rc" | "Arc" | "RefCell" | "Cell" => false,
-
-                    // For other types, you'd need more sophisticated analysis
-                    // This might involve parsing attributes or checking trait bounds
                     _ => false, // Conservatively assume non-Copy
                 }
             } else if !type_path.path.segments.is_empty() {
@@ -157,14 +150,6 @@ pub(crate) fn is_copy(field_type: &syn::Type) -> bool {
             // &T is always Copy, &mut T is never Copy
             type_reference.mutability.is_none()
         }
-        // These are generally not Copy
-        syn::Type::BareFn(_)
-        | syn::Type::ImplTrait(_)
-        | syn::Type::Macro(_)
-        | syn::Type::Ptr(_) // Raw pointers are Copy, but we're being conservative
-        | syn::Type::Slice(_) // Slices are not sized, so not Copy
-        | syn::Type::TraitObject(_)
-        | syn::Type::Verbatim(_) => false,
         _ => false, // Conservative default for any other types
     }
 }

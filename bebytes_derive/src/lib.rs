@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(clippy::pedantic)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -23,11 +24,13 @@ use alloc::vec::Vec;
 
 use consts::Endianness;
 
+#[allow(clippy::too_many_lines)]
 #[proc_macro_derive(BeBytes, attributes(bits, With, FromField, bebytes))]
 pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident.clone();
-    let my_trait_path: syn::Path = syn::parse_str("BeBytes").unwrap();
+    let my_trait_path: syn::Path = syn::parse_quote!(BeBytes);
+
     let mut field_limit_check = Vec::new();
 
     let mut errors = Vec::new();
@@ -50,7 +53,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 let struct_field_names = fields.named.iter().map(|f| &f.ident).collect::<Vec<_>>();
 
                 // Generate big-endian implementation
-                structs::handle_struct(structs::StructContext {
+                let mut be_context = structs::StructContext {
                     field_limit_check: &mut field_limit_check,
                     errors: &mut errors,
                     field_parsing: &mut be_field_parsing,
@@ -59,12 +62,13 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     named_fields: &mut named_fields,
                     fields: &fields,
                     endianness: Endianness::Big,
-                });
+                };
+                structs::handle_struct(&mut be_context);
 
                 // Generate little-endian implementation
                 // We reuse named_fields and bit_sum because they're the same
                 let mut le_named_fields = Vec::new();
-                structs::handle_struct(structs::StructContext {
+                let mut le_context = structs::StructContext {
                     field_limit_check: &mut Vec::new(), // Already generated
                     errors: &mut errors,
                     field_parsing: &mut le_field_parsing,
@@ -73,7 +77,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     named_fields: &mut le_named_fields,
                     fields: &fields,
                     endianness: Endianness::Little,
-                });
+                };
+                structs::handle_struct(&mut le_context);
 
                 // If there are any errors, return them immediately without generating code
                 if !errors.is_empty() {
@@ -305,12 +310,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     }
                 }
 
-                if !validation_errors.is_empty() {
-                    quote! {
-                        #expanded
-                        #(#validation_errors)*
-                    }
-                } else {
+                if validation_errors.is_empty() {
                     quote! {
                         #expanded
 
@@ -418,6 +418,11 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             }
                         }
                     }
+                } else {
+                    quote! {
+                        #expanded
+                        #(#validation_errors)*
+                    }
                 }
             } else {
                 expanded
@@ -425,7 +430,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
             bitwise_ops.into()
         }
-        _ => {
+        Data::Union(_) => {
             let error =
                 syn::Error::new(Span::call_site(), "Type is not supported").to_compile_error();
             let output = quote! {

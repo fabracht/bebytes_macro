@@ -101,7 +101,7 @@ fn determine_field_type(
     }
 }
 
-pub fn handle_struct(context: StructContext) {
+pub fn handle_struct(context: &mut StructContext) {
     // First validate byte completeness
     if let Err(validation_error) = crate::bit_validation::validate_byte_completeness(context.fields)
     {
@@ -810,114 +810,107 @@ fn process_vector_functional(
                     accessor,
                     bit_sum,
                 ));
-            } else {
-                // Handle vector of custom types
-                let inner_type_path = &inner_tp.path;
-                let inner_type_name = quote! { #inner_type_path };
-
-                let try_from_bytes_method =
-                    utils::get_try_from_bytes_method(processing_ctx.endianness);
-                let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
-
-                let parsing_init = quote! {
-                    let mut #field_name = Vec::new();
-                };
-
-                let parsing_loop = if !is_last_field {
-                    if let Some(vec_size) = size {
-                        quote! {
-                            let mut bytes_consumed = 0;
-                            for _ in 0..#vec_size {
-                                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
-                                    break;
-                                }
-                                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                    Ok((item, consumed)) => {
-                                        #field_name.push(item);
-                                        bytes_consumed += consumed;
-                                    }
-                                    Err(e) => return Err(e),
-                                }
-                            }
-                            _bit_sum += bytes_consumed * 8;
-                        }
-                    } else if let Some(ident_path) = vec_size_ident {
-                        // Generate field access path for parsing (no self prefix)
-                        let field_access_parse = if ident_path.len() == 1 {
-                            let ident = &ident_path[0];
-                            quote!(#ident)
-                        } else {
-                            let first = &ident_path[0];
-                            let rest = &ident_path[1..];
-                            rest.iter()
-                                .fold(quote!(#first), |acc, segment| quote!(#acc.#segment))
-                        };
-                        quote! {
-                            let vec_length = #field_access_parse as usize;
-                            let mut bytes_consumed = 0;
-                            for _ in 0..vec_length {
-                                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
-                                    break;
-                                }
-                                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                    Ok((item, consumed)) => {
-                                        #field_name.push(item);
-                                        bytes_consumed += consumed;
-                                    }
-                                    Err(e) => return Err(e),
-                                }
-                            }
-                            _bit_sum += bytes_consumed * 8;
-                        }
-                    } else {
-                        return Err(syn::Error::new(
-                            field.ty.span(),
-                            "Vectors of custom types need size information. Use #[With(size(n))] or #[FromField(field_name)]",
-                        ));
-                    }
-                } else {
-                    quote! {
-                        let mut bytes_consumed = 0;
-                        while _bit_sum / 8 + bytes_consumed < bytes.len() {
-                            match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                                Ok((item, consumed)) => {
-                                    #field_name.push(item);
-                                    bytes_consumed += consumed;
-                                }
-                                Err(e) => break,
-                            }
-                        }
-                        _bit_sum += bytes_consumed * 8;
-                    }
-                };
-
-                let parsing = quote! {
-                    #parsing_init
-                    #parsing_loop
-                };
-
-                let writing = quote! {
-                    // Optimized: Pre-calculate total size to avoid multiple reallocations
-                    let total_size = #field_name.iter().map(|item| {
-                        BeBytes::#to_bytes_method(item).len()
-                    }).sum::<usize>();
-                    bytes.reserve(total_size);
-
-                    for item in &#field_name {
-                        let item_bytes = BeBytes::#to_bytes_method(item);
-                        bytes.extend_from_slice(&item_bytes);
-                        _bit_sum += item_bytes.len() * 8;
-                    }
-                };
-
-                return Ok(crate::functional::FieldProcessResult::new(
-                    quote! {},
-                    parsing,
-                    writing,
-                    accessor,
-                    quote! { bit_sum = 4096 * 8; }, // Variable size
-                ));
             }
+            // Handle vector of custom types
+            let inner_type_path = &inner_tp.path;
+            let inner_type_name = quote! { #inner_type_path };
+
+            let try_from_bytes_method = utils::get_try_from_bytes_method(processing_ctx.endianness);
+            let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
+
+            let parsing_init = quote! {
+                let mut #field_name = Vec::new();
+            };
+
+            let parsing_loop = if is_last_field {
+                quote! {
+                    let mut bytes_consumed = 0;
+                    while _bit_sum / 8 + bytes_consumed < bytes.len() {
+                        match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
+                            Ok((item, consumed)) => {
+                                #field_name.push(item);
+                                bytes_consumed += consumed;
+                            }
+                            Err(e) => break,
+                        }
+                    }
+                    _bit_sum += bytes_consumed * 8;
+                }
+            } else if let Some(vec_size) = size {
+                quote! {
+                    let mut bytes_consumed = 0;
+                    for _ in 0..#vec_size {
+                        if _bit_sum / 8 + bytes_consumed >= bytes.len() {
+                            break;
+                        }
+                        match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
+                            Ok((item, consumed)) => {
+                                #field_name.push(item);
+                                bytes_consumed += consumed;
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    _bit_sum += bytes_consumed * 8;
+                }
+            } else if let Some(ident_path) = vec_size_ident {
+                // Generate field access path for parsing (no self prefix)
+                let field_access_parse = if ident_path.len() == 1 {
+                    let ident = &ident_path[0];
+                    quote!(#ident)
+                } else {
+                    let first = &ident_path[0];
+                    let rest = &ident_path[1..];
+                    rest.iter()
+                        .fold(quote!(#first), |acc, segment| quote!(#acc.#segment))
+                };
+                quote! {
+                    let vec_length = #field_access_parse as usize;
+                    let mut bytes_consumed = 0;
+                    for _ in 0..vec_length {
+                        if _bit_sum / 8 + bytes_consumed >= bytes.len() {
+                            break;
+                        }
+                        match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
+                            Ok((item, consumed)) => {
+                                #field_name.push(item);
+                                bytes_consumed += consumed;
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    _bit_sum += bytes_consumed * 8;
+                }
+            } else {
+                return Err(syn::Error::new(field.ty.span(),"Vectors of custom types need size information. Use #[With(size(n))] or #[FromField(field_name)]"));
+            };
+
+            let parsing = quote! {
+                #parsing_init
+                #parsing_loop
+            };
+
+            let writing = quote! {
+                // Optimized: Pre-calculate total size to avoid multiple reallocations
+                let total_size = #field_name.iter().map(|item| {
+                    BeBytes::#to_bytes_method(item).len()
+                }).sum::<usize>();
+                bytes.reserve(total_size);
+
+                for item in &#field_name {
+                    let item_bytes = BeBytes::#to_bytes_method(item);
+                    bytes.extend_from_slice(&item_bytes);
+                    _bit_sum += item_bytes.len() * 8;
+                }
+            };
+
+            return Ok(crate::functional::FieldProcessResult::new(
+                quote! {},
+                parsing,
+                writing,
+                accessor,
+                quote! { bit_sum = 4096 * 8; }, // Variable size
+            ));
         }
     }
 
