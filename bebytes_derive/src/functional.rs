@@ -354,6 +354,309 @@ pub mod pure_helpers {
             }
         }
     }
+
+    /// Generate field access path from a vector of idents
+    pub fn generate_field_access_path(ident_path: &[Ident]) -> TokenStream {
+        if ident_path.len() == 1 {
+            let ident = &ident_path[0];
+            quote!(#ident)
+        } else {
+            let first = &ident_path[0];
+            let rest = &ident_path[1..];
+            rest.iter()
+                .fold(quote!(#first), |acc, segment| quote!(#acc.#segment))
+        }
+    }
+
+    /// Calculate bits in byte helper - returns min(8 - bit_offset, total_bits - bits_processed)
+    pub fn create_bits_in_byte_calc(
+        bit_offset_expr: TokenStream,
+        total_bits: TokenStream,
+        bits_processed: TokenStream,
+    ) -> TokenStream {
+        quote! {
+            core::cmp::min(8 - #bit_offset_expr, #total_bits - #bits_processed)
+        }
+    }
+
+    /// Generate aligned multi-byte bit field parsing code
+    pub fn create_aligned_multibyte_parsing(
+        field_type: &syn::Type,
+        from_bytes_method: &TokenStream,
+        number_length: usize,
+    ) -> TokenStream {
+        quote! {
+            let slice = &bytes[byte_start..byte_start + #number_length];
+            let mut arr = [0u8; #number_length];
+            arr.copy_from_slice(slice);
+            #field_type::#from_bytes_method(arr)
+        }
+    }
+
+    /// Generate unaligned multi-byte bit field parsing code
+    pub fn create_unaligned_multibyte_parsing(
+        field_type: &syn::Type,
+        size: usize,
+    ) -> TokenStream {
+        let bits_in_byte = create_bits_in_byte_calc(
+            quote!(current_bit_offset),
+            quote!(#size),
+            quote!(bits_read)
+        );
+        
+        quote! {
+            let mut result = 0 as #field_type;
+            let mut bits_read = 0;
+            let mut byte_idx = byte_start;
+            let mut current_bit_offset = bit_offset;
+
+            while bits_read < #size {
+                let bits_in_byte = #bits_in_byte;
+                let byte_val = bytes[byte_idx] as #field_type;
+                let shifted = (byte_val >> (8 - current_bit_offset - bits_in_byte)) & ((1 << bits_in_byte) - 1);
+                result = (result << bits_in_byte) | shifted;
+
+                bits_read += bits_in_byte;
+                byte_idx += 1;
+                current_bit_offset = 0;
+            }
+            result
+        }
+    }
+
+    /// Generate aligned multi-byte bit field writing code
+    pub fn create_aligned_multibyte_writing(
+        field_type: &syn::Type,
+        to_bytes_method: &TokenStream,
+        number_length: usize,
+    ) -> TokenStream {
+        quote! {
+            let value_bytes = #field_type::#to_bytes_method(value);
+            if bytes.len() < byte_start + #number_length {
+                bytes.resize(byte_start + #number_length, 0);
+            }
+            bytes[byte_start..byte_start + #number_length].copy_from_slice(&value_bytes);
+        }
+    }
+
+    /// Generate unaligned multi-byte bit field writing code
+    pub fn create_unaligned_multibyte_writing(
+        field_type: &syn::Type,
+        size: usize,
+    ) -> TokenStream {
+        let bits_in_byte = create_bits_in_byte_calc(
+            quote!(current_bit_offset),
+            quote!(#size),
+            quote!(bits_written)
+        );
+        
+        quote! {
+            let mut remaining_value = value;
+            let mut bits_written = 0;
+            let mut byte_idx = byte_start;
+            let mut current_bit_offset = bit_offset;
+
+            while bits_written < #size {
+                let bits_in_byte = #bits_in_byte;
+                let mask = ((1 << bits_in_byte) - 1) as u8;
+                let shift = #size - bits_written - bits_in_byte;
+                let byte_bits = ((remaining_value >> shift) & mask as #field_type) as u8;
+
+                if bytes.len() <= byte_idx {
+                    bytes.resize(byte_idx + 1, 0);
+                }
+                bytes[byte_idx] |= byte_bits << (8 - current_bit_offset - bits_in_byte);
+
+                bits_written += bits_in_byte;
+                byte_idx += 1;
+                current_bit_offset = 0;
+            }
+        }
+    }
+
+    /// Generate single-byte bit field parsing code based on endianness
+    pub fn create_single_byte_bit_parsing(
+        field_name: &Ident,
+        field_type: &syn::Type,
+        size: usize,
+        mask: u128,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
+        let shift = match endianness {
+            crate::consts::Endianness::Big => quote! { 8 - bit_offset - #size },
+            crate::consts::Endianness::Little => quote! { bit_offset },
+        };
+
+        quote! {
+            let #field_name = {
+                let byte_idx = _bit_sum / 8;
+                let bit_offset = _bit_sum % 8;
+                let mask = #mask as #field_type;
+                let byte_val = bytes[byte_idx] as #field_type;
+                (byte_val >> (#shift)) & mask
+            };
+            _bit_sum += #size;
+        }
+    }
+
+    /// Generate single-byte bit field writing code based on endianness
+    pub fn create_single_byte_bit_writing(
+        field_name: &Ident,
+        size: usize,
+        mask: u128,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
+        let shift = match endianness {
+            crate::consts::Endianness::Big => quote! { 8 - bit_offset - #size },
+            crate::consts::Endianness::Little => quote! { bit_offset },
+        };
+
+        quote! {
+            {
+                let byte_idx = _bit_sum / 8;
+                let bit_offset = _bit_sum % 8;
+                let mask = #mask as u8;
+                if bytes.len() <= byte_idx {
+                    bytes.resize(byte_idx + 1, 0);
+                }
+                bytes[byte_idx] |= ((#field_name as u8) & mask) << (#shift);
+            }
+            _bit_sum += #size;
+        }
+    }
+
+    /// Generate auto-bits single byte parsing (for enums with __BEBYTES_MIN_BITS)
+    pub fn create_auto_bits_single_byte_parsing(
+        field_type: &syn::Type,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
+        let shift = match endianness {
+            crate::consts::Endianness::Big => quote! { 8 - bit_offset - SIZE },
+            crate::consts::Endianness::Little => quote! { bit_offset },
+        };
+
+        quote! {
+            {
+                if byte_idx >= bytes.len() {
+                    return Err("Not enough bytes".into());
+                }
+
+                let bits = {
+                    const MASK: u8 = (1 << SIZE) - 1;
+                    let byte_val = bytes[byte_idx];
+                    (byte_val >> (#shift)) & MASK
+                };
+
+                // Convert from discriminant value to enum
+                #field_type::try_from(bits)?
+            }
+        }
+    }
+
+    /// Generate auto-bits two byte parsing (for enums spanning two bytes)
+    pub fn create_auto_bits_two_byte_parsing(
+        field_type: &syn::Type,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
+        let (first_bits_expr, second_bits_expr, combine_expr) = match endianness {
+            crate::consts::Endianness::Big => (
+                quote! { first_byte & ((1 << bits_from_first) - 1) },
+                quote! { second_byte >> (8 - bits_from_second) },
+                quote! { (first_bits << bits_from_second) | second_bits }
+            ),
+            crate::consts::Endianness::Little => (
+                quote! { (first_byte >> bit_offset) & ((1 << bits_from_first) - 1) },
+                quote! { second_byte & ((1 << bits_from_second) - 1) },
+                quote! { first_bits | (second_bits << bits_from_first) }
+            ),
+        };
+
+        quote! {
+            {
+                let bits_from_first = 8 - bit_offset;
+                let bits_from_second = SIZE - bits_from_first;
+
+                if byte_idx + 1 >= bytes.len() {
+                    return Err("Not enough bytes".into());
+                }
+
+                let first_byte = bytes[byte_idx];
+                let second_byte = bytes[byte_idx + 1];
+
+                let first_bits = #first_bits_expr;
+                let second_bits = #second_bits_expr;
+
+                let bits = #combine_expr;
+
+                // Convert from discriminant value to enum
+                #field_type::try_from(bits)?
+            }
+        }
+    }
+
+    /// Generate auto-bits single byte writing (for enums with __BEBYTES_MIN_BITS)
+    pub fn create_auto_bits_single_byte_writing(
+        field_name: &Ident,
+        size_const: &TokenStream,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
+        let shift = match endianness {
+            crate::consts::Endianness::Big => quote! { 8 - bit_offset - SIZE },
+            crate::consts::Endianness::Little => quote! { bit_offset },
+        };
+
+        quote! {
+            // Convert enum to its discriminant value
+            let bits = #field_name as u8;
+
+            const MASK: u8 = (1 << SIZE) - 1;
+
+            if bytes.len() <= byte_idx {
+                bytes.resize(byte_idx + 1, 0);
+            }
+            bytes[byte_idx] |= (bits & MASK) << (#shift);
+            _bit_sum += #size_const;
+        }
+    }
+
+    /// Generate auto-bits two byte writing (for enums spanning two bytes)
+    pub fn create_auto_bits_two_byte_writing(
+        field_name: &Ident,
+        size_const: &TokenStream,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
+        let (first_byte_expr, second_byte_expr) = match endianness {
+            crate::consts::Endianness::Big => (
+                quote! { (bits >> bits_in_second) & first_mask },
+                quote! { (bits & second_mask) << (8 - bits_in_second) }
+            ),
+            crate::consts::Endianness::Little => (
+                quote! { (bits & first_mask) << bit_offset },
+                quote! { (bits >> bits_in_first) & second_mask }
+            ),
+        };
+
+        quote! {
+            // Convert enum to its discriminant value
+            let bits = #field_name as u8;
+
+            let bits_in_first = 8 - bit_offset;
+            let bits_in_second = SIZE - bits_in_first;
+
+            if bytes.len() <= byte_idx + 1 {
+                bytes.resize(byte_idx + 2, 0);
+            }
+
+            // Write to first byte (lower bits of the value)
+            let first_mask = (1 << bits_in_first) - 1;
+            bytes[byte_idx] |= #first_byte_expr;
+
+            // Write to second byte (upper bits of the value)
+            let second_mask = (1 << bits_in_second) - 1;
+            bytes[byte_idx + 1] |= #second_byte_expr;
+            _bit_sum += #size_const;
+        }
+    }
 }
 
 /// Functional attribute parsing
