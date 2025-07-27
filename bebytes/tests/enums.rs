@@ -166,6 +166,7 @@ mod auto_sized_enums {
     }
 }
 
+#[cfg(feature = "std")]
 mod flag_enums {
     use super::*;
 
