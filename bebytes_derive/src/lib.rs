@@ -426,8 +426,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
                             /// Decompose a u8 value into individual flag variants
                             #[cfg(feature = "std")]
-                            pub fn decompose(bits: u8) -> Vec<Self> {
-                                let mut flags = Vec::new();
+                            pub fn decompose(bits: u8) -> ::bebytes::Vec<Self> {
+                                let mut flags = ::bebytes::Vec::new();
                                 #(
                                     if bits & #variant_values == #variant_values && #variant_values != 0 {
                                         if let Ok(flag) = Self::try_from(#variant_values) {
@@ -440,8 +440,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
                             /// Decompose a u8 value into individual flag variants (no_std)
                             #[cfg(not(feature = "std"))]
-                            pub fn decompose(bits: u8) -> ::alloc::vec::Vec<Self> {
-                                let mut flags = ::alloc::vec::Vec::new();
+                            pub fn decompose(bits: u8) -> ::bebytes::Vec<Self> {
+                                let mut flags = ::bebytes::Vec::new();
                                 #(
                                     if bits & #variant_values == #variant_values && #variant_values != 0 {
                                         if let Ok(flag) = Self::try_from(#variant_values) {

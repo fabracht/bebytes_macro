@@ -8,6 +8,12 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 pub use alloc::borrow::ToOwned;
 
+// Re-export Vec for use in generated code
+#[cfg(not(feature = "std"))]
+pub use alloc::vec::Vec;
+#[cfg(feature = "std")]
+pub use std::vec::Vec;
+
 pub use bebytes_derive::BeBytes;
 
 /// Error type for `BeBytes` operations
