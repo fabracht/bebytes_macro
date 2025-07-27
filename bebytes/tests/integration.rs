@@ -8,6 +8,7 @@
 
 use bebytes::BeBytes;
 
+#[cfg(feature = "std")]
 mod packet_protocols {
     use super::*;
 
@@ -346,6 +347,7 @@ mod performance_scenarios {
     }
 }
 
+#[cfg(feature = "std")]
 mod edge_case_integration {
     use super::*;
 

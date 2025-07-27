@@ -166,6 +166,7 @@ mod auto_sized_enums {
     }
 }
 
+#[cfg(feature = "std")]
 mod flag_enums {
     use super::*;
 
@@ -274,6 +275,84 @@ mod flag_enums {
         // Zero should be valid in from_bits
         let from_zero = StatusFlags::from_bits(0).unwrap();
         assert_eq!(from_zero, 0u8); // from_bits returns u8
+    }
+
+    #[test]
+    fn test_flag_decomposition() {
+        // Test empty flags
+        let empty_flags = StatusFlags::decompose(0);
+        assert!(empty_flags.is_empty());
+
+        // Test single flag
+        let single_flags = StatusFlags::decompose(StatusFlags::Ready as u8);
+        assert_eq!(single_flags.len(), 1);
+        assert_eq!(single_flags[0], StatusFlags::Ready);
+
+        // Test multiple flags
+        let combined = StatusFlags::Ready as u8 | StatusFlags::Complete as u8;
+        let multi_flags = StatusFlags::decompose(combined);
+        assert_eq!(multi_flags.len(), 2);
+        assert!(multi_flags.contains(&StatusFlags::Ready));
+        assert!(multi_flags.contains(&StatusFlags::Complete));
+        assert!(!multi_flags.contains(&StatusFlags::Busy));
+
+        // Test all flags
+        let all_flags_value = StatusFlags::Ready as u8
+            | StatusFlags::Busy as u8
+            | StatusFlags::Complete as u8
+            | StatusFlags::ErrorStatus as u8;
+        let all_flags = StatusFlags::decompose(all_flags_value);
+        assert_eq!(all_flags.len(), 4);
+        assert!(all_flags.contains(&StatusFlags::Ready));
+        assert!(all_flags.contains(&StatusFlags::Busy));
+        assert!(all_flags.contains(&StatusFlags::Complete));
+        assert!(all_flags.contains(&StatusFlags::ErrorStatus));
+    }
+
+    #[test]
+    fn test_flag_iter() {
+        // Test iter_flags with multiple flags
+        let combined = StatusFlags::Ready as u8 | StatusFlags::Complete as u8;
+        let flag_iter: Vec<_> = StatusFlags::iter_flags(combined).collect();
+        assert_eq!(flag_iter.len(), 2);
+        assert!(flag_iter.contains(&StatusFlags::Ready));
+        assert!(flag_iter.contains(&StatusFlags::Complete));
+
+        // Test iter_flags with empty
+        let empty_iter: Vec<_> = StatusFlags::iter_flags(0).collect();
+        assert!(empty_iter.is_empty());
+
+        // Test iter_flags with single flag
+        let single_iter: Vec<_> = StatusFlags::iter_flags(StatusFlags::Busy as u8).collect();
+        assert_eq!(single_iter.len(), 1);
+        assert_eq!(single_iter[0], StatusFlags::Busy);
+    }
+
+    #[test]
+    fn test_flag_decomposition_round_trip() {
+        // Create combined flags
+        let original = StatusFlags::Ready as u8 | StatusFlags::ErrorStatus as u8;
+
+        // Decompose
+        let decomposed = StatusFlags::decompose(original);
+
+        // Reconstruct
+        let reconstructed = decomposed.iter().fold(0u8, |acc, flag| acc | (*flag as u8));
+
+        assert_eq!(original, reconstructed);
+    }
+
+    #[test]
+    fn test_flag_decomposition_invalid_bits() {
+        // Test with invalid bit combination (16 is not a valid flag)
+        let invalid_flags = StatusFlags::decompose(16);
+        assert!(invalid_flags.is_empty()); // Should return empty since 16 doesn't match any flag
+
+        // Test with partially valid combination
+        let partial = StatusFlags::Ready as u8 | 16; // Ready + invalid bit
+        let partial_flags = StatusFlags::decompose(partial);
+        assert_eq!(partial_flags.len(), 1);
+        assert_eq!(partial_flags[0], StatusFlags::Ready);
     }
 }
 

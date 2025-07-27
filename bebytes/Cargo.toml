@@ -1,6 +1,6 @@
 [package]
 name = "bebytes"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/fabracht/bebytes_macro"
@@ -12,13 +12,15 @@ keywords = ["serialization", "deserialization", "network", "bytes", "no-std"]
 [[bin]]
 name = "macro_test"
 path = "./bin/macro_test.rs"
+required-features = ["std"]
 
 [[bin]]
 name = "performance_benchmark"
 path = "./bin/performance_benchmark.rs"
+required-features = ["std"]
 
 [dependencies]
-bebytes_derive = { version = "2.0.0", path = "../bebytes_derive" }
+bebytes_derive = { version = "2.1.0", path = "../bebytes_derive" }
 
 [dev-dependencies]
 trybuild = { version = "1.0.102", features = ["diff"] }
