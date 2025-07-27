@@ -1,8 +1,6 @@
-use bebytes::BeBytes;
-
+use bebytes_derive::BeBytes;
 #[cfg(not(feature = "std"))]
 extern crate alloc;
-#[cfg(not(feature = "std"))]
 
 #[derive(BeBytes, Debug, PartialEq, Clone)]
 struct U32 {

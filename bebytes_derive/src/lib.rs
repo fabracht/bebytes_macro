@@ -29,7 +29,7 @@ use consts::Endianness;
 pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident.clone();
-    let my_trait_path: syn::Path = syn::parse_quote!(BeBytes);
+    let my_trait_path: syn::Path = syn::parse_quote!(::bebytes::BeBytes);
 
     let mut field_limit_check = Vec::new();
 
