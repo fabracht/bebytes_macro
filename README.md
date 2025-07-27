@@ -183,11 +183,11 @@ Produces `DummyEnum: [2]`
 
 ### Enum Bit Packing
 
-Enums can be used with the `#[bits()]` attribute for automatic bit-width calculation. When you use `#[bits()]` (with empty parentheses) on an enum field, the macro automatically calculates the minimum number of bits needed to represent all enum variants. While `#[repr(u8)]` is not strictly required, it is recommended as best practice:
+Enums can be used with the `#[bits(N)]` attribute where you specify the exact number of bits needed. You must specify the bit width explicitly based on the number of enum variants:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
-#[repr(u8)]  // Recommended: ensures discriminants fit in u8 at compile time
+#[repr(u8)]
 enum Status {
     Idle = 0,
     Running = 1,
@@ -199,7 +199,7 @@ enum Status {
 struct PacketHeader {
     #[bits(4)]
     version: u8,
-    #[bits()]  // Automatically uses 2 bits (minimum needed for 4 variants)
+    #[bits(2)]  // 2 bits needed for 4 variants (2^2 = 4)
     status: Status,
     #[bits(2)]
     flags: u8,
@@ -208,57 +208,23 @@ struct PacketHeader {
 
 In this example:
 - The `Status` enum has 4 variants, which requires 2 bits to represent (2^2 = 4)
-- Using `#[bits()]` on the `status` field automatically allocates exactly 2 bits
+- You must specify `#[bits(2)]` explicitly for the status field
 - The total struct uses 8 bits (4 + 2 + 2), fitting perfectly in 1 byte
 
-#### How It Works
+#### Bit Calculation for Enums
 
-1. **Automatic Bit Calculation**: The macro calculates the minimum bits needed as `ceil(log2(max_discriminant + 1))`
-2. **Compile-Time Constant**: Each enum gets a `__BEBYTES_MIN_BITS` constant that can be used at compile time
-3. **TryFrom Implementation**: The macro generates a `TryFrom<u8>` implementation for safe conversion from discriminant values
+To determine the number of bits needed for an enum:
+- 2 variants need 1 bit (2^1 = 2)
+- 3-4 variants need 2 bits (2^2 = 4)
+- 5-8 variants need 3 bits (2^3 = 8)
+- 9-16 variants need 4 bits (2^4 = 16)
+- And so on...
 
-#### Example with Different Enum Sizes
+#### Requirements
 
-```rust
-#[derive(BeBytes, Debug, PartialEq)]
-#[repr(u8)]
-enum TwoVariants {
-    A = 0,
-    B = 1,
-}  // Needs 1 bit
-
-#[derive(BeBytes, Debug, PartialEq)]
-#[repr(u8)]
-enum SeventeenVariants {
-    V0 = 0, V1 = 1, V2 = 2, /* ... */ V16 = 16,
-}  // Needs 5 bits (2^4 = 16 < 17 <= 2^5 = 32)
-
-#[derive(BeBytes, Debug, PartialEq)]
-struct MixedPacket {
-    #[bits(2)]
-    header: u8,
-    #[bits()]  // 1 bit
-    two_var: TwoVariants,
-    #[bits()]  // 5 bits
-    seventeen_var: SeventeenVariants,
-    // Total: 2 + 1 + 5 = 8 bits = 1 byte
-}
-```
-
-#### Benefits
-
-1. **No Redundancy**: You don't need to specify bit width in both the enum definition and struct field
-2. **Type Safety**: The compiler ensures enum values fit in the allocated bits
-3. **Flexibility**: Mix auto-sized enum fields with explicitly-sized integer fields
-4. **Efficiency**: Use exactly the bits needed, no more, no less
-5. **Safety**: Compile-time validation ensures all discriminants fit within u8 range (0-255)
-
-#### Note on `#[repr(u8)]`
-
-While BeBytes will work without `#[repr(u8)]`:
-- Without it: The macro validates at compile time that discriminants fit in u8 range
-- With it: The Rust compiler itself enforces the constraint, providing earlier error detection
-- **Recommendation**: Always use `#[repr(u8)]` for enums with BeBytes for clarity and safety
+1. **Explicit Bit Width**: You must specify the exact number of bits with `#[bits(N)]`
+2. **`#[repr(u8)]`**: Recommended for compile-time validation that discriminants fit in u8 range
+3. **Manual Calculation**: Calculate the required bits based on your enum variant count
 
 ### Flag Enums
 
