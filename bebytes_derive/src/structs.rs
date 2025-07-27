@@ -264,8 +264,11 @@ fn process_bits_field_functional(
             &from_bytes_method,
             number_length,
         );
-        let unaligned_parsing =
-            crate::functional::pure_helpers::create_unaligned_multibyte_parsing(field_type, size);
+        let unaligned_parsing = crate::functional::pure_helpers::create_unaligned_multibyte_parsing(
+            field_type,
+            size,
+            processing_ctx.endianness,
+        );
 
         let parsing = quote! {
             let #field_name = {
@@ -300,8 +303,11 @@ fn process_bits_field_functional(
             &to_bytes_method,
             number_length,
         );
-        let unaligned_writing =
-            crate::functional::pure_helpers::create_unaligned_multibyte_writing(field_type, size);
+        let unaligned_writing = crate::functional::pure_helpers::create_unaligned_multibyte_writing(
+            field_type,
+            size,
+            processing_ctx.endianness,
+        );
 
         let writing = quote! {
             if #field_name > #mask as #field_type {

@@ -6,17 +6,30 @@ This directory contains all tests for the BeBytes library, organized by function
 
 ```
 tests/
-├── core.rs          # Core functionality (primitives, arrays, structs)
-├── bitfields.rs     # Bit field tests
-├── enums.rs         # Enum tests (basic, auto-sized, flags)
-├── vectors.rs       # Vector handling tests
-├── errors.rs        # Error handling tests
-├── no_std.rs        # no_std compatibility tests
-├── integration.rs   # Complex real-world scenarios
-├── compile_fail.rs  # Compile-time failure tests
-└── compile_time/    # Individual compile failure test cases
-    ├── *.rs         # Test cases that should fail
-    └── *.stderr     # Expected error messages
+├── core.rs                    # Core functionality (primitives, arrays, structs)
+├── bitfields.rs               # Bit field tests
+├── enums.rs                   # Enum tests (basic, auto-sized, flags)
+├── vectors.rs                 # Vector handling tests
+├── errors.rs                  # Error handling tests
+├── no_std.rs                  # no_std compatibility tests
+├── integration.rs             # Complex real-world scenarios
+├── compile_fail.rs            # Compile-time failure tests
+├── property_tests.rs          # Property-based testing
+├── macro_expansion.rs         # Macro expansion tests
+├── bit_arithmetic.rs          # Bit arithmetic tests
+├── check_optimization.rs      # Optimization verification
+├── derive_critical.rs         # Critical derive functionality
+├── evil_tests.rs              # Evil test scenarios
+├── functional_coverage.rs     # Functional test coverage
+├── arithmetic_mutations.rs    # Mutation testing: arithmetic
+├── attribute_edge_cases.rs    # Attribute parsing edge cases
+├── bitwise_mutations.rs       # Mutation testing: bitwise ops
+├── comparison_mutations.rs    # Mutation testing: comparisons
+├── logical_mutations.rs       # Mutation testing: logical ops
+├── return_value_mutations.rs  # Mutation testing: return values
+└── compile_time/              # Individual compile failure test cases
+    ├── *.rs                   # Test cases that should fail
+    └── *.stderr               # Expected error messages
 ```
 
 ## Test Categories
@@ -70,6 +83,39 @@ tests/
 - Verifies invalid code is rejected at compile time
 - Uses trybuild framework
 - Tests for unsupported types, incomplete bytes, etc.
+
+### Property-Based Tests (`property_tests.rs`)
+- Randomized testing with quickcheck
+- Round-trip serialization/deserialization
+- Edge case generation
+- Invariant checking
+
+### Macro Expansion Tests (`macro_expansion.rs`)
+- Verifies the derive macro generates expected methods
+- Tests trait implementation completeness
+- Constructor generation
+
+### Bit Arithmetic Tests (`bit_arithmetic.rs`)
+- Bit manipulation correctness
+- Byte alignment calculations
+- Division ceiling behavior
+- Large bit field handling
+
+### Mutation Testing Files
+These files target specific mutation patterns to improve test quality:
+
+- **`arithmetic_mutations.rs`**: Tests arithmetic operators (/, *, +, -, %)
+- **`attribute_edge_cases.rs`**: Tests attribute parsing edge cases
+- **`bitwise_mutations.rs`**: Tests bitwise operators (&, |, ^, <<, >>)
+- **`comparison_mutations.rs`**: Tests comparison operators (==, !=, <, >)
+- **`logical_mutations.rs`**: Tests logical operators (&&, ||)
+- **`return_value_mutations.rs`**: Tests that functions return meaningful values
+- **`derive_critical.rs`**: Tests critical derive functionality
+- **`functional_coverage.rs`**: Tests functional code coverage
+
+### Other Test Files
+- **`check_optimization.rs`**: Verifies optimization behavior
+- **`evil_tests.rs`**: Evil test scenarios to stress the system
 
 ## Running Tests
 

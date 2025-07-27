@@ -210,7 +210,7 @@ pub mod pure_helpers {
         quote! {
             // Ensure byte alignment when transitioning from bitfields
             if _bit_sum % 8 != 0 {
-                _bit_sum = ((_bit_sum + 7) / 8) * 8;
+                _bit_sum = usize::div_ceil(_bit_sum, 8) * 8;
             }
             byte_index = _bit_sum / 8;
             end_byte_index = byte_index + #field_size;
@@ -404,30 +404,54 @@ pub mod pure_helpers {
     }
 
     /// Generate unaligned multi-byte bit field parsing code
-    pub fn create_unaligned_multibyte_parsing(field_type: &syn::Type, size: usize) -> TokenStream {
+    pub fn create_unaligned_multibyte_parsing(
+        field_type: &syn::Type,
+        size: usize,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
         let bits_in_byte = create_bits_in_byte_calc(
             &quote!(current_bit_offset),
             &quote!(#size),
             &quote!(bits_read),
         );
 
-        quote! {
-            let mut result = 0 as #field_type;
-            let mut bits_read = 0;
-            let mut byte_idx = byte_start;
-            let mut current_bit_offset = bit_offset;
+        match endianness {
+            crate::consts::Endianness::Big => quote! {
+                let mut result = 0 as #field_type;
+                let mut bits_read = 0;
+                let mut byte_idx = byte_start;
+                let mut current_bit_offset = bit_offset;
 
-            while bits_read < #size {
-                let bits_in_byte = #bits_in_byte;
-                let byte_val = bytes[byte_idx] as #field_type;
-                let shifted = (byte_val >> (8 - current_bit_offset - bits_in_byte)) & ((1 << bits_in_byte) - 1);
-                result = (result << bits_in_byte) | shifted;
+                while bits_read < #size {
+                    let bits_in_byte = #bits_in_byte;
+                    let byte_val = bytes[byte_idx] as #field_type;
+                    let shifted = (byte_val >> (8 - current_bit_offset - bits_in_byte)) & ((1 << bits_in_byte) - 1);
+                    result = (result << bits_in_byte) | shifted;
 
-                bits_read += bits_in_byte;
-                byte_idx += 1;
-                current_bit_offset = 0;
-            }
-            result
+                    bits_read += bits_in_byte;
+                    byte_idx += 1;
+                    current_bit_offset = 0;
+                }
+                result
+            },
+            crate::consts::Endianness::Little => quote! {
+                let mut result = 0 as #field_type;
+                let mut bits_read = 0;
+                let mut byte_idx = byte_start;
+                let mut current_bit_offset = bit_offset;
+
+                while bits_read < #size {
+                    let bits_in_byte = #bits_in_byte;
+                    let byte_val = bytes[byte_idx] as #field_type;
+                    let shifted = (byte_val >> current_bit_offset) & ((1 << bits_in_byte) - 1);
+                    result |= shifted << bits_read;
+
+                    bits_read += bits_in_byte;
+                    byte_idx += 1;
+                    current_bit_offset = 0;
+                }
+                result
+            },
         }
     }
 
@@ -447,34 +471,62 @@ pub mod pure_helpers {
     }
 
     /// Generate unaligned multi-byte bit field writing code
-    pub fn create_unaligned_multibyte_writing(field_type: &syn::Type, size: usize) -> TokenStream {
+    pub fn create_unaligned_multibyte_writing(
+        field_type: &syn::Type,
+        size: usize,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
         let bits_in_byte = create_bits_in_byte_calc(
             &quote!(current_bit_offset),
             &quote!(#size),
             &quote!(bits_written),
         );
 
-        quote! {
-            let mut remaining_value = value;
-            let mut bits_written = 0;
-            let mut byte_idx = byte_start;
-            let mut current_bit_offset = bit_offset;
+        match endianness {
+            crate::consts::Endianness::Big => quote! {
+                let mut remaining_value = value;
+                let mut bits_written = 0;
+                let mut byte_idx = byte_start;
+                let mut current_bit_offset = bit_offset;
 
-            while bits_written < #size {
-                let bits_in_byte = #bits_in_byte;
-                let mask = ((1 << bits_in_byte) - 1) as u8;
-                let shift = #size - bits_written - bits_in_byte;
-                let byte_bits = ((remaining_value >> shift) & mask as #field_type) as u8;
+                while bits_written < #size {
+                    let bits_in_byte = #bits_in_byte;
+                    let mask = ((1 << bits_in_byte) - 1) as u8;
+                    let shift = #size - bits_written - bits_in_byte;
+                    let byte_bits = ((remaining_value >> shift) & mask as #field_type) as u8;
 
-                if bytes.len() <= byte_idx {
-                    bytes.resize(byte_idx + 1, 0);
+                    if bytes.len() <= byte_idx {
+                        bytes.resize(byte_idx + 1, 0);
+                    }
+                    bytes[byte_idx] |= byte_bits << (8 - current_bit_offset - bits_in_byte);
+
+                    bits_written += bits_in_byte;
+                    byte_idx += 1;
+                    current_bit_offset = 0;
                 }
-                bytes[byte_idx] |= byte_bits << (8 - current_bit_offset - bits_in_byte);
+            },
+            crate::consts::Endianness::Little => quote! {
+                let mut remaining_value = value;
+                let mut bits_written = 0;
+                let mut byte_idx = byte_start;
+                let mut current_bit_offset = bit_offset;
 
-                bits_written += bits_in_byte;
-                byte_idx += 1;
-                current_bit_offset = 0;
-            }
+                while bits_written < #size {
+                    let bits_in_byte = #bits_in_byte;
+                    let mask = ((1 << bits_in_byte) - 1) as #field_type;
+                    let byte_bits = (remaining_value & mask) as u8;
+
+                    if bytes.len() <= byte_idx {
+                        bytes.resize(byte_idx + 1, 0);
+                    }
+                    bytes[byte_idx] |= byte_bits << current_bit_offset;
+
+                    remaining_value >>= bits_in_byte;
+                    bits_written += bits_in_byte;
+                    byte_idx += 1;
+                    current_bit_offset = 0;
+                }
+            },
         }
     }
 
@@ -591,11 +643,38 @@ pub mod pure_helpers {
                 {
                     let byte_idx = _bit_sum / 8;
                     let bit_offset = _bit_sum % 8;
-                    let mask = #mask as u8;
-                    if bytes.len() <= byte_idx {
-                        bytes.resize(byte_idx + 1, 0);
+
+                    // Check if field spans multiple bytes
+                    if bit_offset + #size > 8 {
+                        // Field spans multiple bytes - use multi-byte approach for LE
+                        let mut remaining_value = #field_name as u16; // Use larger type for multi-byte
+                        let mut bits_written = 0;
+                        let mut current_byte_idx = byte_idx;
+                        let mut current_bit_offset = bit_offset;
+
+                        while bits_written < #size {
+                            let bits_in_byte = core::cmp::min(8 - current_bit_offset, #size - bits_written);
+                            let bit_mask = ((1 << bits_in_byte) - 1) as u16;
+                            let byte_bits = (remaining_value & bit_mask) as u8;
+
+                            if bytes.len() <= current_byte_idx {
+                                bytes.resize(current_byte_idx + 1, 0);
+                            }
+                            bytes[current_byte_idx] |= byte_bits << current_bit_offset;
+
+                            remaining_value >>= bits_in_byte;
+                            bits_written += bits_in_byte;
+                            current_byte_idx += 1;
+                            current_bit_offset = 0;
+                        }
+                    } else {
+                        // Field fits in single byte
+                        let mask = #mask as u8;
+                        if bytes.len() <= byte_idx {
+                            bytes.resize(byte_idx + 1, 0);
+                        }
+                        bytes[byte_idx] |= ((#field_name as u8) & mask) << bit_offset;
                     }
-                    bytes[byte_idx] |= ((#field_name as u8) & mask) << bit_offset;
                 }
                 _bit_sum += #size;
             },

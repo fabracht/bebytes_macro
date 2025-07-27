@@ -1,0 +1,44 @@
+# Cargo Mutants Configuration
+
+# Exclude demo/example binaries from mutation testing
+exclude_globs = ["bebytes/bin/**"]
+
+# Focus on library source code only
+examine_globs = ["bebytes/src/**", "bebytes_derive/src/**"]
+
+# Skip certain function calls that are not meaningful to mutate
+skip_calls = [
+    # Skip panic and unreachable calls
+    "panic",
+    "unreachable",
+    # Skip debug/display formatting
+    "Debug::fmt",
+    "Display::fmt",
+    # Skip error creation as the message content doesn't affect behavior
+    "Error::new_spanned",
+    "syn::Error::new",
+    # Skip logging and tracing
+    "trace",
+    "debug",
+    "info",
+    "warn",
+    "error",
+]
+
+# Keep default skip patterns
+skip_calls_defaults = true
+
+# Timeout configuration for mutation tests
+timeout_multiplier = 2.0
+
+# Exclude tests themselves from mutation testing
+exclude_re = [
+    "#\\[cfg\\(test\\)\\]",
+    "#\\[test\\]",
+    "mod tests",
+]
+
+# Additional patterns to exclude for procedural macros
+# These are often false positives in token generation code
+# Note: Adding more specific patterns to the existing exclude_re array above
+# would be the way to exclude these, but cargo-mutants regex support is limited

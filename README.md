@@ -472,6 +472,14 @@ ReInnocentStruct: (InnocentStruct { innocent: 1, mid_tail: WithTailingVec { tail
     }
 ```
 
+## Documentation
+
+For detailed technical documentation about the macro implementation:
+
+- [Data Flow Documentation](docs/data-flow.md) - Comprehensive diagrams showing how data flows through the BeBytes derive macro
+- [Code Generation Examples](docs/code-generation.md) - Concrete examples of generated code for various field types
+- [Mutation Testing](docs/mutation-testing.md) - Information about the project's mutation testing strategy
+
 ## Contribute
 
 I'm doing this for fun, but all help is appreciated.
