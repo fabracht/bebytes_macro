@@ -187,7 +187,6 @@ Enums can be used with the `#[bits(N)]` attribute where you specify the exact nu
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
-#[repr(u8)]
 enum Status {
     Idle = 0,
     Running = 1,
@@ -223,7 +222,7 @@ To determine the number of bits needed for an enum:
 #### Requirements
 
 1. **Explicit Bit Width**: You must specify the exact number of bits with `#[bits(N)]`
-2. **`#[repr(u8)]`**: Recommended for compile-time validation that discriminants fit in u8 range
+2. **u8 Range**: All discriminant values must be within 0-255 range (automatically validated by BeBytes)
 3. **Manual Calculation**: Calculate the required bits based on your enum variant count
 
 ### Flag Enums
@@ -233,7 +232,6 @@ BeBytes now supports flag-style enums marked with `#[bebytes(flags)]`. These enu
 ```rust
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 #[bebytes(flags)]
-#[repr(u8)]
 enum Permissions {
     None = 0,
     Read = 1,
@@ -263,7 +261,7 @@ assert_eq!(Permissions::from_bits(16), None);    // Invalid: 16 is not a valid f
 
 1. **Power of 2 Values**: All enum variants must have discriminant values that are powers of 2 (1, 2, 4, 8, 16, etc.)
 2. **Zero is Allowed**: A variant with value 0 is allowed for "None" or empty flags
-3. **#[repr(u8)]**: Flag enums must use `#[repr(u8)]` representation
+3. **u8 Range**: All discriminant values must be within 0-255 range (automatically validated by BeBytes)
 
 #### Generated Methods
 
@@ -278,7 +276,6 @@ For flag enums, the following additional methods are generated:
 ```rust
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 #[bebytes(flags)]
-#[repr(u8)]
 enum ProtocolFlags {
     Encrypted = 1,
     Compressed = 2,
