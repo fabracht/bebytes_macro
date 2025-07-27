@@ -141,7 +141,7 @@ fn test_bit_merge_patterns() {
 
                     let bytes = test.to_be_bytes();
                     let expected = (a << 6) | (b << 4) | (c << 2) | d;
-                    assert_eq!(bytes[0], expected as u8);
+                    assert_eq!(bytes[0], expected);
 
                     let (parsed, _) = MergePatternTest::try_from_be_bytes(&bytes).unwrap();
                     assert_eq!(parsed.two1, a);

@@ -189,8 +189,7 @@ mod tests {
             let size = get_primitive_type_size(&ty).unwrap();
             assert_eq!(
                 size, expected_size,
-                "Type {} should have size {}",
-                type_str, expected_size
+                "Type {type_str} should have size {expected_size}"
             );
         }
     }
@@ -225,9 +224,9 @@ mod tests {
             let ident = syn::Ident::new(prim, proc_macro2::Span::call_site());
             let ty: syn::Type = parse_quote!(#ident);
             if let syn::Type::Path(tp) = &ty {
-                assert!(is_primitive_type(tp), "{} should be primitive", prim);
+                assert!(is_primitive_type(tp), "{prim} should be primitive");
             } else {
-                panic!("Expected Type::Path for {}", prim);
+                panic!("Expected Type::Path for {prim}");
             }
         }
 
@@ -244,7 +243,7 @@ mod tests {
                 assert!(!is_primitive_type(tp), "Should not be primitive");
             } else {
                 // Non-path types are definitely not primitives
-                assert!(true, "Non-path type is not primitive");
+                // Non-path type is not primitive
             }
         }
     }
@@ -262,11 +261,10 @@ mod tests {
             if let syn::Type::Path(tp) = &ty {
                 assert!(
                     is_supported_primitive_type(tp),
-                    "{} should be supported",
-                    prim
+                    "{prim} should be supported"
                 );
             } else {
-                panic!("Expected Type::Path for {}", prim);
+                panic!("Expected Type::Path for {prim}");
             }
         }
 
@@ -286,7 +284,7 @@ mod tests {
                 assert!(!is_supported_primitive_type(tp), "Should not be supported");
             } else {
                 // Non-path types are definitely not supported
-                assert!(true, "Non-path type is not supported");
+                // Non-path type is not supported
             }
         }
     }
@@ -396,8 +394,7 @@ mod tests {
             let ident = syn::Ident::new(ty_str, proc_macro2::Span::call_site());
             assert!(
                 is_primitive_identity(&ident),
-                "{} should be a primitive",
-                ty_str
+                "{ty_str} should be a primitive"
             );
         }
 
@@ -407,8 +404,7 @@ mod tests {
             let ident = syn::Ident::new(ty_str, proc_macro2::Span::call_site());
             assert!(
                 !is_primitive_identity(&ident),
-                "{} should not be a primitive",
-                ty_str
+                "{ty_str} should not be a primitive"
             );
         }
     }

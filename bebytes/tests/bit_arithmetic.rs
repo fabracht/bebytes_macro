@@ -327,8 +327,8 @@ fn test_array_field_bit_calculation() {
 
     // Verify the data starts at byte 1
     assert_eq!(bytes[0], 0xFF); // nibble + another
-    for i in 1..11 {
-        assert_eq!(bytes[i], 0xAA);
+    for &byte in &bytes[1..11] {
+        assert_eq!(byte, 0xAA);
     }
 }
 

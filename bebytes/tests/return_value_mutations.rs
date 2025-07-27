@@ -78,7 +78,7 @@ fn test_determine_field_type_returns_correct_type() {
 
     // This struct wouldn't compile correctly if determine_field_type returned None
     // The fact it compiles and has the right size proves the function works
-    let _expected_size = 2 + 0 + 5 + 10 + 8; // count + vec(empty) + option + array + u64
+    let _expected_size = 2 + 5 + 10 + 8; // count + option + array + u64
 }
 
 #[test]
