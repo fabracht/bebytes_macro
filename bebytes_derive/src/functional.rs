@@ -16,6 +16,7 @@ pub struct ProcessingContext {
     pub endianness: crate::consts::Endianness,
     pub bit_position: usize,
     pub is_last_field: bool,
+    pub has_auto_sized_field: bool,
 }
 
 impl ProcessingContext {
@@ -24,6 +25,7 @@ impl ProcessingContext {
             endianness,
             bit_position: 0,
             is_last_field: false,
+            has_auto_sized_field: false,
         }
     }
 
@@ -34,6 +36,11 @@ impl ProcessingContext {
 
     pub fn with_last_field(mut self, is_last_field: bool) -> Self {
         self.is_last_field = is_last_field;
+        self
+    }
+
+    pub fn with_auto_sized_field(mut self, has_auto_sized_field: bool) -> Self {
+        self.has_auto_sized_field = has_auto_sized_field;
         self
     }
 }

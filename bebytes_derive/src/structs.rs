@@ -118,6 +118,7 @@ pub fn handle_struct(context: &mut StructContext) {
 
     // Track current bit position for auto-calculation
     let mut current_bit_position = 0;
+    let mut has_seen_auto_sized = false;
 
     for (idx, field) in context.fields.named.iter().enumerate() {
         let is_last = idx == context.fields.named.len() - 1;
@@ -133,9 +134,15 @@ pub fn handle_struct(context: &mut StructContext) {
         let field_processing_ctx = processing_ctx
             .clone()
             .with_bit_position(current_bit_position)
-            .with_last_field(is_last);
+            .with_last_field(is_last)
+            .with_auto_sized_field(has_seen_auto_sized);
 
         if let Some(field_type) = determine_field_type(&field_context, &field.attrs, &mut errors) {
+            // Check if this is an auto-sized field
+            if matches!(field_type, FieldType::AutoBitsField) {
+                has_seen_auto_sized = true;
+            }
+            
             let result = process_field_type(
                 &field_context,
                 field_type,
@@ -253,6 +260,7 @@ fn process_bits_field_functional(
         .map_err(|_| syn::Error::new(field_type.span(), "Type not supported"))?;
 
     let mask: u128 = (1 << size) - 1;
+    let has_auto_sized = processing_ctx.has_auto_sized_field;
 
     // Use multi-byte path if:
     // 1. The underlying type is multi-byte (number_length > 1), OR
@@ -285,7 +293,8 @@ fn process_bits_field_functional(
                 let bit_offset = _bit_sum % 8;
 
                 // Check if we can use compile-time optimization
-                if bit_offset == 0 && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
+                // Only use compile-time position if we haven't seen auto-sized fields
+                if bit_offset == 0 && !#has_auto_sized && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
                     // Compile-time aligned case: direct conversion without bit manipulation
                     #aligned_parsing
                 } else if bit_offset == 0 && #size == (#number_length * 8) {
@@ -322,7 +331,8 @@ fn process_bits_field_functional(
             let byte_start = _bit_sum / 8;
             let bit_offset = _bit_sum % 8;
             // Check if we can use compile-time optimization
-            if bit_offset == 0 && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
+            // Only use compile-time position if we haven't seen auto-sized fields
+            if bit_offset == 0 && !#has_auto_sized && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
                 // Compile-time aligned case: direct byte insertion
                 #aligned_writing
             } else if bit_offset == 0 && #size == (#number_length * 8) {
@@ -373,6 +383,10 @@ fn process_auto_bits_field_functional(
     processing_ctx: &crate::functional::ProcessingContext,
     _current_bit_position: &mut usize,
 ) -> crate::functional::FieldProcessResult {
+    // NOTE: We cannot update _current_bit_position here because the size
+    // is determined by <Type>::__BEBYTES_MIN_BITS which is not available
+    // at macro expansion time. This is why has_auto_sized_field flag is
+    // used to disable compile-time position optimizations for subsequent fields.
     let field_name = &context.field_name;
     let field_type = context.field_type;
 
