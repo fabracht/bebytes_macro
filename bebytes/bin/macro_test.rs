@@ -101,10 +101,10 @@ fn demo_endianness() {
     println!("LE bytes: {}", print_bytes(&le_bytes));
 
     let (decoded_be, _) = U16::try_from_be_bytes(&be_bytes).unwrap();
-    let (decoded_le, _) = U16::try_from_le_bytes(&le_bytes).unwrap();
+    let (decoded_little_endian, _) = U16::try_from_le_bytes(&le_bytes).unwrap();
 
     compare_values("U16 (BE)", &original, &decoded_be, &be_bytes);
-    compare_values("U16 (LE)", &original, &decoded_le, &le_bytes);
+    compare_values("U16 (LE)", &original, &decoded_little_endian, &le_bytes);
 }
 
 fn demo_bit_fields() {
@@ -827,12 +827,13 @@ struct ComplexProtocolPacket {
 #[derive(BeBytes, Debug, PartialEq, Clone)]
 struct Segment {
     #[bits(16)]
-    segment_id: u16,
+    id: u16,
     #[bits(16)]
-    segment_size: u16,
+    length: u16,
     data: [u8; 4],
 }
 
+#[allow(clippy::too_many_lines)]
 fn demo_nested_field_access() {
     print_section("Nested Field Access");
 
@@ -892,7 +893,7 @@ fn demo_nested_field_access() {
     let complex_packet = ComplexProtocolPacket {
         container: Container {
             header: ExtendedHeader {
-                magic_number: 0xDEADBEEF,
+                magic_number: 0xDEAD_BEEF,
                 meta: MetaInfo {
                     protocol_version: 2,
                     total_segments: 3,
@@ -902,22 +903,22 @@ fn demo_nested_field_access() {
         },
         segments: vec![
             Segment {
-                segment_id: 1,
-                segment_size: 100,
+                id: 1,
+                length: 100,
                 data: [0x11, 0x22, 0x33, 0x44],
             },
             Segment {
-                segment_id: 2,
-                segment_size: 200,
+                id: 2,
+                length: 200,
                 data: [0x55, 0x66, 0x77, 0x88],
             },
             Segment {
-                segment_id: 3,
-                segment_size: 300,
+                id: 3,
+                length: 300,
                 data: [0x99, 0xAA, 0xBB, 0xCC],
             },
         ],
-        trailer: 0xCAFEBABE,
+        trailer: 0xCAFE_BABE,
     };
 
     let bytes = complex_packet.to_be_bytes();
@@ -966,11 +967,11 @@ fn demo_nested_field_access() {
         println!(
             "  [{}] id={}, size={}            |   [{}] id={}, size={}",
             i,
-            complex_packet.segments[i].segment_id,
-            complex_packet.segments[i].segment_size,
+            complex_packet.segments[i].id,
+            complex_packet.segments[i].length,
             i,
-            decoded.segments[i].segment_id,
-            decoded.segments[i].segment_size
+            decoded.segments[i].id,
+            decoded.segments[i].length
         );
     }
     println!(

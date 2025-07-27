@@ -1,4 +1,8 @@
 #![allow(clippy::assign_op_pattern)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::cast_possible_wrap)]
 
 use bebytes::BeBytes;
 use std::time::Instant;

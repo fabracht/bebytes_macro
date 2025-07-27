@@ -208,8 +208,18 @@ pub mod pure_helpers {
     /// Create byte indices tokens
     pub fn create_byte_indices(field_size: usize) -> TokenStream {
         quote! {
+            // Ensure byte alignment when transitioning from bitfields
+            if _bit_sum % 8 != 0 {
+                _bit_sum = ((_bit_sum + 7) / 8) * 8;
+            }
             byte_index = _bit_sum / 8;
             end_byte_index = byte_index + #field_size;
+            if end_byte_index > bytes.len() {
+                return Err(::bebytes::BeBytesError::InsufficientData {
+                    expected: #field_size,
+                    actual: bytes.len().saturating_sub(byte_index),
+                });
+            }
             _bit_sum += 8 * #field_size;
         }
     }
@@ -368,11 +378,11 @@ pub mod pure_helpers {
         }
     }
 
-    /// Calculate bits in byte helper - returns min(8 - bit_offset, total_bits - bits_processed)
+    /// Calculate bits in byte helper - returns min(8 - `bit_offset`, `total_bits` - `bits_processed`)
     pub fn create_bits_in_byte_calc(
-        bit_offset_expr: TokenStream,
-        total_bits: TokenStream,
-        bits_processed: TokenStream,
+        bit_offset_expr: &TokenStream,
+        total_bits: &TokenStream,
+        bits_processed: &TokenStream,
     ) -> TokenStream {
         quote! {
             core::cmp::min(8 - #bit_offset_expr, #total_bits - #bits_processed)
@@ -394,16 +404,13 @@ pub mod pure_helpers {
     }
 
     /// Generate unaligned multi-byte bit field parsing code
-    pub fn create_unaligned_multibyte_parsing(
-        field_type: &syn::Type,
-        size: usize,
-    ) -> TokenStream {
+    pub fn create_unaligned_multibyte_parsing(field_type: &syn::Type, size: usize) -> TokenStream {
         let bits_in_byte = create_bits_in_byte_calc(
-            quote!(current_bit_offset),
-            quote!(#size),
-            quote!(bits_read)
+            &quote!(current_bit_offset),
+            &quote!(#size),
+            &quote!(bits_read),
         );
-        
+
         quote! {
             let mut result = 0 as #field_type;
             let mut bits_read = 0;
@@ -440,16 +447,13 @@ pub mod pure_helpers {
     }
 
     /// Generate unaligned multi-byte bit field writing code
-    pub fn create_unaligned_multibyte_writing(
-        field_type: &syn::Type,
-        size: usize,
-    ) -> TokenStream {
+    pub fn create_unaligned_multibyte_writing(field_type: &syn::Type, size: usize) -> TokenStream {
         let bits_in_byte = create_bits_in_byte_calc(
-            quote!(current_bit_offset),
-            quote!(#size),
-            quote!(bits_written)
+            &quote!(current_bit_offset),
+            &quote!(#size),
+            &quote!(bits_written),
         );
-        
+
         quote! {
             let mut remaining_value = value;
             let mut bits_written = 0;
@@ -482,20 +486,57 @@ pub mod pure_helpers {
         mask: u128,
         endianness: crate::consts::Endianness,
     ) -> TokenStream {
-        let shift = match endianness {
-            crate::consts::Endianness::Big => quote! { 8 - bit_offset - #size },
-            crate::consts::Endianness::Little => quote! { bit_offset },
-        };
+        match endianness {
+            crate::consts::Endianness::Big => quote! {
+                let #field_name = {
+                    let byte_idx = _bit_sum / 8;
+                    let bit_offset = _bit_sum % 8;
 
-        quote! {
-            let #field_name = {
-                let byte_idx = _bit_sum / 8;
-                let bit_offset = _bit_sum % 8;
-                let mask = #mask as #field_type;
-                let byte_val = bytes[byte_idx] as #field_type;
-                (byte_val >> (#shift)) & mask
-            };
-            _bit_sum += #size;
+                    // Check if field spans two bytes
+                    if bit_offset + #size > 8 {
+                        // Field spans two bytes
+                        let mut result = 0 as #field_type;
+                        let mut bits_read = 0;
+                        let mut current_byte_idx = byte_idx;
+                        let mut current_bit_offset = bit_offset;
+
+                        while bits_read < #size {
+                            if current_byte_idx >= bytes.len() {
+                                return Err(::bebytes::BeBytesError::InsufficientData {
+                                    expected: current_byte_idx + 1,
+                                    actual: bytes.len(),
+                                });
+                            }
+
+                            let bits_in_byte = core::cmp::min(8 - current_bit_offset, #size - bits_read);
+                            let byte_val = bytes[current_byte_idx] as #field_type;
+                            let shifted = (byte_val >> (8 - current_bit_offset - bits_in_byte)) & ((1 << bits_in_byte) - 1);
+                            result = (result << bits_in_byte) | shifted;
+
+                            bits_read += bits_in_byte;
+                            current_byte_idx += 1;
+                            current_bit_offset = 0;
+                        }
+                        result
+                    } else {
+                        // Field fits in single byte
+                        let mask = #mask as #field_type;
+                        let byte_val = bytes[byte_idx] as #field_type;
+                        (byte_val >> (8 - bit_offset - #size)) & mask
+                    }
+                };
+                _bit_sum += #size;
+            },
+            crate::consts::Endianness::Little => quote! {
+                let #field_name = {
+                    let byte_idx = _bit_sum / 8;
+                    let bit_offset = _bit_sum % 8;
+                    let mask = #mask as #field_type;
+                    let byte_val = bytes[byte_idx] as #field_type;
+                    (byte_val >> bit_offset) & mask
+                };
+                _bit_sum += #size;
+            },
         }
     }
 
@@ -506,26 +547,62 @@ pub mod pure_helpers {
         mask: u128,
         endianness: crate::consts::Endianness,
     ) -> TokenStream {
-        let shift = match endianness {
-            crate::consts::Endianness::Big => quote! { 8 - bit_offset - #size },
-            crate::consts::Endianness::Little => quote! { bit_offset },
-        };
+        match endianness {
+            crate::consts::Endianness::Big => quote! {
+                {
+                    let byte_idx = _bit_sum / 8;
+                    let bit_offset = _bit_sum % 8;
 
-        quote! {
-            {
-                let byte_idx = _bit_sum / 8;
-                let bit_offset = _bit_sum % 8;
-                let mask = #mask as u8;
-                if bytes.len() <= byte_idx {
-                    bytes.resize(byte_idx + 1, 0);
+                    // Check if field spans two bytes
+                    if bit_offset + #size > 8 {
+                        // Field spans two bytes - use multi-byte approach
+                        let mut remaining_value = #field_name as u8;
+                        let mut bits_written = 0;
+                        let mut current_byte_idx = byte_idx;
+                        let mut current_bit_offset = bit_offset;
+
+                        while bits_written < #size {
+                            let bits_in_byte = core::cmp::min(8 - current_bit_offset, #size - bits_written);
+                            let bit_mask = ((1 << bits_in_byte) - 1) as u8;
+                            let shift = #size - bits_written - bits_in_byte;
+                            let byte_bits = ((remaining_value >> shift) & bit_mask) as u8;
+
+                            if bytes.len() <= current_byte_idx {
+                                bytes.resize(current_byte_idx + 1, 0);
+                            }
+                            bytes[current_byte_idx] |= byte_bits << (8 - current_bit_offset - bits_in_byte);
+
+                            bits_written += bits_in_byte;
+                            current_byte_idx += 1;
+                            current_bit_offset = 0;
+                        }
+                    } else {
+                        // Field fits in single byte
+                        let mask = #mask as u8;
+                        if bytes.len() <= byte_idx {
+                            bytes.resize(byte_idx + 1, 0);
+                        }
+                        bytes[byte_idx] |= ((#field_name as u8) & mask) << (8 - bit_offset - #size);
+                    }
                 }
-                bytes[byte_idx] |= ((#field_name as u8) & mask) << (#shift);
-            }
-            _bit_sum += #size;
+                _bit_sum += #size;
+            },
+            crate::consts::Endianness::Little => quote! {
+                {
+                    let byte_idx = _bit_sum / 8;
+                    let bit_offset = _bit_sum % 8;
+                    let mask = #mask as u8;
+                    if bytes.len() <= byte_idx {
+                        bytes.resize(byte_idx + 1, 0);
+                    }
+                    bytes[byte_idx] |= ((#field_name as u8) & mask) << bit_offset;
+                }
+                _bit_sum += #size;
+            },
         }
     }
 
-    /// Generate auto-bits single byte parsing (for enums with __BEBYTES_MIN_BITS)
+    /// Generate auto-bits single byte parsing (for enums with `__BEBYTES_MIN_BITS`)
     pub fn create_auto_bits_single_byte_parsing(
         field_type: &syn::Type,
         endianness: crate::consts::Endianness,
@@ -538,7 +615,10 @@ pub mod pure_helpers {
         quote! {
             {
                 if byte_idx >= bytes.len() {
-                    return Err("Not enough bytes".into());
+                    return Err(::bebytes::BeBytesError::InsufficientData {
+                        expected: byte_idx + 1,
+                        actual: bytes.len(),
+                    });
                 }
 
                 let bits = {
@@ -562,12 +642,12 @@ pub mod pure_helpers {
             crate::consts::Endianness::Big => (
                 quote! { first_byte & ((1 << bits_from_first) - 1) },
                 quote! { second_byte >> (8 - bits_from_second) },
-                quote! { (first_bits << bits_from_second) | second_bits }
+                quote! { (first_bits << bits_from_second) | second_bits },
             ),
             crate::consts::Endianness::Little => (
                 quote! { (first_byte >> bit_offset) & ((1 << bits_from_first) - 1) },
                 quote! { second_byte & ((1 << bits_from_second) - 1) },
-                quote! { first_bits | (second_bits << bits_from_first) }
+                quote! { first_bits | (second_bits << bits_from_first) },
             ),
         };
 
@@ -577,7 +657,10 @@ pub mod pure_helpers {
                 let bits_from_second = SIZE - bits_from_first;
 
                 if byte_idx + 1 >= bytes.len() {
-                    return Err("Not enough bytes".into());
+                    return Err(::bebytes::BeBytesError::InsufficientData {
+                        expected: byte_idx + 1,
+                        actual: bytes.len(),
+                    });
                 }
 
                 let first_byte = bytes[byte_idx];
@@ -594,7 +677,7 @@ pub mod pure_helpers {
         }
     }
 
-    /// Generate auto-bits single byte writing (for enums with __BEBYTES_MIN_BITS)
+    /// Generate auto-bits single byte writing (for enums with `__BEBYTES_MIN_BITS`)
     pub fn create_auto_bits_single_byte_writing(
         field_name: &Ident,
         size_const: &TokenStream,
@@ -628,11 +711,11 @@ pub mod pure_helpers {
         let (first_byte_expr, second_byte_expr) = match endianness {
             crate::consts::Endianness::Big => (
                 quote! { (bits >> bits_in_second) & first_mask },
-                quote! { (bits & second_mask) << (8 - bits_in_second) }
+                quote! { (bits & second_mask) << (8 - bits_in_second) },
             ),
             crate::consts::Endianness::Little => (
                 quote! { (bits & first_mask) << bit_offset },
-                quote! { (bits >> bits_in_first) & second_mask }
+                quote! { (bits >> bits_in_first) & second_mask },
             ),
         };
 

@@ -254,23 +254,31 @@ fn process_bits_field_functional(
 
     let mask: u128 = (1 << size) - 1;
 
-    let (parsing, writing) = if number_length > 1 {
+    // Use multi-byte path if:
+    // 1. The underlying type is multi-byte (number_length > 1), OR
+    // 2. The field is too large to ever fit in a single byte regardless of position (size > 8)
+    // Note: Fields with size <= 8 can still span bytes at runtime, but we handle this differently
+    let (parsing, writing) = if number_length > 1 || size > 8 {
         // Optimized multi-byte bit field handling
         let from_bytes_method = utils::get_from_bytes_method(processing_ctx.endianness);
         let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
 
         let aligned_parsing = crate::functional::pure_helpers::create_aligned_multibyte_parsing(
-            field_type, &from_bytes_method, number_length
+            field_type,
+            &from_bytes_method,
+            number_length,
         );
-        let unaligned_parsing = crate::functional::pure_helpers::create_unaligned_multibyte_parsing(
-            field_type, size
-        );
+        let unaligned_parsing =
+            crate::functional::pure_helpers::create_unaligned_multibyte_parsing(field_type, size);
 
         let parsing = quote! {
             let #field_name = {
                 let byte_start = _bit_sum / 8;
                 if byte_start + #number_length > bytes.len() {
-                    return Err("Not enough bytes".into());
+                    return Err(::bebytes::BeBytesError::InsufficientData {
+                        expected: #number_length,
+                        actual: bytes.len() - byte_start,
+                    });
                 }
 
                 // Optimized: Use compile-time bit position when available
@@ -292,11 +300,12 @@ fn process_bits_field_functional(
         };
 
         let aligned_writing = crate::functional::pure_helpers::create_aligned_multibyte_writing(
-            field_type, &to_bytes_method, number_length
+            field_type,
+            &to_bytes_method,
+            number_length,
         );
-        let unaligned_writing = crate::functional::pure_helpers::create_unaligned_multibyte_writing(
-            field_type, size
-        );
+        let unaligned_writing =
+            crate::functional::pure_helpers::create_unaligned_multibyte_writing(field_type, size);
 
         let writing = quote! {
             if #field_name > #mask as #field_type {
@@ -332,11 +341,18 @@ fn process_bits_field_functional(
         let mask: u128 = (1 << size) - 1;
 
         let parsing = crate::functional::pure_helpers::create_single_byte_bit_parsing(
-            field_name, field_type, size, mask, processing_ctx.endianness
+            field_name,
+            field_type,
+            size,
+            mask,
+            processing_ctx.endianness,
         );
 
         let writing = crate::functional::pure_helpers::create_single_byte_bit_writing(
-            field_name, size, mask, processing_ctx.endianness
+            field_name,
+            size,
+            mask,
+            processing_ctx.endianness,
         );
 
         (parsing, writing)
@@ -355,7 +371,7 @@ fn process_bits_field_functional(
 fn process_auto_bits_field_functional(
     context: &FieldContext,
     processing_ctx: &crate::functional::ProcessingContext,
-    current_bit_position: &mut usize,
+    _current_bit_position: &mut usize,
 ) -> crate::functional::FieldProcessResult {
     let field_name = &context.field_name;
     let field_type = context.field_type;
@@ -367,10 +383,12 @@ fn process_auto_bits_field_functional(
 
     // For parsing, we need to extract the bits and convert from discriminant
     let single_byte_parsing = crate::functional::pure_helpers::create_auto_bits_single_byte_parsing(
-        field_type, processing_ctx.endianness
+        field_type,
+        processing_ctx.endianness,
     );
     let two_byte_parsing = crate::functional::pure_helpers::create_auto_bits_two_byte_parsing(
-        field_type, processing_ctx.endianness
+        field_type,
+        processing_ctx.endianness,
     );
 
     let parsing = quote! {
@@ -383,7 +401,7 @@ fn process_auto_bits_field_functional(
                 // Fits within a single byte
                 #single_byte_parsing
             } else {
-                // Spans two bytes  
+                // Spans two bytes
                 #two_byte_parsing
             }
         };
@@ -392,10 +410,14 @@ fn process_auto_bits_field_functional(
 
     // For writing, convert enum to its discriminant value
     let single_byte_writing = crate::functional::pure_helpers::create_auto_bits_single_byte_writing(
-        field_name, &size_const, processing_ctx.endianness
+        field_name,
+        &size_const,
+        processing_ctx.endianness,
     );
     let two_byte_writing = crate::functional::pure_helpers::create_auto_bits_two_byte_writing(
-        field_name, &size_const, processing_ctx.endianness
+        field_name,
+        &size_const,
+        processing_ctx.endianness,
     );
 
     let writing = quote! {
@@ -414,9 +436,8 @@ fn process_auto_bits_field_functional(
         }
     };
 
-    // Update compile-time bit position (we don't know the exact size at compile time)
-    // This is a limitation - we'll need to handle this differently
-    *current_bit_position += 8; // Conservative estimate
+    // Don't update compile-time bit position for auto-sized fields
+    // The actual size is only known at runtime via the __BEBYTES_MIN_BITS const
 
     // No limit check needed - enum values are checked by type system
     let limit_check = quote! {};
@@ -533,14 +554,14 @@ fn generate_primitive_vector_tokens(
             Ok((
                 quote! { bit_sum = 4096 * 8; },
                 quote! {
-                    let vec_length = #field_access_parse as usize;
+                    let vec_size = #field_access_parse as usize;
                     byte_index = _bit_sum / 8;
-                    let end_index = byte_index + vec_length;
+                    let end_index = byte_index + vec_size;
                     if end_index > bytes.len() {
-                        panic!("Not enough bytes to parse a vector of size {}", vec_length);
+                        panic!("Not enough bytes to parse a vector of size {} (field: {}, byte_index: {}, bytes.len(): {})", vec_size, stringify!(#field_name), byte_index, bytes.len());
                     }
                     let #field_name = Vec::from(&bytes[byte_index..end_index]);
-                    _bit_sum += vec_length * 8;
+                    _bit_sum += vec_size * 8;
                 },
                 quote! {
                     bytes.reserve(#field_name.len());
@@ -552,9 +573,9 @@ fn generate_primitive_vector_tokens(
         (Some(s), None) => Ok((
             crate::functional::pure_helpers::create_byte_bit_sum(s),
             quote! {
-                let vec_length = #s as usize;
+                let vec_size = #s as usize;
                 byte_index = _bit_sum / 8;
-                let end_index = byte_index + vec_length;
+                let end_index = byte_index + vec_size;
                 let #field_name = Vec::from(&bytes[byte_index..end_index]);
                 _bit_sum += #s * 8;
             },
@@ -633,9 +654,9 @@ fn generate_custom_vector_parsing(
         let field_access_parse =
             crate::functional::pure_helpers::generate_field_access_path(&ident_path);
         Ok(quote! {
-            let vec_length = #field_access_parse as usize;
+            let vec_size = #field_access_parse as usize;
             let mut bytes_consumed = 0;
-            for _ in 0..vec_length {
+            for _ in 0..vec_size {
                 if _bit_sum / 8 + bytes_consumed >= bytes.len() {
                     break;
                 }

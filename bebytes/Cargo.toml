@@ -24,6 +24,38 @@ bebytes_derive = "1.5.0"
 trybuild = { version = "1.0.102", features = ["diff"] }
 test-case = "3.3.1"
 
+[[test]]
+name = "core"
+path = "tests/core.rs"
+
+[[test]]
+name = "bitfields"
+path = "tests/bitfields.rs"
+
+[[test]]
+name = "enums"
+path = "tests/enums.rs"
+
+[[test]]
+name = "vectors"
+path = "tests/vectors.rs"
+
+[[test]]
+name = "errors"
+path = "tests/errors.rs"
+
+[[test]]
+name = "no_std"
+path = "tests/no_std.rs"
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+
+[[test]]
+name = "compile_fail"
+path = "tests/compile_fail.rs"
+
 [features]
 default = ["std"]
 std = []
