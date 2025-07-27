@@ -3,7 +3,6 @@ use bebytes::BeBytes;
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 #[cfg(not(feature = "std"))]
-use core::fmt::Write;
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 struct U16 {
