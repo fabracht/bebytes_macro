@@ -423,6 +423,49 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     None
                                 }
                             }
+
+                            /// Decompose a u8 value into individual flag variants
+                            #[cfg(feature = "std")]
+                            pub fn decompose(bits: u8) -> std::vec::Vec<Self> {
+                                let mut flags = std::vec::Vec::new();
+                                #(
+                                    if bits & #variant_values == #variant_values && #variant_values != 0 {
+                                        if let Ok(flag) = Self::try_from(#variant_values) {
+                                            flags.push(flag);
+                                        }
+                                    }
+                                )*
+                                flags
+                            }
+
+                            /// Decompose a u8 value into individual flag variants (no_std)
+                            #[cfg(not(feature = "std"))]
+                            pub fn decompose(bits: u8) -> alloc::vec::Vec<Self> {
+                                let mut flags = alloc::vec::Vec::new();
+                                #(
+                                    if bits & #variant_values == #variant_values && #variant_values != 0 {
+                                        if let Ok(flag) = Self::try_from(#variant_values) {
+                                            flags.push(flag);
+                                        }
+                                    }
+                                )*
+                                flags
+                            }
+
+                            /// Iterate over individual flag variants set in a u8 value
+                            pub fn iter_flags(bits: u8) -> impl Iterator<Item = Self> {
+                                [
+                                    #(
+                                        if bits & #variant_values == #variant_values && #variant_values != 0 {
+                                            Self::try_from(#variant_values).ok()
+                                        } else {
+                                            None
+                                        },
+                                    )*
+                                ]
+                                .into_iter()
+                                .flatten()
+                            }
                         }
                     }
                 } else {

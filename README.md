@@ -270,6 +270,8 @@ For flag enums, the following additional methods are generated:
 - **Bitwise Operators**: `BitOr`, `BitAnd`, `BitXor`, `Not` implementations
 - **`contains(self, flag: Self) -> bool`**: Check if a specific flag is set
 - **`from_bits(bits: u8) -> Option<u8>`**: Validate and create a flag combination from raw bits
+- **`decompose(bits: u8) -> Vec<Self>`**: Decompose a u8 value into individual flag variants
+- **`iter_flags(bits: u8) -> impl Iterator<Item = Self>`**: Iterate over individual flag variants set in a u8 value
 
 #### Example: Network Protocol Flags
 
@@ -309,9 +311,25 @@ let packet = NetworkPacket {
 let bytes = packet.to_be_bytes();
 let (decoded, _) = NetworkPacket::try_from_be_bytes(&bytes).unwrap();
 
-// Check individual flags
+// Check individual flags (traditional method)
 let has_encryption = (decoded.flags & ProtocolFlags::Encrypted as u8) != 0;
 let has_compression = (decoded.flags & ProtocolFlags::Compressed as u8) != 0;
+
+// Decompose flags into individual variants (new method)
+let active_flags = ProtocolFlags::decompose(decoded.flags);
+println!("Active flags: {:?}", active_flags);
+// Output: [Encrypted, Authenticated, KeepAlive]
+
+// Iterate over active flags efficiently
+for flag in ProtocolFlags::iter_flags(decoded.flags) {
+    match flag {
+        ProtocolFlags::Encrypted => println!("Packet is encrypted"),
+        ProtocolFlags::Authenticated => println!("Packet is authenticated"),
+        ProtocolFlags::KeepAlive => println!("Keep-alive flag set"),
+        ProtocolFlags::Compressed => println!("Packet is compressed"),
+        ProtocolFlags::Priority => println!("High priority packet"),
+    }
+}
 ```
 
 ## Options
