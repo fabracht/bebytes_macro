@@ -16,7 +16,6 @@ pub struct ProcessingContext {
     pub endianness: crate::consts::Endianness,
     pub bit_position: usize,
     pub is_last_field: bool,
-    pub has_auto_sized_field: bool,
 }
 
 impl ProcessingContext {
@@ -25,7 +24,6 @@ impl ProcessingContext {
             endianness,
             bit_position: 0,
             is_last_field: false,
-            has_auto_sized_field: false,
         }
     }
 
@@ -36,11 +34,6 @@ impl ProcessingContext {
 
     pub fn with_last_field(mut self, is_last_field: bool) -> Self {
         self.is_last_field = is_last_field;
-        self
-    }
-
-    pub fn with_auto_sized_field(mut self, has_auto_sized_field: bool) -> Self {
-        self.has_auto_sized_field = has_auto_sized_field;
         self
     }
 }
@@ -606,145 +599,6 @@ pub mod pure_helpers {
                 }
                 _bit_sum += #size;
             },
-        }
-    }
-
-    /// Generate auto-bits single byte parsing (for enums with `__BEBYTES_MIN_BITS`)
-    pub fn create_auto_bits_single_byte_parsing(
-        field_type: &syn::Type,
-        endianness: crate::consts::Endianness,
-    ) -> TokenStream {
-        let shift = match endianness {
-            crate::consts::Endianness::Big => quote! { 8 - bit_offset - SIZE },
-            crate::consts::Endianness::Little => quote! { bit_offset },
-        };
-
-        quote! {
-            {
-                if byte_idx >= bytes.len() {
-                    return Err(::bebytes::BeBytesError::InsufficientData {
-                        expected: byte_idx + 1,
-                        actual: bytes.len(),
-                    });
-                }
-
-                let bits = {
-                    const MASK: u8 = (1 << SIZE) - 1;
-                    let byte_val = bytes[byte_idx];
-                    (byte_val >> (#shift)) & MASK
-                };
-
-                // Convert from discriminant value to enum
-                #field_type::try_from(bits)?
-            }
-        }
-    }
-
-    /// Generate auto-bits two byte parsing (for enums spanning two bytes)
-    pub fn create_auto_bits_two_byte_parsing(
-        field_type: &syn::Type,
-        endianness: crate::consts::Endianness,
-    ) -> TokenStream {
-        let (first_bits_expr, second_bits_expr, combine_expr) = match endianness {
-            crate::consts::Endianness::Big => (
-                quote! { first_byte & ((1 << bits_from_first) - 1) },
-                quote! { second_byte >> (8 - bits_from_second) },
-                quote! { (first_bits << bits_from_second) | second_bits },
-            ),
-            crate::consts::Endianness::Little => (
-                quote! { (first_byte >> bit_offset) & ((1 << bits_from_first) - 1) },
-                quote! { second_byte & ((1 << bits_from_second) - 1) },
-                quote! { first_bits | (second_bits << bits_from_first) },
-            ),
-        };
-
-        quote! {
-            {
-                let bits_from_first = 8 - bit_offset;
-                let bits_from_second = SIZE - bits_from_first;
-
-                if byte_idx + 1 >= bytes.len() {
-                    return Err(::bebytes::BeBytesError::InsufficientData {
-                        expected: byte_idx + 1,
-                        actual: bytes.len(),
-                    });
-                }
-
-                let first_byte = bytes[byte_idx];
-                let second_byte = bytes[byte_idx + 1];
-
-                let first_bits = #first_bits_expr;
-                let second_bits = #second_bits_expr;
-
-                let bits = #combine_expr;
-
-                // Convert from discriminant value to enum
-                #field_type::try_from(bits)?
-            }
-        }
-    }
-
-    /// Generate auto-bits single byte writing (for enums with `__BEBYTES_MIN_BITS`)
-    pub fn create_auto_bits_single_byte_writing(
-        field_name: &Ident,
-        size_const: &TokenStream,
-        endianness: crate::consts::Endianness,
-    ) -> TokenStream {
-        let shift = match endianness {
-            crate::consts::Endianness::Big => quote! { 8 - bit_offset - SIZE },
-            crate::consts::Endianness::Little => quote! { bit_offset },
-        };
-
-        quote! {
-            // Convert enum to its discriminant value
-            let bits = #field_name as u8;
-
-            const MASK: u8 = (1 << SIZE) - 1;
-
-            if bytes.len() <= byte_idx {
-                bytes.resize(byte_idx + 1, 0);
-            }
-            bytes[byte_idx] |= (bits & MASK) << (#shift);
-            _bit_sum += #size_const;
-        }
-    }
-
-    /// Generate auto-bits two byte writing (for enums spanning two bytes)
-    pub fn create_auto_bits_two_byte_writing(
-        field_name: &Ident,
-        size_const: &TokenStream,
-        endianness: crate::consts::Endianness,
-    ) -> TokenStream {
-        let (first_byte_expr, second_byte_expr) = match endianness {
-            crate::consts::Endianness::Big => (
-                quote! { (bits >> bits_in_second) & first_mask },
-                quote! { (bits & second_mask) << (8 - bits_in_second) },
-            ),
-            crate::consts::Endianness::Little => (
-                quote! { (bits & first_mask) << bit_offset },
-                quote! { (bits >> bits_in_first) & second_mask },
-            ),
-        };
-
-        quote! {
-            // Convert enum to its discriminant value
-            let bits = #field_name as u8;
-
-            let bits_in_first = 8 - bit_offset;
-            let bits_in_second = SIZE - bits_in_first;
-
-            if bytes.len() <= byte_idx + 1 {
-                bytes.resize(byte_idx + 2, 0);
-            }
-
-            // Write to first byte (lower bits of the value)
-            let first_mask = (1 << bits_in_first) - 1;
-            bytes[byte_idx] |= #first_byte_expr;
-
-            // Write to second byte (upper bits of the value)
-            let second_mask = (1 << bits_in_second) - 1;
-            bytes[byte_idx + 1] |= #second_byte_expr;
-            _bit_sum += #size_const;
         }
     }
 }

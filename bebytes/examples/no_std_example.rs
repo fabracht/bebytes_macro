@@ -13,9 +13,9 @@
 
 extern crate alloc;
 use alloc::vec::Vec;
+use bebytes::BeBytes;
 #[cfg(not(feature = "std"))]
 use bebytes::ToOwned;
-use bebytes::BeBytes;
 #[cfg(feature = "std")]
 use std::borrow::ToOwned;
 

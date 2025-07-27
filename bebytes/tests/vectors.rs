@@ -1,5 +1,5 @@
 //! Vector handling tests for BeBytes
-//! 
+//!
 //! This module tests:
 //! - Fixed size vectors with #[With(size(N))]
 //! - Dynamic size vectors with #[FromField(field_name)]
@@ -99,7 +99,7 @@ mod dynamic_size_vectors {
         };
 
         let bytes = packet.to_be_bytes();
-        assert_eq!(bytes.len(), 2 + 0 + 4);
+        assert_eq!(bytes.len(), 2 + 4);
 
         let (decoded, _) = DynamicVectorPacket::try_from_be_bytes(&bytes).unwrap();
         assert_eq!(decoded.length, 0);
@@ -211,8 +211,8 @@ mod vector_as_last_field {
     fn test_empty_padding_vector() {
         let bytes = vec![
             0x12, 0x34, 0x56, 0x78, // header
-            0xAB,                     // packet_type
-            // No padding bytes
+            0xAB, // packet_type
+                  // No padding bytes
         ];
 
         let (decoded, consumed) = PacketWithPadding::try_from_be_bytes(&bytes).unwrap();
@@ -242,9 +242,18 @@ mod custom_type_vectors {
     #[test]
     fn test_custom_type_vector() {
         let items = vec![
-            Item { id: 1, value: 0xAABBCCDD },
-            Item { id: 2, value: 0x11223344 },
-            Item { id: 3, value: 0xDEADBEEF },
+            Item {
+                id: 1,
+                value: 0xAABBCCDD,
+            },
+            Item {
+                id: 2,
+                value: 0x11223344,
+            },
+            Item {
+                id: 3,
+                value: 0xDEADBEEF,
+            },
         ];
 
         let packet = ItemVector {
@@ -273,8 +282,14 @@ mod custom_type_vectors {
         let packet = FixedItemVector {
             header: 0x1234,
             items: vec![
-                Item { id: 10, value: 0xAAAAAAAA },
-                Item { id: 20, value: 0xBBBBBBBB },
+                Item {
+                    id: 10,
+                    value: 0xAAAAAAAA,
+                },
+                Item {
+                    id: 20,
+                    value: 0xBBBBBBBB,
+                },
             ],
             footer: 0x5678,
         };

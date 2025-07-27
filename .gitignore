@@ -4,3 +4,4 @@ expanded.rs
 .DS_Store
 CLAUDE.md
 .vscode/ltex.dictionary.en-US.txt
+mutants.outmutants.out*

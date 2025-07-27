@@ -1,5 +1,5 @@
 //! Bitfield functionality tests for BeBytes
-//! 
+//!
 //! This module tests:
 //! - Basic bit field packing/unpacking
 //! - Boundary crossing bit fields
@@ -95,18 +95,18 @@ mod boundary_crossing {
     fn test_boundary_at_different_positions() {
         #[derive(BeBytes, Debug, PartialEq)]
         struct BoundaryPositions {
-            #[bits(7)]  // Ends at bit 7
+            #[bits(7)] // Ends at bit 7
             field1: u8,
-            #[bits(6)]  // Crosses byte boundary (bits 7-12)
+            #[bits(6)] // Crosses byte boundary (bits 7-12)
             field2: u8,
-            #[bits(3)]  // Bits 13-15
+            #[bits(3)] // Bits 13-15
             field3: u8,
         }
 
         let data = BoundaryPositions {
-            field1: 0x7F,  // Max 7-bit value
-            field2: 0x3F,  // Max 6-bit value
-            field3: 0x07,  // Max 3-bit value
+            field1: 0x7F, // Max 7-bit value
+            field2: 0x3F, // Max 6-bit value
+            field3: 0x07, // Max 3-bit value
         };
 
         let bytes = data.to_be_bytes();
@@ -228,9 +228,9 @@ mod edge_cases {
         }
 
         let data = MaxValues {
-            seven_bits: 0x7F,    // Max 7-bit value
+            seven_bits: 0x7F,     // Max 7-bit value
             fifteen_bits: 0x7FFF, // Max 15-bit value
-            ten_bits: 0x3FF,     // Max 10-bit value
+            ten_bits: 0x3FF,      // Max 10-bit value
         };
 
         let bytes = data.to_be_bytes();

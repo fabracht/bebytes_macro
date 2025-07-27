@@ -10,7 +10,6 @@ use alloc::vec::Vec;
 
 enum FieldType {
     BitsField(usize), // only size, position is auto-calculated
-    AutoBitsField,    // size determined from type's __BEBYTES_MIN_BITS
     PrimitiveType,
     Array(usize),                                   // array_length
     Vector(Option<usize>, Option<Vec<syn::Ident>>), // size, vec_size_ident
@@ -70,8 +69,13 @@ fn determine_field_type(
             }
             return Some(FieldType::BitsField(size));
         }
-        // Auto size: #[bits()] - only valid for types with __BEBYTES_MIN_BITS
-        return Some(FieldType::AutoBitsField);
+        // Empty #[bits()] is no longer supported
+        let error = syn::Error::new(
+            context.field.span(),
+            "Size required for bits attribute. Use #[bits(N)] where N is the number of bits needed for your field",
+        );
+        errors.push(error.to_compile_error());
+        return None;
     }
 
     match context.field_type {
@@ -118,7 +122,6 @@ pub fn handle_struct(context: &mut StructContext) {
 
     // Track current bit position for auto-calculation
     let mut current_bit_position = 0;
-    let mut has_seen_auto_sized = false;
 
     for (idx, field) in context.fields.named.iter().enumerate() {
         let is_last = idx == context.fields.named.len() - 1;
@@ -134,15 +137,9 @@ pub fn handle_struct(context: &mut StructContext) {
         let field_processing_ctx = processing_ctx
             .clone()
             .with_bit_position(current_bit_position)
-            .with_last_field(is_last)
-            .with_auto_sized_field(has_seen_auto_sized);
+            .with_last_field(is_last);
 
         if let Some(field_type) = determine_field_type(&field_context, &field.attrs, &mut errors) {
-            // Check if this is an auto-sized field
-            if matches!(field_type, FieldType::AutoBitsField) {
-                has_seen_auto_sized = true;
-            }
-            
             let result = process_field_type(
                 &field_context,
                 field_type,
@@ -191,14 +188,6 @@ fn process_field_type(
             )?;
             *current_bit_position += size;
             Ok(result)
-        }
-        FieldType::AutoBitsField => {
-            // Generate code that references the type's __BEBYTES_MIN_BITS const
-            Ok(process_auto_bits_field_functional(
-                context,
-                processing_ctx,
-                current_bit_position,
-            ))
         }
         FieldType::PrimitiveType => {
             let result = process_primitive_type_functional(context, processing_ctx)?;
@@ -260,7 +249,6 @@ fn process_bits_field_functional(
         .map_err(|_| syn::Error::new(field_type.span(), "Type not supported"))?;
 
     let mask: u128 = (1 << size) - 1;
-    let has_auto_sized = processing_ctx.has_auto_sized_field;
 
     // Use multi-byte path if:
     // 1. The underlying type is multi-byte (number_length > 1), OR
@@ -293,8 +281,7 @@ fn process_bits_field_functional(
                 let bit_offset = _bit_sum % 8;
 
                 // Check if we can use compile-time optimization
-                // Only use compile-time position if we haven't seen auto-sized fields
-                if bit_offset == 0 && !#has_auto_sized && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
+                if bit_offset == 0 && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
                     // Compile-time aligned case: direct conversion without bit manipulation
                     #aligned_parsing
                 } else if bit_offset == 0 && #size == (#number_length * 8) {
@@ -331,8 +318,7 @@ fn process_bits_field_functional(
             let byte_start = _bit_sum / 8;
             let bit_offset = _bit_sum % 8;
             // Check if we can use compile-time optimization
-            // Only use compile-time position if we haven't seen auto-sized fields
-            if bit_offset == 0 && !#has_auto_sized && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
+            if bit_offset == 0 && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
                 // Compile-time aligned case: direct byte insertion
                 #aligned_writing
             } else if bit_offset == 0 && #size == (#number_length * 8) {
@@ -375,89 +361,6 @@ fn process_bits_field_functional(
         accessor,
         bit_sum,
     ))
-}
-
-// Functional version for auto-sized bit fields (enums with __BEBYTES_MIN_BITS)
-fn process_auto_bits_field_functional(
-    context: &FieldContext,
-    processing_ctx: &crate::functional::ProcessingContext,
-    _current_bit_position: &mut usize,
-) -> crate::functional::FieldProcessResult {
-    // NOTE: We cannot update _current_bit_position here because the size
-    // is determined by <Type>::__BEBYTES_MIN_BITS which is not available
-    // at macro expansion time. This is why has_auto_sized_field flag is
-    // used to disable compile-time position optimizations for subsequent fields.
-    let field_name = &context.field_name;
-    let field_type = context.field_type;
-
-    // Generate code that uses the type's __BEBYTES_MIN_BITS const
-    let size_const = quote! { <#field_type>::__BEBYTES_MIN_BITS };
-
-    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, false);
-
-    // For parsing, we need to extract the bits and convert from discriminant
-    let single_byte_parsing = crate::functional::pure_helpers::create_auto_bits_single_byte_parsing(
-        field_type,
-        processing_ctx.endianness,
-    );
-    let two_byte_parsing = crate::functional::pure_helpers::create_auto_bits_two_byte_parsing(
-        field_type,
-        processing_ctx.endianness,
-    );
-
-    let parsing = quote! {
-        let #field_name = {
-            const SIZE: usize = #size_const;
-            let byte_idx = _bit_sum / 8;
-            let bit_offset = _bit_sum % 8;
-
-            if bit_offset + SIZE <= 8 {
-                // Fits within a single byte
-                #single_byte_parsing
-            } else {
-                // Spans two bytes
-                #two_byte_parsing
-            }
-        };
-        _bit_sum += #size_const;
-    };
-
-    // For writing, convert enum to its discriminant value
-    let single_byte_writing = crate::functional::pure_helpers::create_auto_bits_single_byte_writing(
-        field_name,
-        &size_const,
-        processing_ctx.endianness,
-    );
-    let two_byte_writing = crate::functional::pure_helpers::create_auto_bits_two_byte_writing(
-        field_name,
-        &size_const,
-        processing_ctx.endianness,
-    );
-
-    let writing = quote! {
-        {
-            const SIZE: usize = #size_const;
-            let byte_idx = _bit_sum / 8;
-            let bit_offset = _bit_sum % 8;
-
-            if bit_offset + SIZE <= 8 {
-                // Fits within a single byte
-                #single_byte_writing
-            } else {
-                // Spans two bytes
-                #two_byte_writing
-            }
-        }
-    };
-
-    // Don't update compile-time bit position for auto-sized fields
-    // The actual size is only known at runtime via the __BEBYTES_MIN_BITS const
-
-    // No limit check needed - enum values are checked by type system
-    let limit_check = quote! {};
-    let bit_sum = quote! { bit_sum += #size_const; };
-
-    crate::functional::FieldProcessResult::new(limit_check, parsing, writing, accessor, bit_sum)
 }
 
 // Functional version of handle_primitive_type

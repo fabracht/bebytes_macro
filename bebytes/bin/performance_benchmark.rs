@@ -223,24 +223,15 @@ fn benchmark_enum_operations() {
     for i in 0..ITERATIONS {
         let val = PacketHeader {
             version: (i % 16) as u8,
-            status: match i % 4 {
-                0 => Status::Idle,
-                1 => Status::Running,
-                2 => Status::Paused,
-                _ => Status::Stopped,
-            },
-            priority: match i % 3 {
-                0 => Priority::Low,
-                1 => Priority::Medium,
-                _ => Priority::High,
-            },
+            status: (i % 4) as u8,   // 0=Idle, 1=Running, 2=Paused, 3=Stopped
+            priority: (i % 3) as u8, // 0=Low, 1=Medium, 2=High
         };
         let bytes = val.to_be_bytes();
         total_bytes += bytes.len();
     }
     let duration = start.elapsed();
     println!(
-        "Auto-sized enum serialization: {} iterations in {:?} ({:.2} ns/op)",
+        "Bit-packed struct serialization: {} iterations in {:?} ({:.2} ns/op)",
         ITERATIONS,
         duration,
         duration.as_nanos() as f64 / ITERATIONS as f64
@@ -823,10 +814,10 @@ enum Priority {
 struct PacketHeader {
     #[bits(4)]
     version: u8,
-    #[bits()] // Auto-sized to Status::__BEBYTES_MIN_BITS (2 bits)
-    status: Status,
-    #[bits()] // Auto-sized to Priority::__BEBYTES_MIN_BITS (2 bits)
-    priority: Priority,
+    #[bits(2)] // Status as u8: 0=Idle, 1=Running, 2=Paused, 3=Stopped
+    status: u8,
+    #[bits(2)] // Priority as u8: 0=Low, 1=Medium, 2=High
+    priority: u8,
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
@@ -855,8 +846,8 @@ enum LargeEnum {
 struct ComplexPacket {
     #[bits(3)]
     flags: u8,
-    #[bits()] // Auto-sized to LargeEnum::__BEBYTES_MIN_BITS (5 bits)
-    large_enum: LargeEnum,
+    #[bits(5)] // LargeEnum as u8: 0-16 (needs 5 bits)
+    large_enum: u8,
     payload_size: u16,
     #[FromField(payload_size)]
     payload: Vec<u8>,

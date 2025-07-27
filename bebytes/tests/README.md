@@ -37,7 +37,7 @@ tests/
 
 ### Enums (`enums.rs`)
 - Basic enum serialization
-- Auto-sized enums with `#[bits()]`
+- Bit fields with explicit sizes using `#[bits(N)]`
 - Flag enums with `#[bebytes(flags)]`
 - Bitwise operations
 - Non-contiguous discriminants

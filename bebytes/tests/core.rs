@@ -1,5 +1,5 @@
 //! Core functionality tests for BeBytes
-//! 
+//!
 //! This module tests basic serialization/deserialization of:
 //! - Primitive types
 //! - Arrays
@@ -55,7 +55,10 @@ mod primitive_types {
 
     #[test]
     fn test_size_calculation() {
-        assert_eq!(AllPrimitives::field_size(), 1 + 1 + 2 + 2 + 4 + 4 + 8 + 8 + 16 + 16);
+        assert_eq!(
+            AllPrimitives::field_size(),
+            1 + 1 + 2 + 2 + 4 + 4 + 8 + 8 + 16 + 16
+        );
     }
 }
 
@@ -123,11 +126,11 @@ mod basic_structs {
         assert_eq!(bytes.len(), 8);
 
         // Verify byte layout
-        assert_eq!(bytes[0], 1);      // version
-        assert_eq!(bytes[1], 42);     // packet_type
-        assert_eq!(bytes[2], 0x04);   // length high byte
-        assert_eq!(bytes[3], 0x00);   // length low byte
-        assert_eq!(bytes[4], 0x12);   // sequence bytes
+        assert_eq!(bytes[0], 1); // version
+        assert_eq!(bytes[1], 42); // packet_type
+        assert_eq!(bytes[2], 0x04); // length high byte
+        assert_eq!(bytes[3], 0x00); // length low byte
+        assert_eq!(bytes[4], 0x12); // sequence bytes
         assert_eq!(bytes[5], 0x34);
         assert_eq!(bytes[6], 0x56);
         assert_eq!(bytes[7], 0x78);
@@ -252,7 +255,7 @@ mod edge_cases {
     //     let data = EmptyStruct {};
     //     let bytes = data.to_be_bytes();
     //     assert_eq!(bytes.len(), 0);
-    //     
+    //
     //     let (decoded, consumed) = EmptyStruct::try_from_be_bytes(&bytes).unwrap();
     //     assert_eq!(consumed, 0);
     //     assert_eq!(decoded, data);
@@ -264,7 +267,7 @@ mod edge_cases {
         let bytes = data.to_be_bytes();
         assert_eq!(bytes.len(), 1);
         assert_eq!(bytes[0], 42);
-        
+
         let (decoded, consumed) = SingleByte::try_from_be_bytes(&bytes).unwrap();
         assert_eq!(consumed, 1);
         assert_eq!(decoded, data);

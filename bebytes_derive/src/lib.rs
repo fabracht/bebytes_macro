@@ -205,7 +205,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             let (
                 from_be_bytes_arms,
                 to_be_bytes_arms,
-                min_bits,
+                _,
                 try_from_arms,
                 discriminants,
                 enum_errors,
@@ -222,11 +222,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             }
 
             let expanded = quote! {
-                impl #name {
-                    /// Minimum number of bits needed to represent all variants
-                    pub const __BEBYTES_MIN_BITS: usize = #min_bits;
-                }
-
                 impl ::core::convert::TryFrom<u8> for #name {
                     type Error = ::bebytes::BeBytesError;
 

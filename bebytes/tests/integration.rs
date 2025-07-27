@@ -1,5 +1,5 @@
 //! Integration tests for BeBytes
-//! 
+//!
 //! This module tests complex real-world scenarios:
 //! - Complete packet workflows
 //! - TLV (Type-Length-Value) structures
@@ -34,8 +34,8 @@ mod packet_protocols {
 
     #[derive(BeBytes, Debug, PartialEq, Clone)]
     struct PacketHeader {
-        magic: u32,           // 0xDEADBEEF
-        version: u8,          // Protocol version
+        magic: u32,  // 0xDEADBEEF
+        version: u8, // Protocol version
         packet_type: PacketType,
         flags: u8, // Bitwise combination of PacketFlags
         sequence_number: u32,
@@ -255,7 +255,7 @@ mod complex_protocols {
     #[test]
     fn test_complex_command_structure() {
         let command_data = b"SELECT * FROM users WHERE id = 42".to_vec();
-        
+
         let command = Command {
             header: CommandHeader {
                 version: 2,
@@ -272,7 +272,7 @@ mod complex_protocols {
         };
 
         let bytes = command.to_be_bytes();
-        
+
         // Verify the command structure
         let (decoded, consumed) = Command::try_from_be_bytes(&bytes).unwrap();
         assert_eq!(consumed, bytes.len());
@@ -338,7 +338,7 @@ mod performance_scenarios {
         assert_eq!(consumed, bytes.len());
         assert_eq!(decoded.sensor_count, 100);
         assert_eq!(decoded.readings.len(), 100);
-        
+
         // Spot check some readings
         assert_eq!(decoded.readings[0], readings[0]);
         assert_eq!(decoded.readings[50], readings[50]);
@@ -375,37 +375,40 @@ mod edge_case_integration {
         u8_field: u8,
         i16_field: i16,
         u32_field: u32,
-        
+
         // Arrays
         fixed_array: [u8; 4],
-        
+
         // Bit fields
         #[bits(3)]
         small_bits: u8,
         #[bits(13)]
         medium_bits: u16,
-        
-        // Auto-sized enum
-        #[bits()]
-        mode: Mode,
-        
+
+        // Mode as u8 (2 bits for 3 values: Normal=0, Extended=1, Compact=2)
+        #[bits(2)]
+        mode: u8,
+        // Padding to complete the byte (3 + 13 + 2 + 6 = 24 bits = 3 bytes)
+        #[bits(6)]
+        padding_bits: u8,
+
         // Flag enum (stored as u8 due to bitwise operations)
         flags: u8,
-        
+
         // Options
         optional_value: Option<u32>,
-        
+
         // Nested struct
         nested: ComplexNested,
-        
+
         // Vectors
         vec_length: u16,
         #[FromField(vec_length)]
         dynamic_vec: Vec<u8>,
-        
+
         #[With(size(8))]
         fixed_vec: Vec<u8>,
-        
+
         // Vector as last field
         padding: Vec<u8>,
     }
@@ -425,7 +428,8 @@ mod edge_case_integration {
             fixed_array: [0x01, 0x02, 0x03, 0x04],
             small_bits: 0x07,
             medium_bits: 0x1FFF,
-            mode: Mode::Extended,
+            mode: 1,         // 1 = Mode::Extended
+            padding_bits: 0, // Padding
             flags: FeatureFlags::FeatureA | FeatureFlags::FeatureC,
             optional_value: Some(0xCAFEBABE),
             nested: ComplexNested {
@@ -442,13 +446,19 @@ mod edge_case_integration {
         let (decoded, consumed) = KitchenSink::try_from_be_bytes(&bytes).unwrap();
         assert_eq!(consumed, bytes.len());
         assert_eq!(decoded, data);
-        
+
         // Verify specific fields
         assert_eq!(decoded.small_bits, 0x07);
-        assert_eq!(decoded.mode, Mode::Extended);
-        // Check flags using bitwise operations since flags is u8
-        assert_eq!(decoded.flags & (FeatureFlags::FeatureA as u8), FeatureFlags::FeatureA as u8);
-        assert_eq!(decoded.flags & (FeatureFlags::FeatureC as u8), FeatureFlags::FeatureC as u8);
+        assert_eq!(decoded.mode, 1); // 1 = Mode::Extended
+                                     // Check flags using bitwise operations since flags is u8
+        assert_eq!(
+            decoded.flags & (FeatureFlags::FeatureA as u8),
+            FeatureFlags::FeatureA as u8
+        );
+        assert_eq!(
+            decoded.flags & (FeatureFlags::FeatureC as u8),
+            FeatureFlags::FeatureC as u8
+        );
         assert!(decoded.optional_value.is_some());
         assert_eq!(decoded.dynamic_vec.len(), 5);
         assert_eq!(decoded.padding, vec![0xFF, 0xEE, 0xDD]);

@@ -212,24 +212,15 @@ fn demo_enum_serialization() {
 fn demo_enum_bit_packing() {
     print_section("5. ENUM BIT PACKING (Auto-sized)");
 
-    println!("\nMinimum bits required:");
-    println!(
-        "Status (4 variants)    = {} bits",
-        Status::__BEBYTES_MIN_BITS
-    );
-    println!(
-        "Priority (3 variants)  = {} bits",
-        Priority::__BEBYTES_MIN_BITS
-    );
-    println!(
-        "LargeEnum (17 variants) = {} bits",
-        LargeEnum::__BEBYTES_MIN_BITS
-    );
+    println!("\nBits used:");
+    println!("Status (4 variants)    = 2 bits");
+    println!("Priority (3 variants)  = 2 bits");
+    println!("LargeEnum (17 variants) = 5 bits");
 
     let original = PacketHeader {
-        version: 15,              // 4 bits: 1111
-        status: Status::Running,  // 2 bits: 01
-        priority: Priority::High, // 2 bits: 10
+        version: 15, // 4 bits: 1111
+        status: 1,   // 2 bits: 01 (1=Running)
+        priority: 2, // 2 bits: 10 (2=High)
     };
 
     let bytes = original.to_be_bytes();
@@ -242,15 +233,15 @@ fn demo_enum_bit_packing() {
         "  version:  {} (0b{:04b})",
         original.version, original.version
     );
-    println!("  status:   {:?}", original.status);
-    println!("  priority: {:?}", original.priority);
+    println!("  status:   {} (Running)", original.status);
+    println!("  priority: {} (High)", original.priority);
     println!("\nDECODED:");
     println!(
         "  version:  {} (0b{:04b})",
         decoded.version, decoded.version
     );
-    println!("  status:   {:?}", decoded.status);
-    println!("  priority: {:?}", decoded.priority);
+    println!("  status:   {} (Running)", decoded.status);
+    println!("  priority: {} (High)", decoded.priority);
     println!(
         "\nMatch: {}",
         if original.version == decoded.version
@@ -707,10 +698,10 @@ enum Priority {
 struct PacketHeader {
     #[bits(4)]
     version: u8,
-    #[bits()] // Auto-sized to Status::__BEBYTES_MIN_BITS (2 bits)
-    status: Status,
-    #[bits()] // Auto-sized to Priority::__BEBYTES_MIN_BITS (2 bits)
-    priority: Priority,
+    #[bits(2)] // Status as u8: 0=Idle, 1=Running, 2=Paused, 3=Stopped
+    status: u8,
+    #[bits(2)] // Priority as u8: 0=Low, 1=Medium, 2=High
+    priority: u8,
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
@@ -738,8 +729,8 @@ enum LargeEnum {
 struct ComplexPacket {
     #[bits(3)]
     flags: u8,
-    #[bits()] // Auto-sized to LargeEnum::__BEBYTES_MIN_BITS (5 bits)
-    large_enum: LargeEnum,
+    #[bits(5)] // LargeEnum as u8: 0-16 (needs 5 bits)
+    large_enum: u8,
     payload_size: u16,
     #[FromField(payload_size)]
     payload: Vec<u8>,

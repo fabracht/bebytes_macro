@@ -31,7 +31,7 @@ struct SensorData {
 enum Status {
     Ok = 0,
     Warning = 1,
-    ErrorStatus = 2,
+    Failed = 2,
 }
 
 // Example with bit fields for compact data representation
