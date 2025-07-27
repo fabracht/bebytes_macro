@@ -56,8 +56,7 @@ fn compare_values<T: std::fmt::Debug + PartialEq>(
 
     assert_eq!(
         original, decoded,
-        "Serialization/deserialization mismatch for {}",
-        name
+        "Serialization/deserialization mismatch for {name}"
     );
 }
 
@@ -73,8 +72,7 @@ where
     println!("DECODED:  {decoded:?}");
     assert_eq!(
         original, decoded,
-        "Enum serialization/deserialization mismatch for {}",
-        name
+        "Enum serialization/deserialization mismatch for {name}"
     );
 }
 
@@ -105,8 +103,8 @@ fn demo_endianness() {
     println!("\nLittle-Endian test:");
     let le_bytes = le_original.to_le_bytes();
     println!("LE bytes: {}", print_bytes(&le_bytes));
-    let (decoded_le, _) = U16::try_from_le_bytes(&le_bytes).unwrap();
-    compare_values("U16 (LE)", &le_original, &decoded_le, &le_bytes);
+    let (decoded_from_le, _) = U16::try_from_le_bytes(&le_bytes).unwrap();
+    compare_values("U16 (LE)", &le_original, &decoded_from_le, &le_bytes);
 
     println!("\nNote: BE and LE bit field ordering produces different logical values");
     println!("This is expected behavior - bit fields have endianness-dependent semantics");
