@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(clippy::pedantic)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -23,11 +24,13 @@ use alloc::vec::Vec;
 
 use consts::Endianness;
 
+#[allow(clippy::too_many_lines)]
 #[proc_macro_derive(BeBytes, attributes(bits, With, FromField, bebytes))]
 pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident.clone();
-    let my_trait_path: syn::Path = syn::parse_str("BeBytes").unwrap();
+    let my_trait_path: syn::Path = syn::parse_quote!(::bebytes::BeBytes);
+
     let mut field_limit_check = Vec::new();
 
     let mut errors = Vec::new();
@@ -50,7 +53,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 let struct_field_names = fields.named.iter().map(|f| &f.ident).collect::<Vec<_>>();
 
                 // Generate big-endian implementation
-                structs::handle_struct(structs::StructContext {
+                let mut be_context = structs::StructContext {
                     field_limit_check: &mut field_limit_check,
                     errors: &mut errors,
                     field_parsing: &mut be_field_parsing,
@@ -59,21 +62,26 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     named_fields: &mut named_fields,
                     fields: &fields,
                     endianness: Endianness::Big,
-                });
+                };
+                structs::handle_struct(&mut be_context);
 
                 // Generate little-endian implementation
-                // We reuse named_fields and bit_sum because they're the same
+                // field_limit_check and bit_sum are endian-independent, so we don't need to regenerate them
+                // but named_fields needs to be regenerated for little-endian
                 let mut le_named_fields = Vec::new();
-                structs::handle_struct(structs::StructContext {
-                    field_limit_check: &mut Vec::new(), // Already generated
+                let mut le_dummy_field_limit = Vec::new(); // Dummy vector since we don't need to populate it again
+                let mut le_dummy_bit_sum = Vec::new(); // Dummy vector since we don't need to populate it again
+                let mut le_context = structs::StructContext {
+                    field_limit_check: &mut le_dummy_field_limit,
                     errors: &mut errors,
                     field_parsing: &mut le_field_parsing,
-                    bit_sum: &mut Vec::new(), // Already generated
+                    bit_sum: &mut le_dummy_bit_sum,
                     field_writing: &mut le_field_writing,
                     named_fields: &mut le_named_fields,
                     fields: &fields,
                     endianness: Endianness::Little,
-                });
+                };
+                structs::handle_struct(&mut le_context);
 
                 // If there are any errors, return them immediately without generating code
                 if !errors.is_empty() {
@@ -98,9 +106,9 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
 
                         // Big-endian implementation
-                        fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
+                        fn try_from_be_bytes(bytes: &[u8]) -> ::core::result::Result<(Self, usize), ::bebytes::BeBytesError> {
                             if bytes.is_empty() {
-                                return Err("No bytes provided.".into());
+                                return Err(::bebytes::BeBytesError::EmptyBuffer);
                             }
 
                             let mut _bit_sum = 0;
@@ -110,7 +118,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             #(#be_field_parsing)*
                             Ok((Self {
                                 #( #struct_field_names, )*
-                            }, _bit_sum.div_ceil(8)))
+                            }, usize::div_ceil(_bit_sum as usize, 8)))
                         }
 
                         fn to_be_bytes(&self) -> Vec<u8> {
@@ -125,9 +133,9 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
 
                         // Little-endian implementation
-                        fn try_from_le_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
+                        fn try_from_le_bytes(bytes: &[u8]) -> ::core::result::Result<(Self, usize), ::bebytes::BeBytesError> {
                             if bytes.is_empty() {
-                                return Err("No bytes provided.".into());
+                                return Err(::bebytes::BeBytesError::EmptyBuffer);
                             }
 
                             let mut _bit_sum = 0;
@@ -137,7 +145,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             #(#le_field_parsing)*
                             Ok((Self {
                                 #( #struct_field_names, )*
-                            }, _bit_sum.div_ceil(8)))
+                            }, usize::div_ceil(_bit_sum as usize, 8)))
                         }
 
                         fn to_le_bytes(&self) -> Vec<u8> {
@@ -200,7 +208,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             let (
                 from_be_bytes_arms,
                 to_be_bytes_arms,
-                min_bits,
+                _,
                 try_from_arms,
                 discriminants,
                 enum_errors,
@@ -217,18 +225,16 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             }
 
             let expanded = quote! {
-                impl #name {
-                    /// Minimum number of bits needed to represent all variants
-                    pub const __BEBYTES_MIN_BITS: usize = #min_bits;
-                }
+                impl ::core::convert::TryFrom<u8> for #name {
+                    type Error = ::bebytes::BeBytesError;
 
-                impl TryFrom<u8> for #name {
-                    type Error = Box<dyn std::error::Error>;
-
-                    fn try_from(value: u8) -> Result<Self, Self::Error> {
+                    fn try_from(value: u8) -> ::core::result::Result<Self, Self::Error> {
                         match value {
                             #(#try_from_arms)*
-                            _ => Err(format!("Invalid discriminant value for {}: {}", stringify!(#name), value).into()),
+                            _ => Err(::bebytes::BeBytesError::InvalidDiscriminant {
+                                value,
+                                type_name: stringify!(#name),
+                            }),
                         }
                     }
                 }
@@ -239,14 +245,17 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     }
 
                     // Big-endian implementation
-                    fn try_from_be_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
+                    fn try_from_be_bytes(bytes: &[u8]) -> ::core::result::Result<(Self, usize), ::bebytes::BeBytesError> {
                         if bytes.is_empty() {
-                            return Err("No bytes provided.".into());
+                            return Err(::bebytes::BeBytesError::EmptyBuffer);
                         }
                         let value = bytes[0];
                         match value {
                             #(#from_be_bytes_arms)*
-                            _ => Err(format!("No matching variant found for value {}", value).into()),
+                            _ => Err(::bebytes::BeBytesError::InvalidDiscriminant {
+                                value,
+                                type_name: stringify!(#name),
+                            }),
                         }
                     }
 
@@ -260,14 +269,17 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     }
 
                     // Little-endian implementation
-                    fn try_from_le_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
+                    fn try_from_le_bytes(bytes: &[u8]) -> ::core::result::Result<(Self, usize), ::bebytes::BeBytesError> {
                         if bytes.is_empty() {
-                            return Err("No bytes provided.".into());
+                            return Err(::bebytes::BeBytesError::EmptyBuffer);
                         }
                         let value = bytes[0];
                         match value {
                             #(#from_le_bytes_arms)*
-                            _ => Err(format!("No matching variant found for value {}", value).into()),
+                            _ => Err(::bebytes::BeBytesError::InvalidDiscriminant {
+                                value,
+                                type_name: stringify!(#name),
+                            }),
                         }
                     }
 
@@ -305,12 +317,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     }
                 }
 
-                if !validation_errors.is_empty() {
-                    quote! {
-                        #expanded
-                        #(#validation_errors)*
-                    }
-                } else {
+                if validation_errors.is_empty() {
                     quote! {
                         #expanded
 
@@ -418,6 +425,11 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             }
                         }
                     }
+                } else {
+                    quote! {
+                        #expanded
+                        #(#validation_errors)*
+                    }
                 }
             } else {
                 expanded
@@ -425,7 +437,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
             bitwise_ops.into()
         }
-        _ => {
+        Data::Union(_) => {
             let error =
                 syn::Error::new(Span::call_site(), "Type is not supported").to_compile_error();
             let output = quote! {

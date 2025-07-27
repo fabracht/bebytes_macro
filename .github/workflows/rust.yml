@@ -34,7 +34,11 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
-      - name: Build
+      - name: Build (std)
         run: cargo build --verbose
-      - name: Run tests
+      - name: Build (no_std)
+        run: cargo build --no-default-features --verbose
+      - name: Run tests (std)
         run: cargo test --verbose
+      - name: Run tests (no_std)
+        run: cargo test --no-default-features --verbose

@@ -10,7 +10,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes_derive = "1.1.0"
+bebytes_derive = "1.3.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -26,7 +26,7 @@ struct MyStruct {
 
 The BeBytes derive macro will generate the following methods for your struct:
 
-- `field_size(&self) -> usize`: A method to calculate the size (in bytes) of the struct.
+- `field_size() -> usize`: A method to calculate the size (in bytes) of the struct.
 
 **Big-endian methods:**
 - `try_from_be_bytes(&[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>>`: A method to convert a big-endian byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
@@ -41,7 +41,7 @@ The BeBytes derive macro will generate the following methods for your struct:
 Here's an example showcasing the usage of the BeBytes Derive:
 
 ```rust
-use bebytes_macro::BeBytes;
+use bebytes_derive::BeBytes;
 
 #[derive(Debug, BeBytes)]
 struct MyStruct {
@@ -70,7 +70,7 @@ fn main() {
 }
 ```
 
-In this example, we define a struct MyStruct with four fields. The `#[U8]` attribute is used to specify the size and position of the fields for serialization. The BeBytes derive macro generates the serialization and deserialization methods for the struct, allowing us to easily convert it to bytes and back.
+In this example, we define a struct MyStruct with four fields. The `#[bits]` attribute is used to specify bit-level fields. The BeBytes derive macro generates the serialization and deserialization methods for the struct, allowing us to easily convert it to bytes and back.
 
 ## How it works
 
@@ -80,7 +80,7 @@ The `bits` attribute allows you to define bit-level fields. The attribute takes 
 Shifted and masked => 0100
 
 Fields are read/written sequentially in Big Endian order and MUST complete a multiple of 8.
-This means that fields decorated with the `U8` attribute MUST complete a byte before the next non `U8` byte is provided. For example, the struct
+This means that fields decorated with the `bits` attribute MUST complete a byte before the next non-bit field is provided. For example, the struct
 
 ```rust
 #[derive(Debug, BeBytes)]
@@ -93,7 +93,7 @@ struct WrongStruct {
 }
 ```
 
-will through a compile time error saying that a `U8` attribute must add up to the full byte.
+will throw a compile time error saying that bit fields must add up to a full byte.
 
 As long as you follow the above rule, you can create custom sequence of bits by using Rust unsigned integers as types and the derived implementation will take care of the nasty shifting and masking for you.
 One of the advantages is that we don't need an intermediate vector implementation to parse groups of or individual bits.
@@ -132,9 +132,9 @@ struct U32 {
 
 And so on.
 
-**The same rules apply here. Your `U8` fields must complete a byte, even if they span over multiple bytes.**
+**The same rules apply here. Your bit fields must complete a byte, even if they span over multiple bytes.**
 
-*The following primitives can be used with the `U8` attribute: u8, u16, u32, u64, u128, i8, i16, i32, i64, i128*
+*The following primitives can be used with the `bits` attribute: u8, u16, u32, u64, u128, i8, i16, i32, i64, i128*
 
 ## Enums
 
@@ -180,6 +180,40 @@ The macro:
 - Generates a `__BEBYTES_MIN_BITS` constant for each enum
 - Implements `TryFrom<u8>` for safe conversion from discriminant values
 - Handles byte-spanning fields automatically
+
+### Flag Enums
+
+BeBytes supports flag-style enums marked with `#[bebytes(flags)]`. These enums automatically implement bitwise operations (`|`, `&`, `^`, `!`) allowing them to be used as bit flags:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
+#[bebytes(flags)]
+#[repr(u8)]
+enum Permissions {
+    None = 0,
+    Read = 1,
+    Write = 2,
+    Execute = 4,
+    Delete = 8,
+}
+
+// Usage
+let read_write = Permissions::Read | Permissions::Write;  // = 3
+let all_perms = Permissions::Read | Permissions::Write | Permissions::Execute | Permissions::Delete;  // = 15
+
+// Check if a flag is set
+assert!(Permissions::Read.contains(Permissions::Read));
+assert!(!Permissions::Read.contains(Permissions::Write));
+
+// Validate flag combinations
+assert_eq!(Permissions::from_bits(7), Some(7));  // Valid: Read|Write|Execute
+assert_eq!(Permissions::from_bits(16), None);    // Invalid: 16 is not a valid flag
+```
+
+Requirements for flag enums:
+- All enum variants must have power-of-2 values (1, 2, 4, 8, etc.)
+- Zero value is allowed for "None" or empty flags
+- Must use `#[repr(u8)]` representation
 
 ## Options
 
@@ -228,16 +262,16 @@ pub struct DummyStruct {
 }
 ```
 
-### From(*fieldname*)
+### FromField(*fieldname*)
 
-From(*fieldname*) will tell the macro to use the value of the field with the
+FromField(*fieldname*) will tell the macro to use the value of the field with the specified name.
 Example:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 pub struct ErrorEstimate {
     pub ipv4: u8,
-    #[From(ipv4)]
+    #[FromField(ipv4)]
     pub address: Vec<u8>,
     pub rest: u8,
 }

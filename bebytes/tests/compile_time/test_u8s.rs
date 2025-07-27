@@ -1,8 +1,6 @@
-use bebytes::BeBytes;
+use bebytes_derive::BeBytes;
 #[cfg(not(feature = "std"))]
 extern crate alloc;
-#[cfg(not(feature = "std"))]
-use core::fmt::Write;
 
 #[derive(BeBytes, Debug, PartialEq)]
 struct U8 {

@@ -1,46 +1,121 @@
 # Test Organization
 
-This directory contains all tests for the BeBytes library.
+This directory contains all tests for the BeBytes library, organized by functionality.
 
 ## Structure
 
 ```
 tests/
-├── compile_time/                        # Tests that verify compile-time behavior
-│   ├── *.rs                            # Test cases that should fail compilation
-│   └── *.stderr                        # Expected error messages
-├── test_arrays.rs                      # Array type serialization tests
-├── test_auto_enum_bits.rs              # Auto-sized enum field tests
-├── test_auto_enum_bits_comprehensive.rs # Comprehensive auto enum tests
-├── test_bit_fields.rs                  # Bit field functionality tests
-├── test_complex_scenarios.rs           # Integration tests for complex scenarios
-├── test_enum_bits.rs                   # Enum bit packing tests
-├── test_enum_flags.rs                  # Flag enum tests (bitwise operations)
-├── test_nested_structs.rs              # Nested struct serialization tests
-├── test_vector_handling.rs             # Vector handling tests
-├── compile_time_tests.rs               # TryBuild runner for compile-time tests
-└── runtime_tests.rs                    # Parameterized tests for edge cases
+├── core.rs                    # Core functionality (primitives, arrays, structs)
+├── bitfields.rs               # Bit field tests
+├── enums.rs                   # Enum tests (basic, auto-sized, flags)
+├── vectors.rs                 # Vector handling tests
+├── errors.rs                  # Error handling tests
+├── no_std.rs                  # no_std compatibility tests
+├── integration.rs             # Complex real-world scenarios
+├── compile_fail.rs            # Compile-time failure tests
+├── property_tests.rs          # Property-based testing
+├── macro_expansion.rs         # Macro expansion tests
+├── bit_arithmetic.rs          # Bit arithmetic tests
+├── check_optimization.rs      # Optimization verification
+├── derive_critical.rs         # Critical derive functionality
+├── evil_tests.rs              # Evil test scenarios
+├── functional_coverage.rs     # Functional test coverage
+├── arithmetic_mutations.rs    # Mutation testing: arithmetic
+├── attribute_edge_cases.rs    # Attribute parsing edge cases
+├── bitwise_mutations.rs       # Mutation testing: bitwise ops
+├── comparison_mutations.rs    # Mutation testing: comparisons
+├── logical_mutations.rs       # Mutation testing: logical ops
+├── return_value_mutations.rs  # Mutation testing: return values
+└── compile_time/              # Individual compile failure test cases
+    ├── *.rs                   # Test cases that should fail
+    └── *.stderr               # Expected error messages
 ```
 
 ## Test Categories
 
-### Compile-Time Tests (`compile_time/`)
-- Tests that verify the macro correctly rejects invalid code
-- Uses TryBuild framework to test compilation failures
-- Each `.rs` file has a corresponding `.stderr` file with expected errors
+### Core Functionality (`core.rs`)
+- Primitive type serialization (u8-u128, i8-i128)
+- Array handling
+- Basic struct serialization
+- Nested structs
+- Endianness consistency
 
-### Feature-Specific Tests
-- **Arrays** (`test_arrays.rs`): Tests for array serialization
-- **Bit Fields** (`test_bit_fields.rs`): Tests for `#[bits(N)]` functionality
-- **Enums** (`test_enum_*.rs`): Tests for enum serialization, auto-sizing, and flags
-- **Nested Structs** (`test_nested_structs.rs`): Tests for complex nested structures
-- **Vectors** (`test_vector_handling.rs`): Tests for `#[FromField]` and `#[With(size())]`
+### Bit Fields (`bitfields.rs`)
+- Single-byte bit fields
+- Boundary-crossing bit fields
+- Multi-byte bit fields
+- Edge cases (single bits, max values)
+- Overflow protection
 
-### Integration Tests
-- **Complex Scenarios** (`test_complex_scenarios.rs`): Real-world packet structures, TLV fields
+### Enums (`enums.rs`)
+- Basic enum serialization
+- Bit fields with explicit sizes using `#[bits(N)]`
+- Flag enums with `#[bebytes(flags)]`
+- Bitwise operations
+- Non-contiguous discriminants
 
-### Edge Cases
-- **Runtime Tests** (`runtime_tests.rs`): Parameterized tests using test-case
+### Vector Handling (`vectors.rs`)
+- Fixed-size vectors with `#[With(size(N))]`
+- Dynamic vectors with `#[FromField(field)]`
+- Nested field access (e.g., `#[FromField(header.count)]`)
+- Vectors as last field (padding)
+- Custom type vectors
+
+### Error Handling (`errors.rs`)
+- Error display formatting
+- All error variants (EmptyBuffer, InsufficientData, etc.)
+- Custom Result type alias compatibility
+- Error propagation in nested structures
+
+### No-std Support (`no_std.rs`)
+- Tests that run without standard library
+- Verifies all features work in embedded contexts
+
+### Integration Tests (`integration.rs`)
+- Complete packet protocols
+- TLV (Type-Length-Value) structures
+- Complex nested structures
+- Real-world protocol implementations
+- Performance scenarios with large batches
+
+### Compile-Time Tests (`compile_fail.rs`)
+- Verifies invalid code is rejected at compile time
+- Uses trybuild framework
+- Tests for unsupported types, incomplete bytes, etc.
+
+### Property-Based Tests (`property_tests.rs`)
+- Randomized testing with quickcheck
+- Round-trip serialization/deserialization
+- Edge case generation
+- Invariant checking
+
+### Macro Expansion Tests (`macro_expansion.rs`)
+- Verifies the derive macro generates expected methods
+- Tests trait implementation completeness
+- Constructor generation
+
+### Bit Arithmetic Tests (`bit_arithmetic.rs`)
+- Bit manipulation correctness
+- Byte alignment calculations
+- Division ceiling behavior
+- Large bit field handling
+
+### Mutation Testing Files
+These files target specific mutation patterns to improve test quality:
+
+- **`arithmetic_mutations.rs`**: Tests arithmetic operators (/, *, +, -, %)
+- **`attribute_edge_cases.rs`**: Tests attribute parsing edge cases
+- **`bitwise_mutations.rs`**: Tests bitwise operators (&, |, ^, <<, >>)
+- **`comparison_mutations.rs`**: Tests comparison operators (==, !=, <, >)
+- **`logical_mutations.rs`**: Tests logical operators (&&, ||)
+- **`return_value_mutations.rs`**: Tests that functions return meaningful values
+- **`derive_critical.rs`**: Tests critical derive functionality
+- **`functional_coverage.rs`**: Tests functional code coverage
+
+### Other Test Files
+- **`check_optimization.rs`**: Verifies optimization behavior
+- **`evil_tests.rs`**: Evil test scenarios to stress the system
 
 ## Running Tests
 
@@ -48,12 +123,28 @@ tests/
 # Run all tests
 cargo test
 
-# Run only compile-time tests
-cargo test --test compile_time_tests
+# Run specific test category
+cargo test core          # Test core functionality
+cargo test bitfields     # Test bit fields
+cargo test enums         # Test enums
+cargo test vectors       # Test vectors
+cargo test errors        # Test error handling
+cargo test integration   # Test complex scenarios
 
-# Run specific test file
-cargo test --test test_bit_fields
-cargo test --test test_enum_flags
+# Run no_std tests
+cargo test --no-default-features no_std
+
+# Run compile-time tests
+cargo test compile_fail
+
+# Run with verbose output
+cargo test -- --nocapture
+
+# Run a specific test function
+cargo test test_simple_struct
+
+# Run tests from a specific file
+cargo test --test core
 
 # Run tests matching a pattern
 cargo test enum   # Runs all enum-related tests
