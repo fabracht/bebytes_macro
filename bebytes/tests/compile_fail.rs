@@ -21,7 +21,7 @@ fn ui_tests() {
     t.pass("tests/compile_time/nested_struct.rs");
     t.pass("tests/compile_time/arrayed.rs");
     t.pass("tests/compile_time/safe_nested_vector.rs");
-    
+
     #[cfg(feature = "std")]
     t.pass("tests/compile_time/zero_value_flag_enum.rs");
 }
