@@ -43,6 +43,7 @@ pub fn get_primitive_type_size(field_type: &syn::Type) -> Result<usize, syn::Err
             Ok(8)
         }
         syn::Type::Path(tp) if tp.path.is_ident("i128") || tp.path.is_ident("u128") => Ok(16),
+        syn::Type::Path(tp) if tp.path.is_ident("char") => Ok(4),
         _ => Err(syn::Error::new_spanned(field_type, "Unsupported type")),
     }
 }
