@@ -1,6 +1,6 @@
 [package]
 name = "bebytes"
-version = "2.1.1"
+version = "2.1.2"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/fabracht/bebytes_macro"
@@ -20,7 +20,7 @@ path = "./bin/performance_benchmark.rs"
 required-features = ["std"]
 
 [dependencies]
-bebytes_derive = { version = "2.1.1", path = "../bebytes_derive" }
+bebytes_derive = { version = "2.1.2", path = "../bebytes_derive" }
 
 [dev-dependencies]
 trybuild = { version = "1.0.102", features = ["diff"] }
