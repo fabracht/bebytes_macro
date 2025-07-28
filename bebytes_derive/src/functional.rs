@@ -232,6 +232,36 @@ pub mod pure_helpers {
     ) -> Result<TokenStream, syn::Error> {
         let type_size = crate::utils::get_primitive_type_size(field_type)?;
 
+        // Special handling for char type
+        if let syn::Type::Path(tp) = field_type {
+            if tp.path.is_ident("char") {
+                return match endianness {
+                    crate::consts::Endianness::Big => Ok(quote! {
+                        let char_value = u32::from_be_bytes([
+                            bytes[byte_index], bytes[byte_index + 1],
+                            bytes[byte_index + 2], bytes[byte_index + 3]
+                        ]);
+                        let #field_name = char::from_u32(char_value)
+                            .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
+                                value: (char_value & 0xFF) as u8,
+                                type_name: "char",
+                            })?;
+                    }),
+                    crate::consts::Endianness::Little => Ok(quote! {
+                        let char_value = u32::from_le_bytes([
+                            bytes[byte_index], bytes[byte_index + 1],
+                            bytes[byte_index + 2], bytes[byte_index + 3]
+                        ]);
+                        let #field_name = char::from_u32(char_value)
+                            .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
+                                value: (char_value & 0xFF) as u8,
+                                type_name: "char",
+                            })?;
+                    }),
+                };
+            }
+        }
+
         match endianness {
             crate::consts::Endianness::Big => match type_size {
                 1 => Ok(quote! {
@@ -323,6 +353,24 @@ pub mod pure_helpers {
         endianness: crate::consts::Endianness,
     ) -> Result<TokenStream, syn::Error> {
         let type_size = crate::utils::get_primitive_type_size(field_type)?;
+
+        // Special handling for char type
+        if let syn::Type::Path(tp) = field_type {
+            if tp.path.is_ident("char") {
+                return match endianness {
+                    crate::consts::Endianness::Big => Ok(quote! {
+                        let char_bytes = (#field_name as u32).to_be_bytes();
+                        bytes.extend_from_slice(&char_bytes);
+                        _bit_sum += 32;
+                    }),
+                    crate::consts::Endianness::Little => Ok(quote! {
+                        let char_bytes = (#field_name as u32).to_le_bytes();
+                        bytes.extend_from_slice(&char_bytes);
+                        _bit_sum += 32;
+                    }),
+                };
+            }
+        }
 
         match endianness {
             crate::consts::Endianness::Big => match type_size {
