@@ -61,7 +61,7 @@ fn determine_field_type(
                 if !utils::is_supported_primitive_type(tp) {
                     let error = syn::Error::new(
                         context.field_type.span(),
-                        "Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) are supported",
+                        "Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) and char are supported",
                     );
                     errors.push(error.to_compile_error());
                     return None;
@@ -250,6 +250,13 @@ fn process_bits_field_functional(
 
     let mask: u128 = (1 << size) - 1;
 
+    // Check if this is a char type for special handling
+    let is_char_type = if let syn::Type::Path(tp) = field_type {
+        tp.path.is_ident("char")
+    } else {
+        false
+    };
+
     // Use multi-byte path if:
     // 1. The underlying type is multi-byte (number_length > 1), OR
     // 2. The field is too large to ever fit in a single byte regardless of position (size > 8)
@@ -259,16 +266,31 @@ fn process_bits_field_functional(
         let from_bytes_method = utils::get_from_bytes_method(processing_ctx.endianness);
         let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
 
-        let aligned_parsing = crate::functional::pure_helpers::create_aligned_multibyte_parsing(
-            field_type,
-            &from_bytes_method,
-            number_length,
-        );
-        let unaligned_parsing = crate::functional::pure_helpers::create_unaligned_multibyte_parsing(
-            field_type,
-            size,
-            processing_ctx.endianness,
-        );
+        let aligned_parsing = if is_char_type {
+            // For char, we need to validate after extracting the u32 value
+            crate::functional::pure_helpers::create_aligned_char_parsing(
+                &from_bytes_method,
+                number_length,
+            )
+        } else {
+            crate::functional::pure_helpers::create_aligned_multibyte_parsing(
+                field_type,
+                &from_bytes_method,
+                number_length,
+            )
+        };
+        let unaligned_parsing = if is_char_type {
+            crate::functional::pure_helpers::create_unaligned_char_parsing(
+                size,
+                processing_ctx.endianness,
+            )
+        } else {
+            crate::functional::pure_helpers::create_unaligned_multibyte_parsing(
+                field_type,
+                size,
+                processing_ctx.endianness,
+            )
+        };
 
         let parsing = quote! {
             let #field_name = {
@@ -298,16 +320,30 @@ fn process_bits_field_functional(
             _bit_sum += #size;
         };
 
-        let aligned_writing = crate::functional::pure_helpers::create_aligned_multibyte_writing(
-            field_type,
-            &to_bytes_method,
-            number_length,
-        );
-        let unaligned_writing = crate::functional::pure_helpers::create_unaligned_multibyte_writing(
-            field_type,
-            size,
-            processing_ctx.endianness,
-        );
+        let aligned_writing = if is_char_type {
+            crate::functional::pure_helpers::create_aligned_char_writing(
+                &to_bytes_method,
+                number_length,
+            )
+        } else {
+            crate::functional::pure_helpers::create_aligned_multibyte_writing(
+                field_type,
+                &to_bytes_method,
+                number_length,
+            )
+        };
+        let unaligned_writing = if is_char_type {
+            crate::functional::pure_helpers::create_unaligned_char_writing(
+                size,
+                processing_ctx.endianness,
+            )
+        } else {
+            crate::functional::pure_helpers::create_unaligned_multibyte_writing(
+                field_type,
+                size,
+                processing_ctx.endianness,
+            )
+        };
 
         let writing = quote! {
             if #field_name > #mask as #field_type {
