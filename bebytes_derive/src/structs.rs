@@ -295,9 +295,11 @@ fn process_bits_field_functional(
         let parsing = quote! {
             let #field_name = {
                 let byte_start = _bit_sum / 8;
-                if byte_start + #number_length > bytes.len() {
+                let bit_end = _bit_sum + #size;
+                let bytes_needed = (bit_end + 7) / 8; // Round up to nearest byte
+                if bytes_needed > bytes.len() {
                     return Err(::bebytes::BeBytesError::InsufficientData {
-                        expected: #number_length,
+                        expected: bytes_needed - byte_start,
                         actual: bytes.len() - byte_start,
                     });
                 }
@@ -345,18 +347,38 @@ fn process_bits_field_functional(
             )
         };
 
-        let writing = quote! {
-            if #field_name > #mask as #field_type {
-                panic!(
-                    "Value {} for field {} exceeds the maximum allowed value {}.",
-                    #field_name,
-                    stringify!(#field_name),
-                    #mask
-                );
-            }
+        let writing = if is_char_type {
+            quote! {
+                if (#field_name as u32) > #mask as u32 {
+                    panic!(
+                        "Value {} for field {} exceeds the maximum allowed value {}.",
+                        #field_name as u32,
+                        stringify!(#field_name),
+                        #mask
+                    );
+                }
 
-            // Optimized: Use compile-time bit position when available
-            let value = #field_name & #mask as #field_type;
+                // Optimized: Use compile-time bit position when available
+                let value = #field_name as u32 & #mask as u32;
+            }
+        } else {
+            quote! {
+                if #field_name > #mask as #field_type {
+                    panic!(
+                        "Value {} for field {} exceeds the maximum allowed value {}.",
+                        #field_name,
+                        stringify!(#field_name),
+                        #mask
+                    );
+                }
+
+                // Optimized: Use compile-time bit position when available
+                let value = #field_name & #mask as #field_type;
+            }
+        };
+
+        let writing = quote! {
+            #writing
             let byte_start = _bit_sum / 8;
             let bit_offset = _bit_sum % 8;
             // Check if we can use compile-time optimization
