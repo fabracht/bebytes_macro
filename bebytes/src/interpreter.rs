@@ -1,11 +1,19 @@
-//! String interpretation traits for pluggable encoding support
+//! Internal string interpretation traits
+//!
+//! This module is for internal use by the BeBytes derive macro.
+//! The traits and types are exposed publicly but are not intended for external use.
+//! The derive macro is currently hardcoded to use UTF-8 encoding.
 
 use crate::BeBytesError;
 
 #[cfg(not(feature = "std"))]
 use alloc::{borrow::ToOwned, string::String};
 
-/// Trait for interpreting byte sequences as strings
+/// Internal trait for interpreting byte sequences as strings
+///
+/// This trait is exposed publicly but is intended for internal use only.
+/// The derive macro currently only supports UTF-8 encoding.
+#[doc(hidden)]
 pub trait StringInterpreter {
     /// Convert bytes to a String
     ///
@@ -18,7 +26,10 @@ pub trait StringInterpreter {
     fn to_bytes(s: &str) -> &[u8];
 }
 
-/// Default UTF-8 interpreter
+/// Internal UTF-8 interpreter implementation
+///
+/// This type is exposed publicly but is intended for internal use only.
+#[doc(hidden)]
 pub struct Utf8;
 
 impl StringInterpreter for Utf8 {

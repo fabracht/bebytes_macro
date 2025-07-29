@@ -10,7 +10,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "2.2.0"
+bebytes = "2.3.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -281,6 +281,125 @@ struct Packet {
     data: Vec<u8>,
 }
 ```
+
+## Size Expressions (New in 2.3.0)
+
+BeBytes now supports dynamic field sizing using mathematical expressions and field references. This powerful feature enables efficient binary protocol implementations where field sizes depend on other fields in the struct.
+
+### Basic Syntax
+
+Use the `#[With(size(expression))]` attribute to specify dynamic field sizes:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct Message {
+    count: u8,
+    #[With(size(count * 4))]  // Size = count × 4 bytes
+    data: Vec<u8>,
+}
+```
+
+### Supported Operations
+
+Size expressions support mathematical operations, field references, and parentheses:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct ComplexMessage {
+    width: u8,
+    height: u8,
+    padding: u8,
+    
+    #[With(size(width + height))]           // Addition
+    simple_data: Vec<u8>,
+    
+    #[With(size(width * height))]           // Multiplication  
+    image_data: Vec<u8>,
+    
+    #[With(size((width * height) + padding))] // Complex expression
+    padded_data: Vec<u8>,
+}
+```
+
+### Protocol Examples
+
+Size expressions make it easy to implement real-world protocols:
+
+```rust
+// IPv4 Packet Structure
+#[derive(BeBytes, Debug, PartialEq)]
+struct Ipv4Packet {
+    version: u8,
+    header_length: u8,
+    total_length: u16,
+    // ... other fields ...
+    #[With(size(4))]  // IPv4 addresses are always 4 bytes
+    source_address: Vec<u8>,
+    #[With(size(4))]
+    dest_address: Vec<u8>,
+}
+
+// DNS Message with Variable Sections
+#[derive(BeBytes, Debug, PartialEq)]
+struct DnsMessage {
+    id: u16,
+    flags: u16,
+    question_count: u16,
+    answer_count: u16,
+    
+    #[With(size(question_count * 5))]  // ~5 bytes per question
+    questions: Vec<u8>,
+    
+    #[With(size(answer_count * 12))]   // ~12 bytes per answer
+    answers: Vec<u8>,
+}
+
+// MQTT Packet with Remaining Length
+#[derive(BeBytes, Debug, PartialEq)]
+struct MqttPacket {
+    fixed_header: u8,
+    remaining_length: u8,
+    
+    #[With(size(remaining_length))]    // Payload size from header
+    payload: Vec<u8>,
+}
+```
+
+### String Support
+
+Size expressions work with both `Vec<u8>` and `String` fields:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct StringMessage {
+    name_length: u8,
+    content_length: u16,
+    
+    #[With(size(name_length))]
+    name: String,
+    
+    #[With(size(content_length))]
+    content: String,
+}
+```
+
+### Key Features
+
+- **Runtime Evaluation**: Expressions are evaluated during serialization/deserialization
+- **Compile-time Validation**: Parser validates expression syntax at compile time
+- **Field Dependencies**: Reference any previously defined field in the struct
+- **Mathematical Operations**: Full support for `+`, `-`, `*`, `/`, `%` with parentheses
+- **Memory Safety**: Proper bounds checking and size validation
+- **Performance**: No significant overhead compared to manual size calculations
+
+### Important Notes
+
+- Fields referenced in expressions must be defined **before** the fields that use them
+- Size mismatches during serialization will panic with descriptive error messages
+- Insufficient data during deserialization returns `BeBytesError::InsufficientData`
+- Variable-size fields should generally be placed toward the end of structs
+
+For complete documentation and examples, see [SIZE_EXPRESSIONS.md](SIZE_EXPRESSIONS.md).
 
 ## Enums
 

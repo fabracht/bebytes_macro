@@ -28,7 +28,7 @@ BeBytes is a Rust procedural macro library for binary serialization/deserializat
 
 ### Design Philosophy
 
-The string implementation in BeBytes v2.2.0+ uses Rust's standard `String` type with attributes for size control.
+The string implementation in BeBytes v2.3.0+ uses Rust's standard `String` type with attributes for size control.
 
 ### Implementation Details
 
@@ -156,21 +156,22 @@ Error information includes:
 - Bit field flexibility vs raw byte performance
 - Compile-time validation vs runtime flexibility
 
-## Pluggable String Interpretation
+## String Interpretation (Internal)
 
 ### Design
-BeBytes v2.2.0+ implements a pluggable interpreter system for strings. The key insight is that strings are just `Vec<u8>` with an interpretation step.
+BeBytes v2.3.0+ uses an internal `StringInterpreter` trait for string handling. This trait is currently for internal use only and always uses UTF-8 encoding.
 
-### StringInterpreter Trait
+### StringInterpreter Trait (Internal Use)
 ```rust
+// Internal trait - not intended for external use
 pub trait StringInterpreter {
     fn from_bytes(bytes: &[u8]) -> Result<String, BeBytesError>;
     fn to_bytes(s: &str) -> &[u8];
 }
 ```
 
-### Default Implementation
-The `Utf8` struct provides the default UTF-8 interpretation, maintaining backward compatibility.
+### Implementation
+The `Utf8` struct provides UTF-8 interpretation. The derive macro is hardcoded to use this implementation.
 
 ### Generated Code
 String parsing now generates:
