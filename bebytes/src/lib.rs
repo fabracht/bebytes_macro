@@ -14,7 +14,10 @@ pub use alloc::vec::Vec;
 #[cfg(feature = "std")]
 pub use std::vec::Vec;
 
+pub mod interpreter;
+
 pub use bebytes_derive::BeBytes;
+pub use interpreter::{StringInterpreter, Utf8};
 
 /// Error type for `BeBytes` operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,8 +1,9 @@
 [package]
 name = "bebytes_derive"
 description = "A macro to generate/parse binary representation of messages with custom bit fields"
-version = "2.1.2"
+version = "2.2.0"
 edition = "2021"
+rust-version = "1.73.0"
 publish = true
 license = "MIT"
 repository = "https://github.com/fabracht/bebytes_macro"

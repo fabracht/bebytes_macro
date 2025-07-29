@@ -232,87 +232,98 @@ pub mod pure_helpers {
     ) -> Result<TokenStream, syn::Error> {
         let type_size = crate::utils::get_primitive_type_size(field_type)?;
 
+        // Special handling for char type
+        if let syn::Type::Path(tp) = field_type {
+            if tp.path.is_ident("char") {
+                return Ok(create_char_parsing(field_name, endianness));
+            }
+        }
+
+        create_numeric_parsing(field_name, field_type, type_size, endianness)
+    }
+
+    /// Create char type parsing code
+    fn create_char_parsing(
+        field_name: &Ident,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
         match endianness {
-            crate::consts::Endianness::Big => match type_size {
-                1 => Ok(quote! {
-                    let #field_name = bytes[byte_index] as #field_type;
-                }),
-                2 => Ok(quote! {
-                    let #field_name = #field_type::from_be_bytes([
-                        bytes[byte_index], bytes[byte_index + 1]
-                    ]);
-                }),
-                4 => Ok(quote! {
-                    let #field_name = #field_type::from_be_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3]
-                    ]);
-                }),
-                8 => Ok(quote! {
-                    let #field_name = #field_type::from_be_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3],
-                        bytes[byte_index + 4], bytes[byte_index + 5],
-                        bytes[byte_index + 6], bytes[byte_index + 7]
-                    ]);
-                }),
-                16 => Ok(quote! {
-                    let #field_name = #field_type::from_be_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3],
-                        bytes[byte_index + 4], bytes[byte_index + 5],
-                        bytes[byte_index + 6], bytes[byte_index + 7],
-                        bytes[byte_index + 8], bytes[byte_index + 9],
-                        bytes[byte_index + 10], bytes[byte_index + 11],
-                        bytes[byte_index + 12], bytes[byte_index + 13],
-                        bytes[byte_index + 14], bytes[byte_index + 15]
-                    ]);
-                }),
-                _ => Err(syn::Error::new_spanned(
-                    field_type,
-                    "Unsupported primitive type size",
-                )),
+            crate::consts::Endianness::Big => quote! {
+                let char_value = u32::from_be_bytes([
+                    bytes[byte_index], bytes[byte_index + 1],
+                    bytes[byte_index + 2], bytes[byte_index + 3]
+                ]);
+                let #field_name = char::from_u32(char_value)
+                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
+                        value: (char_value & 0xFF) as u8,
+                        type_name: "char",
+                    })?;
             },
-            crate::consts::Endianness::Little => match type_size {
-                1 => Ok(quote! {
-                    let #field_name = bytes[byte_index] as #field_type;
-                }),
-                2 => Ok(quote! {
-                    let #field_name = #field_type::from_le_bytes([
-                        bytes[byte_index], bytes[byte_index + 1]
-                    ]);
-                }),
-                4 => Ok(quote! {
-                    let #field_name = #field_type::from_le_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3]
-                    ]);
-                }),
-                8 => Ok(quote! {
-                    let #field_name = #field_type::from_le_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3],
-                        bytes[byte_index + 4], bytes[byte_index + 5],
-                        bytes[byte_index + 6], bytes[byte_index + 7]
-                    ]);
-                }),
-                16 => Ok(quote! {
-                    let #field_name = #field_type::from_le_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3],
-                        bytes[byte_index + 4], bytes[byte_index + 5],
-                        bytes[byte_index + 6], bytes[byte_index + 7],
-                        bytes[byte_index + 8], bytes[byte_index + 9],
-                        bytes[byte_index + 10], bytes[byte_index + 11],
-                        bytes[byte_index + 12], bytes[byte_index + 13],
-                        bytes[byte_index + 14], bytes[byte_index + 15]
-                    ]);
-                }),
-                _ => Err(syn::Error::new_spanned(
-                    field_type,
-                    "Unsupported primitive type size",
-                )),
+            crate::consts::Endianness::Little => quote! {
+                let char_value = u32::from_le_bytes([
+                    bytes[byte_index], bytes[byte_index + 1],
+                    bytes[byte_index + 2], bytes[byte_index + 3]
+                ]);
+                let #field_name = char::from_u32(char_value)
+                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
+                        value: (char_value & 0xFF) as u8,
+                        type_name: "char",
+                    })?;
             },
+        }
+    }
+
+    /// Create numeric type parsing code
+    fn create_numeric_parsing(
+        field_name: &Ident,
+        field_type: &syn::Type,
+        type_size: usize,
+        endianness: crate::consts::Endianness,
+    ) -> Result<TokenStream, syn::Error> {
+        let from_bytes_method = match endianness {
+            crate::consts::Endianness::Big => quote!(from_be_bytes),
+            crate::consts::Endianness::Little => quote!(from_le_bytes),
+        };
+
+        match type_size {
+            1 => Ok(quote! {
+                let #field_name = bytes[byte_index] as #field_type;
+            }),
+            2 => Ok(quote! {
+                let #field_name = #field_type::#from_bytes_method([
+                    bytes[byte_index], bytes[byte_index + 1]
+                ]);
+            }),
+            4 => Ok(quote! {
+                let #field_name = #field_type::#from_bytes_method([
+                    bytes[byte_index], bytes[byte_index + 1],
+                    bytes[byte_index + 2], bytes[byte_index + 3]
+                ]);
+            }),
+            8 => Ok(quote! {
+                let #field_name = #field_type::#from_bytes_method([
+                    bytes[byte_index], bytes[byte_index + 1],
+                    bytes[byte_index + 2], bytes[byte_index + 3],
+                    bytes[byte_index + 4], bytes[byte_index + 5],
+                    bytes[byte_index + 6], bytes[byte_index + 7]
+                ]);
+            }),
+            16 => Ok(quote! {
+                let #field_name = #field_type::#from_bytes_method([
+                    bytes[byte_index], bytes[byte_index + 1],
+                    bytes[byte_index + 2], bytes[byte_index + 3],
+                    bytes[byte_index + 4], bytes[byte_index + 5],
+                    bytes[byte_index + 6], bytes[byte_index + 7],
+                    bytes[byte_index + 8], bytes[byte_index + 9],
+                    bytes[byte_index + 10], bytes[byte_index + 11],
+                    bytes[byte_index + 12], bytes[byte_index + 13],
+                    bytes[byte_index + 14], bytes[byte_index + 15]
+                ]);
+            }),
+            _ => Err(syn::Error::new_spanned(
+                field_type,
+                "Unsupported primitive type size",
+            )),
         }
     }
 
@@ -323,6 +334,24 @@ pub mod pure_helpers {
         endianness: crate::consts::Endianness,
     ) -> Result<TokenStream, syn::Error> {
         let type_size = crate::utils::get_primitive_type_size(field_type)?;
+
+        // Special handling for char type
+        if let syn::Type::Path(tp) = field_type {
+            if tp.path.is_ident("char") {
+                return match endianness {
+                    crate::consts::Endianness::Big => Ok(quote! {
+                        let char_bytes = (#field_name as u32).to_be_bytes();
+                        bytes.extend_from_slice(&char_bytes);
+                        _bit_sum += 32;
+                    }),
+                    crate::consts::Endianness::Little => Ok(quote! {
+                        let char_bytes = (#field_name as u32).to_le_bytes();
+                        bytes.extend_from_slice(&char_bytes);
+                        _bit_sum += 32;
+                    }),
+                };
+            }
+        }
 
         match endianness {
             crate::consts::Endianness::Big => match type_size {
@@ -357,6 +386,19 @@ pub mod pure_helpers {
         size: usize,
     ) -> TokenStream {
         let mask: u128 = (1 << size) - 1;
+
+        // Special handling for char type
+        if let syn::Type::Path(tp) = field_type {
+            if tp.path.is_ident("char") {
+                return quote! {
+                    if (#field_name as u32) > #mask as u32 {
+                        panic!("Value of field {} is out of range (max value: {})",
+                            stringify!(#field_name), #mask);
+                    }
+                };
+            }
+        }
+
         quote! {
             if #field_name > #mask as #field_type {
                 panic!("Value of field {} is out of range (max value: {})",
@@ -400,6 +442,26 @@ pub mod pure_helpers {
             let mut arr = [0u8; #number_length];
             arr.copy_from_slice(slice);
             #field_type::#from_bytes_method(arr)
+        }
+    }
+
+    /// Generate aligned char bit field parsing code with validation
+    pub fn create_aligned_char_parsing(
+        from_bytes_method: &TokenStream,
+        number_length: usize,
+    ) -> TokenStream {
+        quote! {
+            {
+                let slice = &bytes[byte_start..byte_start + #number_length];
+                let mut arr = [0u8; #number_length];
+                arr.copy_from_slice(slice);
+                let char_value = u32::#from_bytes_method(arr);
+                char::from_u32(char_value)
+                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
+                        value: (char_value & 0xFF) as u8,
+                        type_name: "char",
+                    })?
+            }
         }
     }
 
@@ -451,6 +513,69 @@ pub mod pure_helpers {
                     current_bit_offset = 0;
                 }
                 result
+            },
+        }
+    }
+
+    /// Generate unaligned char bit field parsing code with validation
+    pub fn create_unaligned_char_parsing(
+        size: usize,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
+        let bits_in_byte = create_bits_in_byte_calc(
+            &quote!(current_bit_offset),
+            &quote!(#size),
+            &quote!(bits_read),
+        );
+
+        match endianness {
+            crate::consts::Endianness::Big => quote! {
+                {
+                    let mut result = 0u32;
+                    let mut bits_read = 0;
+                    let mut byte_idx = byte_start;
+                    let mut current_bit_offset = bit_offset;
+
+                    while bits_read < #size {
+                        let bits_in_byte = #bits_in_byte;
+                        let byte_val = bytes[byte_idx] as u32;
+                        let shifted = (byte_val >> (8 - current_bit_offset - bits_in_byte)) & ((1 << bits_in_byte) - 1);
+                        result = (result << bits_in_byte) | shifted;
+
+                        bits_read += bits_in_byte;
+                        byte_idx += 1;
+                        current_bit_offset = 0;
+                    }
+                    char::from_u32(result)
+                        .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
+                            value: (result & 0xFF) as u8,
+                            type_name: "char",
+                        })?
+                }
+            },
+            crate::consts::Endianness::Little => quote! {
+                {
+                    let mut result = 0u32;
+                    let mut bits_read = 0;
+                    let mut byte_idx = byte_start;
+                    let mut current_bit_offset = bit_offset;
+
+                    while bits_read < #size {
+                        let bits_in_byte = #bits_in_byte;
+                        let byte_val = bytes[byte_idx] as u32;
+                        let shifted = (byte_val >> current_bit_offset) & ((1 << bits_in_byte) - 1);
+                        result |= shifted << bits_read;
+
+                        bits_read += bits_in_byte;
+                        byte_idx += 1;
+                        current_bit_offset = 0;
+                    }
+                    char::from_u32(result)
+                        .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
+                            value: (result & 0xFF) as u8,
+                            type_name: "char",
+                        })?
+                }
             },
         }
     }
@@ -514,6 +639,79 @@ pub mod pure_helpers {
                 while bits_written < #size {
                     let bits_in_byte = #bits_in_byte;
                     let mask = ((1 << bits_in_byte) - 1) as #field_type;
+                    let byte_bits = (remaining_value & mask) as u8;
+
+                    if bytes.len() <= byte_idx {
+                        bytes.resize(byte_idx + 1, 0);
+                    }
+                    bytes[byte_idx] |= byte_bits << current_bit_offset;
+
+                    remaining_value >>= bits_in_byte;
+                    bits_written += bits_in_byte;
+                    byte_idx += 1;
+                    current_bit_offset = 0;
+                }
+            },
+        }
+    }
+
+    /// Generate aligned char bit field writing code
+    pub fn create_aligned_char_writing(
+        to_bytes_method: &TokenStream,
+        number_length: usize,
+    ) -> TokenStream {
+        quote! {
+            let value_bytes = u32::#to_bytes_method(value as u32);
+            if bytes.len() < byte_start + #number_length {
+                bytes.resize(byte_start + #number_length, 0);
+            }
+            bytes[byte_start..byte_start + #number_length].copy_from_slice(&value_bytes);
+        }
+    }
+
+    /// Generate unaligned char bit field writing code
+    pub fn create_unaligned_char_writing(
+        size: usize,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
+        let bits_in_byte = create_bits_in_byte_calc(
+            &quote!(current_bit_offset),
+            &quote!(#size),
+            &quote!(bits_written),
+        );
+
+        match endianness {
+            crate::consts::Endianness::Big => quote! {
+                let mut remaining_value = value as u32;
+                let mut bits_written = 0;
+                let mut byte_idx = byte_start;
+                let mut current_bit_offset = bit_offset;
+
+                while bits_written < #size {
+                    let bits_in_byte = #bits_in_byte;
+                    let mask = ((1 << bits_in_byte) - 1) as u8;
+                    let shift = #size - bits_written - bits_in_byte;
+                    let byte_bits = ((remaining_value >> shift) & mask as u32) as u8;
+
+                    if bytes.len() <= byte_idx {
+                        bytes.resize(byte_idx + 1, 0);
+                    }
+                    bytes[byte_idx] |= byte_bits << (8 - current_bit_offset - bits_in_byte);
+
+                    bits_written += bits_in_byte;
+                    byte_idx += 1;
+                    current_bit_offset = 0;
+                }
+            },
+            crate::consts::Endianness::Little => quote! {
+                let mut remaining_value = value as u32;
+                let mut bits_written = 0;
+                let mut byte_idx = byte_start;
+                let mut current_bit_offset = bit_offset;
+
+                while bits_written < #size {
+                    let bits_in_byte = #bits_in_byte;
+                    let mask = ((1 << bits_in_byte) - 1) as u32;
                     let byte_bits = (remaining_value & mask) as u8;
 
                     if bytes.len() <= byte_idx {

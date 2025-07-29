@@ -17,6 +17,8 @@ fn main() {
     demo_nested_structs();
     demo_complete_functionality();
     demo_nested_field_access();
+    demo_char_support();
+    demo_string_support();
 
     println!("\n=== All tests completed ===");
 }
@@ -952,4 +954,186 @@ fn demo_nested_field_access() {
     );
 
     assert_eq!(complex_packet, decoded, "Complex packet test failed");
+}
+
+fn demo_char_support() {
+    print_section("11. CHARACTER SUPPORT DEMONSTRATION");
+
+    // Basic char serialization
+    let char_struct = CharStruct {
+        letter: 'A',
+        symbol: '€',
+        emoji: '🦀',
+    };
+
+    let bytes = char_struct.to_be_bytes();
+    let (decoded, _) = CharStruct::try_from_be_bytes(&bytes).unwrap();
+    compare_values("CharStruct", &char_struct, &decoded, &bytes);
+
+    println!("\nCharacter values:");
+    println!(
+        "letter: '{}' (U+{:04X})",
+        char_struct.letter, char_struct.letter as u32
+    );
+    println!(
+        "symbol: '{}' (U+{:04X})",
+        char_struct.symbol, char_struct.symbol as u32
+    );
+    println!(
+        "emoji:  '{}' (U+{:04X})",
+        char_struct.emoji, char_struct.emoji as u32
+    );
+
+    // Char in bit fields
+    let bit_char = CharBitField {
+        flags: 0b101,
+        compressed_char: 'Z',
+        reserved: 0b11,
+    };
+
+    let bytes = bit_char.to_be_bytes();
+    let (decoded, _) = CharBitField::try_from_be_bytes(&bytes).unwrap();
+    compare_values("CharBitField", &bit_char, &decoded, &bytes);
+
+    println!("\nBit field char demonstration:");
+    println!("flags: {:03b}", bit_char.flags);
+    println!("compressed_char: '{}' (16 bits)", bit_char.compressed_char);
+    println!("reserved: {:02b}", bit_char.reserved);
+}
+
+fn demo_string_support() {
+    print_section("12. STRING SUPPORT DEMONSTRATION");
+
+    // Fixed-size strings
+    println!("\nFixed-size string (16 bytes):");
+    let fixed_string = FixedStringStruct {
+        username: "alice".to_string() + &" ".repeat(11), // Pad to 16 bytes
+        status_code: 200,
+    };
+
+    let bytes = fixed_string.to_be_bytes();
+    let (decoded, _) = FixedStringStruct::try_from_be_bytes(&bytes).unwrap();
+
+    println!(
+        "Original username: '{}' ({} bytes)",
+        fixed_string.username,
+        fixed_string.username.len()
+    );
+    println!(
+        "Decoded username:  '{}' ({} bytes)",
+        decoded.username,
+        decoded.username.len()
+    );
+    assert_eq!(fixed_string.status_code, decoded.status_code);
+
+    // Variable-size strings
+    println!("\nVariable-size string with length field:");
+    let var_string = VariableStringStruct {
+        name_len: 7,
+        name: "BeBytes".to_string(),
+        desc_len: 35,
+        description: "A Rust serialization library".to_string() + " rocks!",
+    };
+
+    let bytes = var_string.to_be_bytes();
+    let (decoded, _) = VariableStringStruct::try_from_be_bytes(&bytes).unwrap();
+    compare_values("VariableStringStruct", &var_string, &decoded, &bytes);
+
+    // Unbounded string (last field)
+    println!("\nUnbounded string as last field:");
+    let log_entry = LogEntry {
+        timestamp: 1640995200,
+        level: 3,
+        message: "Application started successfully with all modules loaded".to_string(),
+    };
+
+    let bytes = log_entry.to_be_bytes();
+    let (decoded, _) = LogEntry::try_from_be_bytes(&bytes).unwrap();
+    compare_values("LogEntry", &log_entry, &decoded, &bytes);
+
+    // Mixed string types
+    println!("\nMixed string types in one struct:");
+    let mixed = MixedStringStruct {
+        id: 42,
+        #[allow(clippy::needless_range_loop)]
+        fixed_header: "BEBYTES_".to_string() + &" ".repeat(8), // Pad to 16
+        content_len: 13,
+        content: "Hello, world!".to_string(),
+        unicode_test: "Rust 🦀 rocks! 🚀".to_string(),
+    };
+
+    let bytes = mixed.to_be_bytes();
+    let (decoded, _) = MixedStringStruct::try_from_be_bytes(&bytes).unwrap();
+
+    println!("\nString comparison:");
+    println!(
+        "fixed_header: '{}' | '{}'",
+        mixed.fixed_header, decoded.fixed_header
+    );
+    println!("content:      '{}' | '{}'", mixed.content, decoded.content);
+    println!(
+        "unicode_test: '{}' | '{}'",
+        mixed.unicode_test, decoded.unicode_test
+    );
+
+    assert_eq!(mixed.id, decoded.id);
+    assert_eq!(mixed.fixed_header, decoded.fixed_header);
+    assert_eq!(mixed.content, decoded.content);
+    assert_eq!(mixed.unicode_test, decoded.unicode_test);
+}
+
+// ============ Character Support Structures ============
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct CharStruct {
+    letter: char,
+    symbol: char,
+    emoji: char,
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct CharBitField {
+    #[bits(3)]
+    flags: u8,
+    #[bits(16)]
+    compressed_char: char,
+    #[bits(5)]
+    reserved: u8,
+}
+
+// ============ String Support Structures ============
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct FixedStringStruct {
+    #[With(size(16))]
+    username: String,
+    status_code: u16,
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct VariableStringStruct {
+    name_len: u8,
+    #[FromField(name_len)]
+    name: String,
+    desc_len: u16,
+    #[FromField(desc_len)]
+    description: String,
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct LogEntry {
+    timestamp: u64,
+    level: u8,
+    message: String, // Unbounded - consumes remaining bytes
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct MixedStringStruct {
+    id: u32,
+    #[With(size(16))]
+    fixed_header: String,
+    content_len: u8,
+    #[FromField(content_len)]
+    content: String,
+    unicode_test: String, // Last field - unbounded
 }
