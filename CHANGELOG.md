@@ -99,6 +99,30 @@ All notable changes to this project will be documented in this file.
 - Full documentation
 - Comprehensive test suite
 
+## [0.7.1] - 2025-07-14
+
+### Fixed
+- Clippy warnings
+- Documentation improvements
+
+## [0.7.0] - 2025-07-14
+
+### Added
+- Support for vectors of custom types
+- Better FromField attribute error messages
+
+## [0.6.1] - 2025-07-14
+
+### Fixed
+- Minor documentation updates
+
+## [0.6.0] - 2025-07-14
+
+### Added
+- Little-endian support
+- `to_le_bytes()` and `try_from_le_bytes()` methods
+- Complete endianness support for all types
+
 ## [0.5.0] - 2025-07-14
 
 ### Changed
