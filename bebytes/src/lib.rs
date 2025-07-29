@@ -17,6 +17,7 @@ pub use std::vec::Vec;
 pub mod interpreter;
 
 pub use bebytes_derive::BeBytes;
+#[doc(hidden)]
 pub use interpreter::{StringInterpreter, Utf8};
 
 /// Error type for `BeBytes` operations

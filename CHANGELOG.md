@@ -34,7 +34,7 @@ All notable changes to this project will be documented in this file.
   - Bit field bounds validation
   - Endianness consistency checks
   - String encoding/decoding verification
-- Pluggable string interpreter architecture via `StringInterpreter` trait
+- Internal `StringInterpreter` trait for UTF-8 string handling (not user-facing)
 - Separation of byte extraction from string interpretation
 
 ### Changed
