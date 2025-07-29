@@ -80,6 +80,127 @@ All notable changes to this project will be documented in this file.
 - Enum discriminant validation
 - Better error messages for invalid enum values
 
-## Earlier versions
+## [1.2.0] - 2025-07-17
 
-For earlier version history, see the git repository tags.
+### Added
+- Auto-sized enum functionality
+- Automatic bit width calculation for enums
+
+## [1.1.0] - 2025-07-16
+
+### Fixed
+- Side effects removed from macro implementation
+- Improved functional programming approach
+
+## [1.0.0] - 2025-07-15
+
+### Added
+- Stable API release
+- Full documentation
+- Comprehensive test suite
+
+## [0.5.0] - 2025-07-14
+
+### Changed
+- Major refactoring of codebase structure
+- Improved test organization
+
+### Fixed
+- std feature flag handling
+
+## [0.4.6] - 2025-07-14
+
+### Fixed
+- Updated bebytes_derive dependency
+
+## [0.4.5] - 2025-07-14
+
+### Fixed
+- std feature compatibility
+
+## [0.4.4] - 2025-07-14
+
+### Changed
+- Internal improvements
+
+## [0.4.3] - 2025-07-14
+
+### Changed
+- Documentation updates
+
+## [0.4.2] - 2025-07-13
+
+### Fixed
+- Minor bug fixes
+
+## [0.4.1] - 2025-07-13
+
+### Fixed
+- Dependency updates
+
+## [0.4.0] - 2025-07-13
+
+### Added
+- Vector support for custom types
+- Improved error messages
+
+### Fixed
+- Formatting issues
+
+## [0.3.1] - 2025-07-12
+
+### Fixed
+- Bug fixes in vector handling
+
+## [0.3.0] - 2025-07-12
+
+### Added
+- Vector field support with size hints
+- FromField attribute
+
+## [0.2.1] - 2025-07-11
+
+### Fixed
+- Array serialization bug
+
+## [0.2.0] - 2025-07-11
+
+### Added
+- Array support
+- Better documentation
+
+## [0.1.5] - 2025-07-10
+
+### Fixed
+- README updates
+- Minor bug fixes
+
+## [0.1.4] - 2025-07-10
+
+### Fixed
+- Expected size calculation bug
+
+## [0.1.3] - 2025-07-10
+
+### Added
+- README documentation for derive crate
+
+## [0.1.2] - 2025-07-10
+
+### Fixed
+- Repository URL in Cargo.toml
+
+## [0.1.1] - 2025-07-10
+
+### Fixed
+- Workspace configuration
+- Dependency updates
+
+## [0.1.0] - 2025-07-10
+
+### Added
+- Initial release
+- Basic BeBytes trait
+- Primitive type support
+- Bit field support
+- Big-endian and little-endian serialization
