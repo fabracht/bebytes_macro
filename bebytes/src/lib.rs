@@ -263,26 +263,26 @@ impl<const N: usize> BeBytes for FixedString<N> {
 }
 
 /// A variable-length string type with a length prefix that can be serialized with BeBytes.
-/// 
+///
 /// This type stores a UTF-8 string with an automatic length prefix. The length is stored
 /// as the specified integer type (u8, u16, or u32) followed by the UTF-8 bytes.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// use bebytes::{BeBytes, VarString8};
-/// 
+///
 /// #[derive(BeBytes, Debug, PartialEq)]
 /// struct Message {
 ///     id: u32,
 ///     content: VarString8,  // Max 255 bytes
 /// }
-/// 
+///
 /// let msg = Message {
 ///     id: 42,
 ///     content: VarString8::from_str("Hello, world!"),
 /// };
-/// 
+///
 /// let bytes = msg.to_be_bytes();
 /// let (decoded, _) = Message::try_from_be_bytes(&bytes).unwrap();
 /// assert_eq!(decoded, msg);
@@ -301,7 +301,7 @@ impl<T> VarString<T> {
             _phantom: core::marker::PhantomData,
         }
     }
-    
+
     /// Create a VarString from a string slice
     pub fn from_str(s: &str) -> Self {
         Self {
@@ -309,7 +309,7 @@ impl<T> VarString<T> {
             _phantom: core::marker::PhantomData,
         }
     }
-    
+
     /// Create a VarString from a String
     #[cfg(feature = "std")]
     pub fn from_string(s: String) -> Self {
@@ -318,7 +318,7 @@ impl<T> VarString<T> {
             _phantom: core::marker::PhantomData,
         }
     }
-    
+
     /// Create a VarString from a String (no_std version)
     #[cfg(not(feature = "std"))]
     pub fn from_string(s: alloc::string::String) -> Self {
@@ -327,60 +327,60 @@ impl<T> VarString<T> {
             _phantom: core::marker::PhantomData,
         }
     }
-    
+
     /// Get the underlying byte data
     pub fn as_bytes(&self) -> &[u8] {
         &self.data
     }
-    
+
     /// Get a mutable reference to the underlying byte data
     pub fn as_bytes_mut(&mut self) -> &mut Vec<u8> {
         &mut self.data
     }
-    
+
     /// Convert to a string slice
-    /// 
+    ///
     /// Returns None if the data contains invalid UTF-8
     pub fn as_str(&self) -> Option<&str> {
         core::str::from_utf8(&self.data).ok()
     }
-    
+
     /// Convert to a String
-    /// 
+    ///
     /// Returns None if the data contains invalid UTF-8
     #[cfg(feature = "std")]
     pub fn to_string(&self) -> Option<std::string::String> {
         self.as_str().map(|s| s.to_owned())
     }
-    
+
     /// Convert to a String (no_std version)
-    /// 
+    ///
     /// Returns None if the data contains invalid UTF-8
     #[cfg(not(feature = "std"))]
     pub fn to_string(&self) -> Option<alloc::string::String> {
         self.as_str().map(|s| s.to_owned())
     }
-    
+
     /// Get the length of the string in bytes
     pub fn len(&self) -> usize {
         self.data.len()
     }
-    
+
     /// Check if the string is empty
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
-    
+
     /// Clear the string
     pub fn clear(&mut self) {
         self.data.clear();
     }
-    
+
     /// Push a string slice to the end
     pub fn push_str(&mut self, s: &str) {
         self.data.extend_from_slice(s.as_bytes());
     }
-    
+
     /// Push a character to the end
     pub fn push(&mut self, ch: char) {
         let mut buf = [0; 4];
@@ -431,8 +431,8 @@ pub type FixedString32 = FixedString<32>;
 pub type FixedString64 = FixedString<64>;
 
 /// Type aliases for common variable-length string sizes
-pub type VarString8 = VarString<u8>;   // Max 255 bytes
-pub type VarString16 = VarString<u16>; // Max 65535 bytes  
+pub type VarString8 = VarString<u8>; // Max 255 bytes
+pub type VarString16 = VarString<u16>; // Max 65535 bytes
 pub type VarString32 = VarString<u32>; // Max 4GB bytes
 
 /// A C-style null-terminated string type that can be serialized with BeBytes.
@@ -469,13 +469,11 @@ pub struct CString {
 impl CString {
     /// Create a new empty CString
     pub fn new() -> Self {
-        Self {
-            data: Vec::new(),
-        }
+        Self { data: Vec::new() }
     }
-    
+
     /// Create a CString from a string slice
-    /// 
+    ///
     /// Note: Null bytes in the input string will be treated as terminators
     pub fn from_str(s: &str) -> Self {
         let bytes = s.as_bytes();
@@ -485,67 +483,67 @@ impl CString {
             data: bytes[..end_pos].to_vec(),
         }
     }
-    
+
     /// Create a CString from a String
     #[cfg(feature = "std")]
     pub fn from_string(s: String) -> Self {
         Self::from_str(&s)
     }
-    
+
     /// Create a CString from a String (no_std version)
     #[cfg(not(feature = "std"))]
     pub fn from_string(s: alloc::string::String) -> Self {
         Self::from_str(&s)
     }
-    
+
     /// Get the underlying byte data (without null terminator)
     pub fn as_bytes(&self) -> &[u8] {
         &self.data
     }
-    
+
     /// Get a mutable reference to the underlying byte data
     pub fn as_bytes_mut(&mut self) -> &mut Vec<u8> {
         &mut self.data
     }
-    
+
     /// Convert to a string slice
-    /// 
+    ///
     /// Returns None if the data contains invalid UTF-8
     pub fn as_str(&self) -> Option<&str> {
         core::str::from_utf8(&self.data).ok()
     }
-    
+
     /// Convert to a String
-    /// 
+    ///
     /// Returns None if the data contains invalid UTF-8
     #[cfg(feature = "std")]
     pub fn to_string(&self) -> Option<std::string::String> {
         self.as_str().map(|s| s.to_owned())
     }
-    
+
     /// Convert to a String (no_std version)
-    /// 
+    ///
     /// Returns None if the data contains invalid UTF-8
     #[cfg(not(feature = "std"))]
     pub fn to_string(&self) -> Option<alloc::string::String> {
         self.as_str().map(|s| s.to_owned())
     }
-    
+
     /// Get the length of the string in bytes
     pub fn len(&self) -> usize {
         self.data.len()
     }
-    
+
     /// Check if the string is empty
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
-    
+
     /// Clear the string
     pub fn clear(&mut self) {
         self.data.clear();
     }
-    
+
     /// Push a string slice to the end
     pub fn push_str(&mut self, s: &str) {
         // Only add bytes up to the first null byte
@@ -553,10 +551,11 @@ impl CString {
         let end_pos = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
         self.data.extend_from_slice(&bytes[..end_pos]);
     }
-    
+
     /// Push a character to the end
     pub fn push(&mut self, ch: char) {
-        if ch != '\0' {  // Don't allow null characters
+        if ch != '\0' {
+            // Don't allow null characters
             let mut buf = [0; 4];
             let s = ch.encode_utf8(&mut buf);
             self.push_str(s);
@@ -627,11 +626,11 @@ impl BeBytes for CString {
     {
         // Find the null terminator
         let null_pos = bytes.iter().position(|&b| b == 0);
-        
+
         match null_pos {
             Some(pos) => {
                 let string_data = &bytes[..pos];
-                
+
                 // Validate UTF-8
                 if core::str::from_utf8(string_data).is_err() {
                     return Err(BeBytesError::InvalidDiscriminant {
@@ -639,10 +638,13 @@ impl BeBytes for CString {
                         type_name: "CString (invalid UTF-8)",
                     });
                 }
-                
-                Ok((Self {
-                    data: string_data.to_vec(),
-                }, pos + 1)) // +1 to include the null terminator in bytes consumed
+
+                Ok((
+                    Self {
+                        data: string_data.to_vec(),
+                    },
+                    pos + 1,
+                )) // +1 to include the null terminator in bytes consumed
             }
             None => {
                 // No null terminator found - this is an error for C strings
@@ -694,27 +696,27 @@ impl LengthPrefix for u8 {
             None
         }
     }
-    
+
     fn to_usize(self) -> usize {
         self as usize
     }
-    
+
     fn size() -> usize {
         1
     }
-    
+
     fn from_be_bytes(bytes: &[u8]) -> Self {
         bytes[0]
     }
-    
+
     fn to_be_bytes(self) -> Vec<u8> {
         vec![self]
     }
-    
+
     fn from_le_bytes(bytes: &[u8]) -> Self {
         bytes[0]
     }
-    
+
     fn to_le_bytes(self) -> Vec<u8> {
         vec![self]
     }
@@ -728,27 +730,27 @@ impl LengthPrefix for u16 {
             None
         }
     }
-    
+
     fn to_usize(self) -> usize {
         self as usize
     }
-    
+
     fn size() -> usize {
         2
     }
-    
+
     fn from_be_bytes(bytes: &[u8]) -> Self {
         u16::from_be_bytes([bytes[0], bytes[1]])
     }
-    
+
     fn to_be_bytes(self) -> Vec<u8> {
         self.to_be_bytes().to_vec()
     }
-    
+
     fn from_le_bytes(bytes: &[u8]) -> Self {
         u16::from_le_bytes([bytes[0], bytes[1]])
     }
-    
+
     fn to_le_bytes(self) -> Vec<u8> {
         self.to_le_bytes().to_vec()
     }
@@ -762,27 +764,27 @@ impl LengthPrefix for u32 {
             None
         }
     }
-    
+
     fn to_usize(self) -> usize {
         self as usize
     }
-    
+
     fn size() -> usize {
         4
     }
-    
+
     fn from_be_bytes(bytes: &[u8]) -> Self {
         u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
     }
-    
+
     fn to_be_bytes(self) -> Vec<u8> {
         self.to_be_bytes().to_vec()
     }
-    
+
     fn from_le_bytes(bytes: &[u8]) -> Self {
         u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
     }
-    
+
     fn to_le_bytes(self) -> Vec<u8> {
         self.to_le_bytes().to_vec()
     }
@@ -798,8 +800,8 @@ impl<T: LengthPrefix> BeBytes for VarString<T> {
 
     #[cfg(feature = "std")]
     fn to_be_bytes(&self) -> std::vec::Vec<u8> {
-        let len_prefix = T::from_usize(self.data.len())
-            .expect("String too long for length prefix type");
+        let len_prefix =
+            T::from_usize(self.data.len()).expect("String too long for length prefix type");
         let mut result = len_prefix.to_be_bytes();
         result.extend_from_slice(&self.data);
         result
@@ -807,8 +809,8 @@ impl<T: LengthPrefix> BeBytes for VarString<T> {
 
     #[cfg(not(feature = "std"))]
     fn to_be_bytes(&self) -> alloc::vec::Vec<u8> {
-        let len_prefix = T::from_usize(self.data.len())
-            .expect("String too long for length prefix type");
+        let len_prefix =
+            T::from_usize(self.data.len()).expect("String too long for length prefix type");
         let mut result = len_prefix.to_be_bytes();
         result.extend_from_slice(&self.data);
         result
@@ -819,26 +821,26 @@ impl<T: LengthPrefix> BeBytes for VarString<T> {
         Self: Sized,
     {
         let prefix_size = T::size();
-        
+
         if bytes.len() < prefix_size {
             return Err(BeBytesError::InsufficientData {
                 expected: prefix_size,
                 actual: bytes.len(),
             });
         }
-        
+
         let length = T::from_be_bytes(&bytes[..prefix_size]).to_usize();
         let total_size = prefix_size + length;
-        
+
         if bytes.len() < total_size {
             return Err(BeBytesError::InsufficientData {
                 expected: total_size,
                 actual: bytes.len(),
             });
         }
-        
+
         let string_data = &bytes[prefix_size..total_size];
-        
+
         // Validate UTF-8
         if core::str::from_utf8(string_data).is_err() {
             return Err(BeBytesError::InvalidDiscriminant {
@@ -846,17 +848,20 @@ impl<T: LengthPrefix> BeBytes for VarString<T> {
                 type_name: "VarString (invalid UTF-8)",
             });
         }
-        
-        Ok((Self {
-            data: string_data.to_vec(),
-            _phantom: core::marker::PhantomData,
-        }, total_size))
+
+        Ok((
+            Self {
+                data: string_data.to_vec(),
+                _phantom: core::marker::PhantomData,
+            },
+            total_size,
+        ))
     }
 
     #[cfg(feature = "std")]
     fn to_le_bytes(&self) -> std::vec::Vec<u8> {
-        let len_prefix = T::from_usize(self.data.len())
-            .expect("String too long for length prefix type");
+        let len_prefix =
+            T::from_usize(self.data.len()).expect("String too long for length prefix type");
         let mut result = len_prefix.to_le_bytes();
         result.extend_from_slice(&self.data);
         result
@@ -864,8 +869,8 @@ impl<T: LengthPrefix> BeBytes for VarString<T> {
 
     #[cfg(not(feature = "std"))]
     fn to_le_bytes(&self) -> alloc::vec::Vec<u8> {
-        let len_prefix = T::from_usize(self.data.len())
-            .expect("String too long for length prefix type");
+        let len_prefix =
+            T::from_usize(self.data.len()).expect("String too long for length prefix type");
         let mut result = len_prefix.to_le_bytes();
         result.extend_from_slice(&self.data);
         result
@@ -876,26 +881,26 @@ impl<T: LengthPrefix> BeBytes for VarString<T> {
         Self: Sized,
     {
         let prefix_size = T::size();
-        
+
         if bytes.len() < prefix_size {
             return Err(BeBytesError::InsufficientData {
                 expected: prefix_size,
                 actual: bytes.len(),
             });
         }
-        
+
         let length = T::from_le_bytes(&bytes[..prefix_size]).to_usize();
         let total_size = prefix_size + length;
-        
+
         if bytes.len() < total_size {
             return Err(BeBytesError::InsufficientData {
                 expected: total_size,
                 actual: bytes.len(),
             });
         }
-        
+
         let string_data = &bytes[prefix_size..total_size];
-        
+
         // Validate UTF-8
         if core::str::from_utf8(string_data).is_err() {
             return Err(BeBytesError::InvalidDiscriminant {
@@ -903,11 +908,14 @@ impl<T: LengthPrefix> BeBytes for VarString<T> {
                 type_name: "VarString (invalid UTF-8)",
             });
         }
-        
-        Ok((Self {
-            data: string_data.to_vec(),
-            _phantom: core::marker::PhantomData,
-        }, total_size))
+
+        Ok((
+            Self {
+                data: string_data.to_vec(),
+                _phantom: core::marker::PhantomData,
+            },
+            total_size,
+        ))
     }
 }
 

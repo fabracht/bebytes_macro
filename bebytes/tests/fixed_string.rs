@@ -1,4 +1,4 @@
-use bebytes::{BeBytes, FixedString, FixedString8, FixedString16};
+use bebytes::{BeBytes, FixedString, FixedString16, FixedString8};
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 

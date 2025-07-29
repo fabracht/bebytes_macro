@@ -275,7 +275,6 @@ mod tests {
             parse_quote!(isize),
             parse_quote!(f32),
             parse_quote!(f64),
-            parse_quote!(char),
             parse_quote!(bool),
             parse_quote!(String),
         ];
