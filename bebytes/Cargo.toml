@@ -26,6 +26,7 @@ bebytes_derive = { version = "2.2.0", path = "../bebytes_derive" }
 [dev-dependencies]
 trybuild = { version = "1.0.102", features = ["diff"] }
 test-case = "3.3.1"
+proptest = "1.4"
 
 [[test]]
 name = "core"
@@ -58,6 +59,10 @@ path = "tests/integration.rs"
 [[test]]
 name = "compile_fail"
 path = "tests/compile_fail.rs"
+
+[[test]]
+name = "property_based"
+path = "tests/property_based.rs"
 
 [features]
 default = ["std"]

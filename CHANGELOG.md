@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
   - Unbounded strings as the last field
 - UTF-8 validation for all string deserialization
 - String support documentation and examples
+- Property-based testing with proptest
+  - Round-trip serialization tests
+  - Bit field bounds validation
+  - Endianness consistency checks
+  - String encoding/decoding verification
 
 ### Changed
 - Simplified string API - removed `FixedString`, `VarString`, and `CString` types
