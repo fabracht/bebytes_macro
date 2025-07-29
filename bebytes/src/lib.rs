@@ -7,6 +7,8 @@ extern crate std;
 extern crate alloc;
 #[cfg(not(feature = "std"))]
 pub use alloc::borrow::ToOwned;
+#[cfg(not(feature = "std"))]
+use alloc::vec;
 
 // Re-export Vec for use in generated code
 #[cfg(not(feature = "std"))]
@@ -432,6 +434,246 @@ pub type FixedString64 = FixedString<64>;
 pub type VarString8 = VarString<u8>;   // Max 255 bytes
 pub type VarString16 = VarString<u16>; // Max 65535 bytes  
 pub type VarString32 = VarString<u32>; // Max 4GB bytes
+
+/// A C-style null-terminated string type that can be serialized with BeBytes.
+///
+/// This type represents strings that are terminated by a null byte (0x00), commonly
+/// used in C APIs and legacy systems. The string data is stored without a length prefix,
+/// relying on the null terminator to determine the end.
+///
+/// # Examples
+///
+/// ```
+/// use bebytes::{BeBytes, CString};
+///
+/// #[derive(BeBytes, Debug, PartialEq)]
+/// struct CStyleMessage {
+///     name: CString,
+///     path: CString,
+/// }
+///
+/// let msg = CStyleMessage {
+///     name: CString::from_str("alice"),
+///     path: CString::from_str("/home/alice"),
+/// };
+///
+/// let bytes = msg.to_be_bytes();
+/// let (decoded, _) = CStyleMessage::try_from_be_bytes(&bytes).unwrap();
+/// assert_eq!(decoded, msg);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CString {
+    data: Vec<u8>,
+}
+
+impl CString {
+    /// Create a new empty CString
+    pub fn new() -> Self {
+        Self {
+            data: Vec::new(),
+        }
+    }
+    
+    /// Create a CString from a string slice
+    /// 
+    /// Note: Null bytes in the input string will be treated as terminators
+    pub fn from_str(s: &str) -> Self {
+        let bytes = s.as_bytes();
+        // Find the first null byte if any, and truncate there
+        let end_pos = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        Self {
+            data: bytes[..end_pos].to_vec(),
+        }
+    }
+    
+    /// Create a CString from a String
+    #[cfg(feature = "std")]
+    pub fn from_string(s: String) -> Self {
+        Self::from_str(&s)
+    }
+    
+    /// Create a CString from a String (no_std version)
+    #[cfg(not(feature = "std"))]
+    pub fn from_string(s: alloc::string::String) -> Self {
+        Self::from_str(&s)
+    }
+    
+    /// Get the underlying byte data (without null terminator)
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.data
+    }
+    
+    /// Get a mutable reference to the underlying byte data
+    pub fn as_bytes_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.data
+    }
+    
+    /// Convert to a string slice
+    /// 
+    /// Returns None if the data contains invalid UTF-8
+    pub fn as_str(&self) -> Option<&str> {
+        core::str::from_utf8(&self.data).ok()
+    }
+    
+    /// Convert to a String
+    /// 
+    /// Returns None if the data contains invalid UTF-8
+    #[cfg(feature = "std")]
+    pub fn to_string(&self) -> Option<std::string::String> {
+        self.as_str().map(|s| s.to_owned())
+    }
+    
+    /// Convert to a String (no_std version)
+    /// 
+    /// Returns None if the data contains invalid UTF-8
+    #[cfg(not(feature = "std"))]
+    pub fn to_string(&self) -> Option<alloc::string::String> {
+        self.as_str().map(|s| s.to_owned())
+    }
+    
+    /// Get the length of the string in bytes
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+    
+    /// Check if the string is empty
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+    
+    /// Clear the string
+    pub fn clear(&mut self) {
+        self.data.clear();
+    }
+    
+    /// Push a string slice to the end
+    pub fn push_str(&mut self, s: &str) {
+        // Only add bytes up to the first null byte
+        let bytes = s.as_bytes();
+        let end_pos = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        self.data.extend_from_slice(&bytes[..end_pos]);
+    }
+    
+    /// Push a character to the end
+    pub fn push(&mut self, ch: char) {
+        if ch != '\0' {  // Don't allow null characters
+            let mut buf = [0; 4];
+            let s = ch.encode_utf8(&mut buf);
+            self.push_str(s);
+        }
+    }
+}
+
+impl Default for CString {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<&str> for CString {
+    fn from(s: &str) -> Self {
+        Self::from_str(s)
+    }
+}
+
+#[cfg(feature = "std")]
+impl From<std::string::String> for CString {
+    fn from(s: std::string::String) -> Self {
+        Self::from_string(s)
+    }
+}
+
+#[cfg(not(feature = "std"))]
+impl From<alloc::string::String> for CString {
+    fn from(s: alloc::string::String) -> Self {
+        Self::from_string(s)
+    }
+}
+
+impl core::fmt::Display for CString {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self.as_str() {
+            Some(s) => write!(f, "{}", s),
+            None => write!(f, "<invalid UTF-8>"),
+        }
+    }
+}
+
+// Implement BeBytes for CString
+impl BeBytes for CString {
+    fn field_size() -> usize {
+        // Variable size - this is not accurate, but required by trait
+        // CString size depends on content + 1 byte for null terminator
+        0
+    }
+
+    #[cfg(feature = "std")]
+    fn to_be_bytes(&self) -> std::vec::Vec<u8> {
+        let mut result = self.data.clone();
+        result.push(0); // Add null terminator
+        result
+    }
+
+    #[cfg(not(feature = "std"))]
+    fn to_be_bytes(&self) -> alloc::vec::Vec<u8> {
+        let mut result = self.data.clone();
+        result.push(0); // Add null terminator
+        result
+    }
+
+    fn try_from_be_bytes(bytes: &'_ [u8]) -> core::result::Result<(Self, usize), BeBytesError>
+    where
+        Self: Sized,
+    {
+        // Find the null terminator
+        let null_pos = bytes.iter().position(|&b| b == 0);
+        
+        match null_pos {
+            Some(pos) => {
+                let string_data = &bytes[..pos];
+                
+                // Validate UTF-8
+                if core::str::from_utf8(string_data).is_err() {
+                    return Err(BeBytesError::InvalidDiscriminant {
+                        value: 0, // Not really a discriminant, but reusing error type
+                        type_name: "CString (invalid UTF-8)",
+                    });
+                }
+                
+                Ok((Self {
+                    data: string_data.to_vec(),
+                }, pos + 1)) // +1 to include the null terminator in bytes consumed
+            }
+            None => {
+                // No null terminator found - this is an error for C strings
+                Err(BeBytesError::InvalidDiscriminant {
+                    value: 0,
+                    type_name: "CString (missing null terminator)",
+                })
+            }
+        }
+    }
+
+    #[cfg(feature = "std")]
+    fn to_le_bytes(&self) -> std::vec::Vec<u8> {
+        // For byte data, endianness doesn't matter
+        self.to_be_bytes()
+    }
+
+    #[cfg(not(feature = "std"))]
+    fn to_le_bytes(&self) -> alloc::vec::Vec<u8> {
+        // For byte data, endianness doesn't matter
+        self.to_be_bytes()
+    }
+
+    fn try_from_le_bytes(bytes: &'_ [u8]) -> core::result::Result<(Self, usize), BeBytesError>
+    where
+        Self: Sized,
+    {
+        // For byte data, endianness doesn't matter
+        Self::try_from_be_bytes(bytes)
+    }
+}
 
 // Helper trait to handle different length prefix types
 trait LengthPrefix: Copy {

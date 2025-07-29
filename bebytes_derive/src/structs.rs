@@ -98,7 +98,7 @@ fn determine_field_type(
             match &segment.ident {
                 ident if ident == "Vec" => Some(FieldType::Vector(size, vec_size_ident)),
                 ident if ident == "Option" => Some(FieldType::OptionType),
-                ident if ident == "VarString" || ident == "VarString8" || ident == "VarString16" || ident == "VarString32" => Some(FieldType::VarString),
+                ident if ident == "VarString" || ident == "VarString8" || ident == "VarString16" || ident == "VarString32" || ident == "CString" => Some(FieldType::VarString),
                 ident if !utils::is_primitive_identity(ident) => Some(FieldType::CustomType),
                 _ => None,
             }

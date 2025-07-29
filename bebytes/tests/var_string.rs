@@ -199,7 +199,7 @@ fn test_var_string_string_too_long_for_prefix() {
     });
     
     #[cfg(not(feature = "std"))]
-    let result = Ok(()); // Skip panic test in no_std
+    let result: Result<(), ()> = Ok(()); // Skip panic test in no_std
     
     #[cfg(feature = "std")]
     assert!(result.is_err());
