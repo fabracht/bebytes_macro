@@ -10,6 +10,8 @@ tests/
 ├── bitfields.rs               # Bit field tests
 ├── enums.rs                   # Enum tests (basic, auto-sized, flags)
 ├── vectors.rs                 # Vector handling tests
+├── size_expressions.rs        # Size expression tests (NEW in 2.3.0)
+├── protocol_examples.rs       # Protocol tests with size expressions (NEW in 2.3.0)
 ├── errors.rs                  # Error handling tests
 ├── no_std.rs                  # no_std compatibility tests
 ├── integration.rs             # Complex real-world scenarios
@@ -61,6 +63,22 @@ tests/
 - Nested field access (e.g., `#[FromField(header.count)]`)
 - Vectors as last field (padding)
 - Custom type vectors
+
+### Size Expressions (`size_expressions.rs`) - NEW in 2.3.0
+- Mathematical operations (+, -, *, /, %)
+- Field references and complex expressions
+- String fields with dynamic sizing
+- Nested expressions with parentheses
+- Zero-size expression handling
+- Error conditions and validation
+
+### Protocol Examples (`protocol_examples.rs`) - NEW in 2.3.0
+- IPv4/IPv6 packet structures
+- DNS message parsing with variable sections
+- MQTT packet with remaining length
+- TCP segments with variable options
+- HTTP-like messages with content-length
+- Complex field dependencies
 
 ### Error Handling (`errors.rs`)
 - Error display formatting
@@ -124,12 +142,14 @@ These files target specific mutation patterns to improve test quality:
 cargo test
 
 # Run specific test category
-cargo test core          # Test core functionality
-cargo test bitfields     # Test bit fields
-cargo test enums         # Test enums
-cargo test vectors       # Test vectors
-cargo test errors        # Test error handling
-cargo test integration   # Test complex scenarios
+cargo test core              # Test core functionality
+cargo test bitfields         # Test bit fields
+cargo test enums             # Test enums
+cargo test vectors           # Test vectors
+cargo test size_expressions  # Test size expressions (NEW in 2.3.0)
+cargo test protocol_examples # Test protocol examples (NEW in 2.3.0)
+cargo test errors            # Test error handling
+cargo test integration       # Test complex scenarios
 
 # Run no_std tests
 cargo test --no-default-features no_std

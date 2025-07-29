@@ -14,7 +14,7 @@ To use BeBytes, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "2.2.0"
+bebytes = "2.3.0"
 ```
 
 Then, import the BeBytes trait from the bebytes crate and derive it for your struct:
@@ -269,6 +269,57 @@ struct UnicodeData {
 
 Characters are stored as 4-byte Unicode scalar values with validation to ensure they represent valid Unicode code points.
 
+## Size Expressions (New in 2.3.0)
+
+BeBytes now supports dynamic field sizing using mathematical expressions. This powerful feature enables protocol implementations where field sizes depend on other fields:
+
+```rust
+#[derive(BeBytes)]
+struct NetworkMessage {
+    header_size: u8,
+    payload_count: u16,
+    
+    #[With(size(header_size))]        // Size from field
+    header: Vec<u8>,
+    
+    #[With(size(payload_count * 8))]   // Mathematical expression
+    payload: Vec<u8>,
+}
+```
+
+### Supported Operations
+
+- **Mathematical**: `+`, `-`, `*`, `/`, `%` with parentheses
+- **Field References**: Reference any previously defined field
+- **Complex Expressions**: `#[With(size((width * height) + padding))]`
+
+### Protocol Examples
+
+```rust
+// MQTT Packet
+#[derive(BeBytes)]
+struct MqttPacket {
+    fixed_header: u8,
+    remaining_length: u8,
+    #[With(size(remaining_length))]
+    payload: Vec<u8>,
+}
+
+// IPv4 Packet  
+#[derive(BeBytes)]
+struct Ipv4Packet {
+    version: u8,
+    header_length: u8,
+    // ... other fields ...
+    #[With(size(4))]  // IPv4 addresses are 4 bytes
+    source_address: Vec<u8>,
+    #[With(size(4))]
+    dest_address: Vec<u8>,
+}
+```
+
+Size expressions work with both `Vec<u8>` and `String` fields, enabling dynamic sizing for binary protocols while maintaining compile-time validation of expression syntax.
+
 ## Vector Support
 
 Vectors require special handling since their size is dynamic. BeBytes provides several ways to handle vectors:
@@ -381,7 +432,7 @@ BeBytes supports no_std environments through feature flags:
 
 ```toml
 [dependencies]
-bebytes = { version = "2.1.3", default-features = false }
+bebytes = { version = "2.3.0", default-features = false }
 ```
 
 By default, the `std` feature is enabled. Disable it for no_std support.

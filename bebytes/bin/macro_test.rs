@@ -19,6 +19,7 @@ fn main() {
     demo_nested_field_access();
     demo_char_support();
     demo_string_support();
+    demo_size_expressions();
 
     println!("\n=== All tests completed ===");
 }
@@ -1055,7 +1056,6 @@ fn demo_string_support() {
     println!("\nMixed string types in one struct:");
     let mixed = MixedStringStruct {
         id: 42,
-        #[allow(clippy::needless_range_loop)]
         fixed_header: "BEBYTES_".to_string() + &" ".repeat(8), // Pad to 16
         content_len: 13,
         content: "Hello, world!".to_string(),
@@ -1136,4 +1136,89 @@ struct MixedStringStruct {
     #[FromField(content_len)]
     content: String,
     unicode_test: String, // Last field - unbounded
+}
+
+fn demo_size_expressions() {
+    use bebytes_derive::BeBytes;
+
+    print_section("Size Expressions");
+
+    // Define structs with size expressions
+    #[derive(BeBytes, Debug, PartialEq)]
+    struct MathExpression {
+        count: u8,
+        #[With(size(count * 4))]
+        data: Vec<u8>,
+    }
+
+    #[derive(BeBytes, Debug, PartialEq)]
+    struct FieldReference {
+        length: u16,
+        #[With(size(length))]
+        payload: Vec<u8>,
+    }
+
+    #[derive(BeBytes, Debug, PartialEq)]
+    struct ComplexExpression {
+        width: u8,
+        height: u8,
+        #[With(size((width * height) + 4))]
+        image_data: Vec<u8>,
+    }
+
+    #[derive(BeBytes, Debug, PartialEq)]
+    struct ProtocolMessage {
+        header_size: u8,
+        payload_count: u16,
+        #[With(size(header_size))]
+        header: Vec<u8>,
+        #[With(size(payload_count * 8))]
+        payload: Vec<u8>,
+    }
+
+    // Test mathematical expression: count * 4
+    let math_msg = MathExpression {
+        count: 3,
+        data: vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C], // 12 bytes = 3 * 4
+    };
+
+    let bytes = math_msg.to_be_bytes();
+    let (decoded, _) = MathExpression::try_from_be_bytes(&bytes).unwrap();
+    compare_values("Mathematical Expression (count * 4)", &math_msg, &decoded, &bytes);
+
+    // Test field reference
+    let field_msg = FieldReference {
+        length: 8,
+        payload: vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22], // 8 bytes
+    };
+
+    let bytes = field_msg.to_be_bytes();
+    let (decoded, _) = FieldReference::try_from_be_bytes(&bytes).unwrap();
+    compare_values("Field Reference", &field_msg, &decoded, &bytes);
+
+    // Test complex expression: (width * height) + 4
+    let complex_msg = ComplexExpression {
+        width: 4,
+        height: 3,
+        image_data: vec![0x10; 16], // (4 * 3) + 4 = 16 bytes
+    };
+
+    let bytes = complex_msg.to_be_bytes();
+    let (decoded, _) = ComplexExpression::try_from_be_bytes(&bytes).unwrap();
+    compare_values("Complex Expression ((width * height) + 4)", &complex_msg, &decoded, &bytes);
+
+    // Test protocol with multiple size expressions
+    let protocol_msg = ProtocolMessage {
+        header_size: 4,
+        payload_count: 2,
+        header: vec![0x01, 0x02, 0x03, 0x04], // 4 bytes
+        payload: vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00], // 16 bytes = 2 * 8
+    };
+
+    let bytes = protocol_msg.to_be_bytes();
+    let (decoded, _) = ProtocolMessage::try_from_be_bytes(&bytes).unwrap();
+    compare_values("Protocol Message (multiple expressions)", &protocol_msg, &decoded, &bytes);
+
+    println!("\nSize expressions enable dynamic field sizing based on other fields!");
+    println!("Supported operations: +, -, *, /, % with field references and literals");
 }

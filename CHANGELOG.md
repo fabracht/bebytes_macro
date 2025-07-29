@@ -2,7 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.2.0] - Unreleased
+## [2.3.0] - Unreleased
+
+### Added
+- **Size Expressions**: Dynamic field sizing using mathematical expressions
+  - `#[With(size(expression))]` syntax for Vec<u8> and String fields  
+  - Support for mathematical operations: `+`, `-`, `*`, `/`, `%` with parentheses
+  - Field references for dynamic sizing based on other struct fields
+  - Complex expressions like `#[With(size((width * height) + padding))]`
+  - Runtime expression evaluation with compile-time syntax validation
+- Protocol examples demonstrating size expressions (IPv4, DNS, MQTT, TCP, HTTP)
+- Comprehensive size expression documentation (SIZE_EXPRESSIONS.md)
+- Size expression demonstration in macro_test.rs
+
+### Changed
+- Enhanced attribute parsing to support mathematical expressions
+- Extended code generation for runtime size calculation
+- Updated all documentation and examples to reflect new capabilities
+
+## [2.2.0] - 2025-07-28
 
 ### Added
 - Comprehensive string support with standard Rust `String` types
