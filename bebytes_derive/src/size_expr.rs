@@ -5,8 +5,8 @@
 //! and field references.
 
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{parse::Parse, parse_str, Error, Expr, Ident, LitInt, Result, Token};
+use quote::quote;
+use syn::{parse_str, Error, Expr, Ident, Result};
 
 #[cfg(feature = "std")]
 use std::{fmt, vec::Vec};
@@ -100,10 +100,19 @@ impl SizeExpression {
             }
             Expr::If(if_expr) => {
                 let condition = Box::new(Condition::from_syn_expr(&if_expr.cond)?);
-                let then_expr = Box::new(Self::from_syn_expr(&if_expr.then_branch.stmts[0])?);
+                
+                // Extract the then expression from the block
+                let then_expr = if let Some(stmt) = if_expr.then_branch.stmts.first() {
+                    match stmt {
+                        syn::Stmt::Expr(expr, _) => Box::new(Self::from_syn_expr(expr)?),
+                        _ => return Err(Error::new_spanned(stmt, "Expected expression in then branch")),
+                    }
+                } else {
+                    return Err(Error::new_spanned(&if_expr.then_branch, "Empty then branch"));
+                };
                 
                 let else_expr = if let Some((_, else_branch)) = &if_expr.else_branch {
-                    Box::new(Self::from_syn_expr(else_branch)?)?
+                    Box::new(Self::from_syn_expr(else_branch)?)
                 } else {
                     return Err(Error::new_spanned(if_expr, "Conditional expressions must have an else clause"));
                 };
@@ -195,7 +204,7 @@ impl SizeExpression {
         refs
     }
 
-    fn collect_field_references(&self, refs: &mut Vec<&FieldPath>) {
+    fn collect_field_references<'a>(&'a self, refs: &mut Vec<&'a FieldPath>) {
         match self {
             SizeExpression::FieldRef(field_path) => refs.push(field_path),
             SizeExpression::BinaryOp { left, right, .. } => {

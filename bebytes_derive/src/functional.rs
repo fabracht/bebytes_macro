@@ -912,6 +912,8 @@ pub mod functional_attrs {
                 } else if attr.path().is_ident("FromField") {
                     parse_from_field_attribute_functional(attr)
                         .map(|field| Some(AttributeData::new().with_field(field)))
+                } else if attr.path().is_ident("size") {
+                    parse_size_attribute_with_expressions(attr)
                 } else {
                     Ok(None)
                 }
@@ -991,26 +993,42 @@ pub mod functional_attrs {
         let mut size = None;
         let mut size_expression = None;
         
-        attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("size") {
-                let content;
-                parenthesized!(content in meta.input);
+        // Parse the content inside With(...)
+        match &attr.meta {
+            syn::Meta::List(list) => {
+                // Parse the tokens inside With(...)
+                let tokens = &list.tokens;
                 
-                // Try to parse as integer literal first
-                if let Ok(lit) = content.parse::<LitInt>() {
-                    let n: usize = lit.base10_parse()?;
-                    size = Some(n);
+                // Try to parse as "size(...)" pattern
+                let tokens_str = tokens.to_string();
+                if tokens_str.starts_with("size") {
+                    // Find the content inside size(...)
+                    if let Some(start) = tokens_str.find('(') {
+                        if let Some(end) = tokens_str.rfind(')') {
+                            let expr_content = &tokens_str[start + 1..end];
+                            
+                            // Try to parse as integer literal first
+                            if let Ok(n) = expr_content.trim().parse::<usize>() {
+                                size = Some(n);
+                            } else {
+                                // Parse as expression
+                                let parsed_expr = crate::size_expr::SizeExpression::parse(expr_content.trim())?;
+                                size_expression = Some(parsed_expr);
+                            }
+                        } else {
+                            return Err(syn::Error::new_spanned(attr, "Missing closing parenthesis in size attribute"));
+                        }
+                    } else {
+                        return Err(syn::Error::new_spanned(attr, "Expected size(...) format"));
+                    }
                 } else {
-                    // Parse as expression
-                    let expr_str = content.to_string();
-                    let parsed_expr = crate::size_expr::SizeExpression::parse(&expr_str)?;
-                    size_expression = Some(parsed_expr);
+                    return Err(syn::Error::new_spanned(attr, "Only size attribute is supported in With"));
                 }
-                Ok(())
-            } else {
-                Err(meta.error("Allowed attributes are `size` - Example: #[With(size(3))] or #[With(size(count * 4))]"))
             }
-        })?;
+            _ => {
+                return Err(syn::Error::new_spanned(attr, "With attribute must have parentheses: #[With(size(...))]"));
+            }
+        }
         
         if size.is_some() || size_expression.is_some() {
             let mut attr_data = AttributeData::new();
@@ -1020,6 +1038,33 @@ pub mod functional_attrs {
             if let Some(expr) = size_expression {
                 attr_data = attr_data.with_size_expression(expr);
             }
+            Ok(Some(attr_data))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse standalone size attribute with expression support
+    pub fn parse_size_attribute_with_expressions(
+        attr: &syn::Attribute,
+    ) -> Result<Option<AttributeData>, syn::Error> {
+        let mut size_expression = None;
+        
+        // Parse the content inside #[size(...)]
+        match &attr.meta {
+            syn::Meta::List(list) => {
+                let tokens = &list.tokens;
+                let expr_str = tokens.to_string();
+                let parsed_expr = crate::size_expr::SizeExpression::parse(&expr_str)?;
+                size_expression = Some(parsed_expr);
+            }
+            _ => {
+                return Err(syn::Error::new_spanned(attr, "size attribute must have parentheses: #[size(expression)]"));
+            }
+        }
+        
+        if let Some(expr) = size_expression {
+            let attr_data = AttributeData::new().with_size_expression(expr);
             Ok(Some(attr_data))
         } else {
             Ok(None)
