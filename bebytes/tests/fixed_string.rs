@@ -1,4 +1,4 @@
-use bebytes::{BeBytes, FixedString};
+use bebytes::{BeBytes, FixedString, FixedString8, FixedString16};
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
@@ -64,14 +64,14 @@ fn test_fixed_string_in_struct() {
     #[derive(BeBytes, Debug, PartialEq)]
     struct Message {
         id: u32,
-        name: FixedString<16>,
-        status: FixedString<8>,
+        name: FixedString16,
+        status: FixedString8,
     }
 
     let msg = Message {
         id: 42,
-        name: FixedString::from_str("Alice"),
-        status: FixedString::from_str("active"),
+        name: FixedString16::from_str("Alice"),
+        status: FixedString8::from_str("active"),
     };
 
     let bytes = msg.to_be_bytes();

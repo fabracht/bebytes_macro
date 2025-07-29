@@ -422,6 +422,12 @@ impl<T> core::fmt::Display for VarString<T> {
     }
 }
 
+/// Type aliases for common fixed-length string sizes
+pub type FixedString8 = FixedString<8>;
+pub type FixedString16 = FixedString<16>;
+pub type FixedString32 = FixedString<32>;
+pub type FixedString64 = FixedString<64>;
+
 /// Type aliases for common variable-length string sizes
 pub type VarString8 = VarString<u8>;   // Max 255 bytes
 pub type VarString16 = VarString<u16>; // Max 65535 bytes  
