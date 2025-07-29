@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.1.3] - Unreleased
+## [2.2.0] - Unreleased
 
 ### Added
 - Comprehensive string support with standard Rust `String` types
