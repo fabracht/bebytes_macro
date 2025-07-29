@@ -1179,12 +1179,19 @@ fn demo_size_expressions() {
     // Test mathematical expression: count * 4
     let math_msg = MathExpression {
         count: 3,
-        data: vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C], // 12 bytes = 3 * 4
+        data: vec![
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C,
+        ], // 12 bytes = 3 * 4
     };
 
     let bytes = math_msg.to_be_bytes();
     let (decoded, _) = MathExpression::try_from_be_bytes(&bytes).unwrap();
-    compare_values("Mathematical Expression (count * 4)", &math_msg, &decoded, &bytes);
+    compare_values(
+        "Mathematical Expression (count * 4)",
+        &math_msg,
+        &decoded,
+        &bytes,
+    );
 
     // Test field reference
     let field_msg = FieldReference {
@@ -1205,19 +1212,32 @@ fn demo_size_expressions() {
 
     let bytes = complex_msg.to_be_bytes();
     let (decoded, _) = ComplexExpression::try_from_be_bytes(&bytes).unwrap();
-    compare_values("Complex Expression ((width * height) + 4)", &complex_msg, &decoded, &bytes);
+    compare_values(
+        "Complex Expression ((width * height) + 4)",
+        &complex_msg,
+        &decoded,
+        &bytes,
+    );
 
     // Test protocol with multiple size expressions
     let protocol_msg = ProtocolMessage {
         header_size: 4,
         payload_count: 2,
         header: vec![0x01, 0x02, 0x03, 0x04], // 4 bytes
-        payload: vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00], // 16 bytes = 2 * 8
+        payload: vec![
+            0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+            0x99, 0x00,
+        ], // 16 bytes = 2 * 8
     };
 
     let bytes = protocol_msg.to_be_bytes();
     let (decoded, _) = ProtocolMessage::try_from_be_bytes(&bytes).unwrap();
-    compare_values("Protocol Message (multiple expressions)", &protocol_msg, &decoded, &bytes);
+    compare_values(
+        "Protocol Message (multiple expressions)",
+        &protocol_msg,
+        &decoded,
+        &bytes,
+    );
 
     println!("\nSize expressions enable dynamic field sizing based on other fields!");
     println!("Supported operations: +, -, *, /, % with field references and literals");
