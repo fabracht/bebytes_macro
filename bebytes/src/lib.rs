@@ -68,17 +68,17 @@ impl std::error::Error for BeBytesError {}
 /// # Examples
 ///
 /// ```
-/// use bebytes::{BeBytes, FixedString};
+/// use bebytes::{BeBytes, FixedString16, FixedString8};
 ///
 /// #[derive(BeBytes, Debug, PartialEq)]
 /// struct Message {
-///     name: FixedString<16>,
-///     status: FixedString<8>,
+///     name: FixedString16,
+///     status: FixedString8,
 /// }
 ///
 /// let msg = Message {
-///     name: FixedString::from_str("Alice"),
-///     status: FixedString::from_str("active"),
+///     name: FixedString16::from_str("Alice"),
+///     status: FixedString8::from_str("active"),
 /// };
 ///
 /// let bytes = msg.to_be_bytes();
