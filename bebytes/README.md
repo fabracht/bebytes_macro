@@ -426,6 +426,46 @@ For vectors of custom types, the following rules apply:
 - When used elsewhere, you must specify size information with `#[FromField]` or `#[With]`
 - Each item in the vector is serialized/deserialized using its own BeBytes implementation
 
+## Performance Optimizations
+
+### Direct Buffer Writing (New in 2.4.0)
+
+BeBytes now supports direct buffer writing to avoid intermediate allocations:
+
+```rust
+use bebytes::BeBytes;
+use bytes::BytesMut;
+
+#[derive(BeBytes)]
+struct Packet {
+    header: u32,
+    payload: Vec<u8>,
+}
+
+// Traditional approach (allocates)
+let bytes = packet.to_be_bytes();
+buffer.put_slice(&bytes);
+
+// Direct writing (no allocation)
+packet.encode_be_to(&mut buffer)?;
+```
+
+The `encode_be_to` and `encode_le_to` methods write directly to any `BufMut` implementation, eliminating the allocation overhead of `to_be_bytes()`. This is particularly beneficial for high-performance networking code.
+
+### Performance Features
+
+- **Inline annotations**: All generated methods use `#[inline]` for better optimization
+- **Pre-allocated capacity**: The `to_bytes` methods pre-allocate exact capacity
+- **Direct buffer writing**: Available with the `bytes` feature flag
+- **Zero-copy parsing**: Deserialization works directly from byte slices
+
+To enable direct buffer writing:
+
+```toml
+[dependencies]
+bebytes = { version = "2.4.0", features = ["bytes"] }
+```
+
 ## No-STD Support
 
 BeBytes supports no_std environments through feature flags:

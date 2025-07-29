@@ -20,6 +20,10 @@ pub use bebytes_derive::BeBytes;
 #[doc(hidden)]
 pub use interpreter::{StringInterpreter, Utf8};
 
+// Re-export bytes::BufMut when the bytes feature is enabled
+#[cfg(feature = "bytes")]
+pub use bytes::BufMut;
+
 /// Error type for `BeBytes` operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BeBytesError {
@@ -102,4 +106,49 @@ pub trait BeBytes {
     fn try_from_le_bytes(bytes: &'_ [u8]) -> core::result::Result<(Self, usize), BeBytesError>
     where
         Self: Sized;
+
+    // Direct buffer writing methods (when bytes feature is enabled)
+    #[cfg(feature = "bytes")]
+    /// Encode directly to a buffer in big-endian format
+    ///
+    /// This method avoids intermediate allocations by writing directly to the provided buffer.
+    /// It's more efficient than `to_be_bytes()` for performance-critical code.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the buffer doesn't have enough capacity
+    fn encode_be_to<B: BufMut>(&self, buf: &mut B) -> core::result::Result<(), BeBytesError> {
+        // Default implementation using to_be_bytes for backward compatibility
+        let bytes = self.to_be_bytes();
+        if buf.remaining_mut() < bytes.len() {
+            return Err(BeBytesError::InsufficientData {
+                expected: bytes.len(),
+                actual: buf.remaining_mut(),
+            });
+        }
+        buf.put_slice(&bytes);
+        Ok(())
+    }
+
+    #[cfg(feature = "bytes")]
+    /// Encode directly to a buffer in little-endian format
+    ///
+    /// This method avoids intermediate allocations by writing directly to the provided buffer.
+    /// It's more efficient than `to_le_bytes()` for performance-critical code.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the buffer doesn't have enough capacity
+    fn encode_le_to<B: BufMut>(&self, buf: &mut B) -> core::result::Result<(), BeBytesError> {
+        // Default implementation using to_le_bytes for backward compatibility
+        let bytes = self.to_le_bytes();
+        if buf.remaining_mut() < bytes.len() {
+            return Err(BeBytesError::InsufficientData {
+                expected: bytes.len(),
+                actual: buf.remaining_mut(),
+            });
+        }
+        buf.put_slice(&bytes);
+        Ok(())
+    }
 }
