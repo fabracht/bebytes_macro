@@ -13,7 +13,7 @@ enum FieldType {
     PrimitiveType,
     Array(usize),                                   // array_length
     Vector(Option<usize>, Option<Vec<syn::Ident>>), // size, vec_size_ident
-    VarString,                                      // Variable-length string with prefix
+    String(Option<usize>, Option<Vec<syn::Ident>>), // size, string_size_ident
     OptionType,
     CustomType,
 }
@@ -98,15 +98,7 @@ fn determine_field_type(
             match &segment.ident {
                 ident if ident == "Vec" => Some(FieldType::Vector(size, vec_size_ident)),
                 ident if ident == "Option" => Some(FieldType::OptionType),
-                ident
-                    if ident == "VarString"
-                        || ident == "VarString8"
-                        || ident == "VarString16"
-                        || ident == "VarString32"
-                        || ident == "CString" =>
-                {
-                    Some(FieldType::VarString)
-                }
+                ident if ident == "String" => Some(FieldType::String(size, vec_size_ident)),
                 ident if !utils::is_primitive_identity(ident) => Some(FieldType::CustomType),
                 _ => None,
             }
@@ -231,9 +223,13 @@ fn process_field_type(
             }
             Ok(result)
         }
-        FieldType::VarString => {
-            let result = process_var_string_functional(context, processing_ctx);
-            // VarString has variable size, can't track bit position
+        FieldType::String(size, string_size_ident) => {
+            let result =
+                process_string_functional(context, size, string_size_ident, processing_ctx)?;
+            // Strings have variable size, but we need to track something for bit field positioning
+            if let Some(s) = size {
+                *current_bit_position += s * 8;
+            }
             Ok(result)
         }
         FieldType::CustomType => {
@@ -272,165 +268,21 @@ fn process_bits_field_functional(
         false
     };
 
-    // Use multi-byte path if:
-    // 1. The underlying type is multi-byte (number_length > 1), OR
-    // 2. The field is too large to ever fit in a single byte regardless of position (size > 8)
-    // Note: Fields with size <= 8 can still span bytes at runtime, but we handle this differently
+    // Use multi-byte path if the type is multi-byte or field is too large
     let (parsing, writing) = if number_length > 1 || size > 8 {
-        // Optimized multi-byte bit field handling
-        let from_bytes_method = utils::get_from_bytes_method(processing_ctx.endianness);
-        let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
-
-        let aligned_parsing = if is_char_type {
-            // For char, we need to validate after extracting the u32 value
-            crate::functional::pure_helpers::create_aligned_char_parsing(
-                &from_bytes_method,
-                number_length,
-            )
-        } else {
-            crate::functional::pure_helpers::create_aligned_multibyte_parsing(
-                field_type,
-                &from_bytes_method,
-                number_length,
-            )
-        };
-        let unaligned_parsing = if is_char_type {
-            crate::functional::pure_helpers::create_unaligned_char_parsing(
-                size,
-                processing_ctx.endianness,
-            )
-        } else {
-            crate::functional::pure_helpers::create_unaligned_multibyte_parsing(
-                field_type,
-                size,
-                processing_ctx.endianness,
-            )
-        };
-
-        let parsing = quote! {
-            let #field_name = {
-                let byte_start = _bit_sum / 8;
-                let bit_end = _bit_sum + #size;
-                let bytes_needed = (bit_end + 7) / 8; // Round up to nearest byte
-                if bytes_needed > bytes.len() {
-                    return Err(::bebytes::BeBytesError::InsufficientData {
-                        expected: bytes_needed - byte_start,
-                        actual: bytes.len() - byte_start,
-                    });
-                }
-
-                // Optimized: Use compile-time bit position when available
-                let bit_offset = _bit_sum % 8;
-
-                // Check if we can use compile-time optimization
-                if bit_offset == 0 && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
-                    // Compile-time aligned case: direct conversion without bit manipulation
-                    #aligned_parsing
-                } else if bit_offset == 0 && #size == (#number_length * 8) {
-                    // Runtime aligned case: direct conversion without bit manipulation
-                    #aligned_parsing
-                } else {
-                    // Unaligned case: optimized bit extraction
-                    #unaligned_parsing
-                }
-            };
-            _bit_sum += #size;
-        };
-
-        let aligned_writing = if is_char_type {
-            crate::functional::pure_helpers::create_aligned_char_writing(
-                &to_bytes_method,
-                number_length,
-            )
-        } else {
-            crate::functional::pure_helpers::create_aligned_multibyte_writing(
-                field_type,
-                &to_bytes_method,
-                number_length,
-            )
-        };
-        let unaligned_writing = if is_char_type {
-            crate::functional::pure_helpers::create_unaligned_char_writing(
-                size,
-                processing_ctx.endianness,
-            )
-        } else {
-            crate::functional::pure_helpers::create_unaligned_multibyte_writing(
-                field_type,
-                size,
-                processing_ctx.endianness,
-            )
-        };
-
-        let writing = if is_char_type {
-            quote! {
-                if (#field_name as u32) > #mask as u32 {
-                    panic!(
-                        "Value {} for field {} exceeds the maximum allowed value {}.",
-                        #field_name as u32,
-                        stringify!(#field_name),
-                        #mask
-                    );
-                }
-
-                // Optimized: Use compile-time bit position when available
-                let value = #field_name as u32 & #mask as u32;
-            }
-        } else {
-            quote! {
-                if #field_name > #mask as #field_type {
-                    panic!(
-                        "Value {} for field {} exceeds the maximum allowed value {}.",
-                        #field_name,
-                        stringify!(#field_name),
-                        #mask
-                    );
-                }
-
-                // Optimized: Use compile-time bit position when available
-                let value = #field_name & #mask as #field_type;
-            }
-        };
-
-        let writing = quote! {
-            #writing
-            let byte_start = _bit_sum / 8;
-            let bit_offset = _bit_sum % 8;
-            // Check if we can use compile-time optimization
-            if bit_offset == 0 && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
-                // Compile-time aligned case: direct byte insertion
-                #aligned_writing
-            } else if bit_offset == 0 && #size == (#number_length * 8) {
-                // Runtime aligned case: direct byte insertion
-                #aligned_writing
-            } else {
-                // Unaligned case: optimized bit insertion
-                #unaligned_writing
-            }
-            _bit_sum += #size;
-        };
-
-        (parsing, writing)
-    } else {
-        // Single byte bit field - generate inline code that uses _bit_sum
-        let mask: u128 = (1 << size) - 1;
-
-        let parsing = crate::functional::pure_helpers::create_single_byte_bit_parsing(
+        let ctx = MultiByteBitFieldCtx {
             field_name,
             field_type,
             size,
+            number_length,
+            bit_position,
+            is_char_type,
             mask,
-            processing_ctx.endianness,
-        );
-
-        let writing = crate::functional::pure_helpers::create_single_byte_bit_writing(
-            field_name,
-            size,
-            mask,
-            processing_ctx.endianness,
-        );
-
-        (parsing, writing)
+            processing_ctx,
+        };
+        generate_multibyte_bit_field(&ctx)
+    } else {
+        generate_single_byte_bit_field(field_name, field_type, size, mask, processing_ctx)
     };
 
     Ok(crate::functional::FieldProcessResult::new(
@@ -440,6 +292,225 @@ fn process_bits_field_functional(
         accessor,
         bit_sum,
     ))
+}
+
+// Context for multi-byte bit field generation
+struct MultiByteBitFieldCtx<'a> {
+    field_name: &'a syn::Ident,
+    field_type: &'a syn::Type,
+    size: usize,
+    number_length: usize,
+    bit_position: usize,
+    is_char_type: bool,
+    mask: u128,
+    processing_ctx: &'a crate::functional::ProcessingContext,
+}
+
+// Generate code for multi-byte bit fields
+fn generate_multibyte_bit_field(
+    ctx: &MultiByteBitFieldCtx,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let from_bytes_method = utils::get_from_bytes_method(ctx.processing_ctx.endianness);
+    let to_bytes_method = utils::get_to_bytes_method(ctx.processing_ctx.endianness);
+
+    let (aligned_parsing, unaligned_parsing) = generate_parsing_tokens(
+        ctx.field_type,
+        ctx.size,
+        ctx.number_length,
+        ctx.is_char_type,
+        &from_bytes_method,
+        ctx.processing_ctx,
+    );
+
+    let field_name = ctx.field_name;
+    let size = ctx.size;
+    let bit_position = ctx.bit_position;
+    let number_length = ctx.number_length;
+
+    let parsing = quote! {
+        let #field_name = {
+            let byte_start = _bit_sum / 8;
+            let bit_end = _bit_sum + #size;
+            let bytes_needed = bit_end.div_ceil(8);
+            if bytes_needed > bytes.len() {
+                return Err(::bebytes::BeBytesError::InsufficientData {
+                    expected: bytes_needed - byte_start,
+                    actual: bytes.len() - byte_start,
+                });
+            }
+
+            let bit_offset = _bit_sum % 8;
+            if bit_offset == 0 && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
+                #aligned_parsing
+            } else if bit_offset == 0 && #size == (#number_length * 8) {
+                #aligned_parsing
+            } else {
+                #unaligned_parsing
+            }
+        };
+        _bit_sum += #size;
+    };
+
+    let (aligned_writing, unaligned_writing) = generate_writing_tokens(
+        ctx.field_type,
+        ctx.size,
+        ctx.number_length,
+        ctx.is_char_type,
+        &to_bytes_method,
+        ctx.processing_ctx,
+    );
+
+    let value_prep =
+        generate_value_preparation(ctx.field_name, ctx.field_type, ctx.is_char_type, ctx.mask);
+
+    let writing = quote! {
+        #value_prep
+        let byte_start = _bit_sum / 8;
+        let bit_offset = _bit_sum % 8;
+        if bit_offset == 0 && (#bit_position % 8 == 0) && (#size == (#number_length * 8)) {
+            #aligned_writing
+        } else if bit_offset == 0 && #size == (#number_length * 8) {
+            #aligned_writing
+        } else {
+            #unaligned_writing
+        }
+        _bit_sum += #size;
+    };
+
+    (parsing, writing)
+}
+
+// Generate code for single-byte bit fields
+fn generate_single_byte_bit_field(
+    field_name: &syn::Ident,
+    field_type: &syn::Type,
+    size: usize,
+    mask: u128,
+    processing_ctx: &crate::functional::ProcessingContext,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let parsing = crate::functional::pure_helpers::create_single_byte_bit_parsing(
+        field_name,
+        field_type,
+        size,
+        mask,
+        processing_ctx.endianness,
+    );
+
+    let writing = crate::functional::pure_helpers::create_single_byte_bit_writing(
+        field_name,
+        size,
+        mask,
+        processing_ctx.endianness,
+    );
+
+    (parsing, writing)
+}
+
+// Helper to generate parsing tokens
+fn generate_parsing_tokens(
+    field_type: &syn::Type,
+    size: usize,
+    number_length: usize,
+    is_char_type: bool,
+    from_bytes_method: &proc_macro2::TokenStream,
+    processing_ctx: &crate::functional::ProcessingContext,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let aligned_parsing = if is_char_type {
+        crate::functional::pure_helpers::create_aligned_char_parsing(
+            from_bytes_method,
+            number_length,
+        )
+    } else {
+        crate::functional::pure_helpers::create_aligned_multibyte_parsing(
+            field_type,
+            from_bytes_method,
+            number_length,
+        )
+    };
+
+    let unaligned_parsing = if is_char_type {
+        crate::functional::pure_helpers::create_unaligned_char_parsing(
+            size,
+            processing_ctx.endianness,
+        )
+    } else {
+        crate::functional::pure_helpers::create_unaligned_multibyte_parsing(
+            field_type,
+            size,
+            processing_ctx.endianness,
+        )
+    };
+
+    (aligned_parsing, unaligned_parsing)
+}
+
+// Helper to generate writing tokens
+fn generate_writing_tokens(
+    field_type: &syn::Type,
+    size: usize,
+    number_length: usize,
+    is_char_type: bool,
+    to_bytes_method: &proc_macro2::TokenStream,
+    processing_ctx: &crate::functional::ProcessingContext,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let aligned_writing = if is_char_type {
+        crate::functional::pure_helpers::create_aligned_char_writing(to_bytes_method, number_length)
+    } else {
+        crate::functional::pure_helpers::create_aligned_multibyte_writing(
+            field_type,
+            to_bytes_method,
+            number_length,
+        )
+    };
+
+    let unaligned_writing = if is_char_type {
+        crate::functional::pure_helpers::create_unaligned_char_writing(
+            size,
+            processing_ctx.endianness,
+        )
+    } else {
+        crate::functional::pure_helpers::create_unaligned_multibyte_writing(
+            field_type,
+            size,
+            processing_ctx.endianness,
+        )
+    };
+
+    (aligned_writing, unaligned_writing)
+}
+
+// Helper to generate value preparation code
+fn generate_value_preparation(
+    field_name: &syn::Ident,
+    field_type: &syn::Type,
+    is_char_type: bool,
+    mask: u128,
+) -> proc_macro2::TokenStream {
+    if is_char_type {
+        quote! {
+            if (#field_name as u32) > #mask as u32 {
+                panic!(
+                    "Value {} for field {} exceeds the maximum allowed value {}.",
+                    #field_name as u32,
+                    stringify!(#field_name),
+                    #mask
+                );
+            }
+            let value = #field_name as u32 & #mask as u32;
+        }
+    } else {
+        quote! {
+            if #field_name > #mask as #field_type {
+                panic!(
+                    "Value {} for field {} exceeds the maximum allowed value {}.",
+                    #field_name,
+                    stringify!(#field_name),
+                    #mask
+                );
+            }
+            let value = #field_name & #mask as #field_type;
+        }
+    }
 }
 
 // Functional version of handle_primitive_type
@@ -858,40 +929,150 @@ fn process_custom_type_functional(
     crate::functional::FieldProcessResult::new(quote! {}, parsing, writing, accessor, bit_sum)
 }
 
-// Functional version for VarString fields
-fn process_var_string_functional(
+// Functional version for String fields
+fn process_string_functional(
     context: &FieldContext,
-    processing_ctx: &crate::functional::ProcessingContext,
-) -> crate::functional::FieldProcessResult {
+    size: Option<usize>,
+    string_size_ident: Option<Vec<syn::Ident>>,
+    _processing_ctx: &crate::functional::ProcessingContext,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
     let field_name = &context.field_name;
-    let field_type = context.field_type;
+    let field = context.field;
+    let is_last_field = context.is_last_field;
 
-    let needs_owned = !utils::is_copy(field_type);
-    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, needs_owned);
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, true);
 
-    // VarString is variable size, so we can't predict bit_sum at compile time
-    // We don't add anything to bit_sum because the size is variable
-    let bit_sum = quote! {
-        // VarString fields don't contribute to compile-time size calculation
+    // Generate parsing code based on size constraints
+    let (bit_sum, parsing, writing) = match (size, string_size_ident) {
+        // Fixed size from attribute: #[With(size(N))]
+        (Some(s), None) => generate_fixed_size_string(field_name, s),
+        // Size from field: #[FromField(field_name)]
+        (_, Some(ident_path)) => generate_field_size_string(field_name, &ident_path),
+        // Unbounded (last field only)
+        (None, None) => {
+            if !is_last_field {
+                return Err(syn::Error::new(
+                    field.ty.span(),
+                    "Unbounded strings can only be used as the last field of a struct",
+                ));
+            }
+            generate_unbounded_string(field_name)
+        }
     };
 
-    let try_from_bytes_method = utils::get_try_from_bytes_method(processing_ctx.endianness);
-    let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
+    Ok(crate::functional::FieldProcessResult::new(
+        quote! {},
+        parsing,
+        writing,
+        accessor,
+        bit_sum,
+    ))
+}
 
-    let parsing = quote_spanned! { context.field.span() =>
+// Generate code for fixed-size strings
+fn generate_fixed_size_string(
+    field_name: &syn::Ident,
+    size: usize,
+) -> (
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+) {
+    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(size);
+
+    let parsing = quote! {
         byte_index = _bit_sum / 8;
-        let (temp_value, bytes_consumed) = #field_type::#try_from_bytes_method(&bytes[byte_index..])?;
-        let #field_name = temp_value;
-        _bit_sum += bytes_consumed * 8;
+        let end_index = byte_index + #size;
+        if end_index > bytes.len() {
+            return Err(::bebytes::BeBytesError::InsufficientData {
+                expected: end_index,
+                actual: bytes.len(),
+            });
+        }
+        let string_bytes = &bytes[byte_index..end_index];
+        let #field_name = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::from_bytes(string_bytes)?;
+        _bit_sum += #size * 8;
     };
 
-    let writing = quote_spanned! { context.field.span() =>
-        let bytes_data = &BeBytes::#to_bytes_method(&#field_name);
-        // Optimized: Reserve capacity to avoid reallocation
-        bytes.reserve(bytes_data.len());
-        bytes.extend_from_slice(bytes_data);
-        _bit_sum += bytes_data.len() * 8;
+    let writing = quote! {
+        let string_bytes = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::to_bytes(&#field_name);
+        if string_bytes.len() != #size {
+            panic!(
+                "String field {} has length {} but expected fixed size {}",
+                stringify!(#field_name),
+                string_bytes.len(),
+                #size
+            );
+        }
+        bytes.reserve(#size);
+        bytes.extend_from_slice(string_bytes);
+        _bit_sum += #size * 8;
     };
 
-    crate::functional::FieldProcessResult::new(quote! {}, parsing, writing, accessor, bit_sum)
+    (bit_sum, parsing, writing)
+}
+
+// Generate code for field-size strings
+fn generate_field_size_string(
+    field_name: &syn::Ident,
+    ident_path: &[syn::Ident],
+) -> (
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+) {
+    let field_access_parse =
+        crate::functional::pure_helpers::generate_field_access_path(ident_path);
+    let bit_sum = quote! { bit_sum = 4096 * 8; };
+
+    let parsing = quote! {
+        byte_index = _bit_sum / 8;
+        let string_size = #field_access_parse as usize;
+        let end_index = byte_index + string_size;
+        if end_index > bytes.len() {
+            return Err(::bebytes::BeBytesError::InsufficientData {
+                expected: end_index,
+                actual: bytes.len(),
+            });
+        }
+        let string_bytes = &bytes[byte_index..end_index];
+        let #field_name = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::from_bytes(string_bytes)?;
+        _bit_sum += string_size * 8;
+    };
+
+    let writing = quote! {
+        let string_bytes = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::to_bytes(&#field_name);
+        bytes.reserve(string_bytes.len());
+        bytes.extend_from_slice(string_bytes);
+        _bit_sum += string_bytes.len() * 8;
+    };
+
+    (bit_sum, parsing, writing)
+}
+
+// Generate code for unbounded strings
+fn generate_unbounded_string(
+    field_name: &syn::Ident,
+) -> (
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+) {
+    let bit_sum = quote! { bit_sum = 4096 * 8; };
+
+    let parsing = quote! {
+        byte_index = _bit_sum / 8;
+        let string_bytes = &bytes[byte_index..];
+        let #field_name = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::from_bytes(string_bytes)?;
+        _bit_sum += string_bytes.len() * 8;
+    };
+
+    let writing = quote! {
+        let string_bytes = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::to_bytes(&#field_name);
+        bytes.reserve(string_bytes.len());
+        bytes.extend_from_slice(string_bytes);
+        _bit_sum += string_bytes.len() * 8;
+    };
+
+    (bit_sum, parsing, writing)
 }

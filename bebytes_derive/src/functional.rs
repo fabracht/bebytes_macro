@@ -235,114 +235,95 @@ pub mod pure_helpers {
         // Special handling for char type
         if let syn::Type::Path(tp) = field_type {
             if tp.path.is_ident("char") {
-                return match endianness {
-                    crate::consts::Endianness::Big => Ok(quote! {
-                        let char_value = u32::from_be_bytes([
-                            bytes[byte_index], bytes[byte_index + 1],
-                            bytes[byte_index + 2], bytes[byte_index + 3]
-                        ]);
-                        let #field_name = char::from_u32(char_value)
-                            .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
-                                value: (char_value & 0xFF) as u8,
-                                type_name: "char",
-                            })?;
-                    }),
-                    crate::consts::Endianness::Little => Ok(quote! {
-                        let char_value = u32::from_le_bytes([
-                            bytes[byte_index], bytes[byte_index + 1],
-                            bytes[byte_index + 2], bytes[byte_index + 3]
-                        ]);
-                        let #field_name = char::from_u32(char_value)
-                            .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
-                                value: (char_value & 0xFF) as u8,
-                                type_name: "char",
-                            })?;
-                    }),
-                };
+                return Ok(create_char_parsing(field_name, endianness));
             }
         }
 
+        create_numeric_parsing(field_name, field_type, type_size, endianness)
+    }
+
+    /// Create char type parsing code
+    fn create_char_parsing(
+        field_name: &Ident,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
         match endianness {
-            crate::consts::Endianness::Big => match type_size {
-                1 => Ok(quote! {
-                    let #field_name = bytes[byte_index] as #field_type;
-                }),
-                2 => Ok(quote! {
-                    let #field_name = #field_type::from_be_bytes([
-                        bytes[byte_index], bytes[byte_index + 1]
-                    ]);
-                }),
-                4 => Ok(quote! {
-                    let #field_name = #field_type::from_be_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3]
-                    ]);
-                }),
-                8 => Ok(quote! {
-                    let #field_name = #field_type::from_be_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3],
-                        bytes[byte_index + 4], bytes[byte_index + 5],
-                        bytes[byte_index + 6], bytes[byte_index + 7]
-                    ]);
-                }),
-                16 => Ok(quote! {
-                    let #field_name = #field_type::from_be_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3],
-                        bytes[byte_index + 4], bytes[byte_index + 5],
-                        bytes[byte_index + 6], bytes[byte_index + 7],
-                        bytes[byte_index + 8], bytes[byte_index + 9],
-                        bytes[byte_index + 10], bytes[byte_index + 11],
-                        bytes[byte_index + 12], bytes[byte_index + 13],
-                        bytes[byte_index + 14], bytes[byte_index + 15]
-                    ]);
-                }),
-                _ => Err(syn::Error::new_spanned(
-                    field_type,
-                    "Unsupported primitive type size",
-                )),
+            crate::consts::Endianness::Big => quote! {
+                let char_value = u32::from_be_bytes([
+                    bytes[byte_index], bytes[byte_index + 1],
+                    bytes[byte_index + 2], bytes[byte_index + 3]
+                ]);
+                let #field_name = char::from_u32(char_value)
+                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
+                        value: (char_value & 0xFF) as u8,
+                        type_name: "char",
+                    })?;
             },
-            crate::consts::Endianness::Little => match type_size {
-                1 => Ok(quote! {
-                    let #field_name = bytes[byte_index] as #field_type;
-                }),
-                2 => Ok(quote! {
-                    let #field_name = #field_type::from_le_bytes([
-                        bytes[byte_index], bytes[byte_index + 1]
-                    ]);
-                }),
-                4 => Ok(quote! {
-                    let #field_name = #field_type::from_le_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3]
-                    ]);
-                }),
-                8 => Ok(quote! {
-                    let #field_name = #field_type::from_le_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3],
-                        bytes[byte_index + 4], bytes[byte_index + 5],
-                        bytes[byte_index + 6], bytes[byte_index + 7]
-                    ]);
-                }),
-                16 => Ok(quote! {
-                    let #field_name = #field_type::from_le_bytes([
-                        bytes[byte_index], bytes[byte_index + 1],
-                        bytes[byte_index + 2], bytes[byte_index + 3],
-                        bytes[byte_index + 4], bytes[byte_index + 5],
-                        bytes[byte_index + 6], bytes[byte_index + 7],
-                        bytes[byte_index + 8], bytes[byte_index + 9],
-                        bytes[byte_index + 10], bytes[byte_index + 11],
-                        bytes[byte_index + 12], bytes[byte_index + 13],
-                        bytes[byte_index + 14], bytes[byte_index + 15]
-                    ]);
-                }),
-                _ => Err(syn::Error::new_spanned(
-                    field_type,
-                    "Unsupported primitive type size",
-                )),
+            crate::consts::Endianness::Little => quote! {
+                let char_value = u32::from_le_bytes([
+                    bytes[byte_index], bytes[byte_index + 1],
+                    bytes[byte_index + 2], bytes[byte_index + 3]
+                ]);
+                let #field_name = char::from_u32(char_value)
+                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
+                        value: (char_value & 0xFF) as u8,
+                        type_name: "char",
+                    })?;
             },
+        }
+    }
+
+    /// Create numeric type parsing code
+    fn create_numeric_parsing(
+        field_name: &Ident,
+        field_type: &syn::Type,
+        type_size: usize,
+        endianness: crate::consts::Endianness,
+    ) -> Result<TokenStream, syn::Error> {
+        let from_bytes_method = match endianness {
+            crate::consts::Endianness::Big => quote!(from_be_bytes),
+            crate::consts::Endianness::Little => quote!(from_le_bytes),
+        };
+
+        match type_size {
+            1 => Ok(quote! {
+                let #field_name = bytes[byte_index] as #field_type;
+            }),
+            2 => Ok(quote! {
+                let #field_name = #field_type::#from_bytes_method([
+                    bytes[byte_index], bytes[byte_index + 1]
+                ]);
+            }),
+            4 => Ok(quote! {
+                let #field_name = #field_type::#from_bytes_method([
+                    bytes[byte_index], bytes[byte_index + 1],
+                    bytes[byte_index + 2], bytes[byte_index + 3]
+                ]);
+            }),
+            8 => Ok(quote! {
+                let #field_name = #field_type::#from_bytes_method([
+                    bytes[byte_index], bytes[byte_index + 1],
+                    bytes[byte_index + 2], bytes[byte_index + 3],
+                    bytes[byte_index + 4], bytes[byte_index + 5],
+                    bytes[byte_index + 6], bytes[byte_index + 7]
+                ]);
+            }),
+            16 => Ok(quote! {
+                let #field_name = #field_type::#from_bytes_method([
+                    bytes[byte_index], bytes[byte_index + 1],
+                    bytes[byte_index + 2], bytes[byte_index + 3],
+                    bytes[byte_index + 4], bytes[byte_index + 5],
+                    bytes[byte_index + 6], bytes[byte_index + 7],
+                    bytes[byte_index + 8], bytes[byte_index + 9],
+                    bytes[byte_index + 10], bytes[byte_index + 11],
+                    bytes[byte_index + 12], bytes[byte_index + 13],
+                    bytes[byte_index + 14], bytes[byte_index + 15]
+                ]);
+            }),
+            _ => Err(syn::Error::new_spanned(
+                field_type,
+                "Unsupported primitive type size",
+            )),
         }
     }
 

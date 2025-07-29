@@ -10,7 +10,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes_derive = "1.3.0"
+bebytes_derive = "2.1.3"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -100,7 +100,7 @@ One of the advantages is that we don't need an intermediate vector implementatio
 
 ## Multi Byte values
 
-The macro has support for all unsigned types from u8 to u128. These can be used in the same way the u8 type is used:
+The macro has support for all unsigned types from u8 to u128, as well as signed integers (i8 to i128) and the `char` type for Unicode characters. These can be used in the same way the u8 type is used:
 
 - Using a u16
 
@@ -134,7 +134,7 @@ And so on.
 
 **The same rules apply here. Your bit fields must complete a byte, even if they span over multiple bytes.**
 
-*The following primitives can be used with the `bits` attribute: u8, u16, u32, u64, u128, i8, i16, i32, i64, i128*
+*The following primitives can be used with the `bits` attribute: u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, char*
 
 ## Enums
 
@@ -284,6 +284,83 @@ This allows you to read the value as part of the incoming buffer, such as is the
 If you don't provide a hint and try to use a vector in the middle of your struct, the macro will throw a compile time error.
 
 NOTICE: If a vector is used as the last field of another struct, but the struct is not the last field of the parent struct, the macro will read the whole buffer and try to put that as the value of the vector. This is probably not what you want, so just don't do it.
+
+## Characters and Strings
+
+BeBytes provides comprehensive support for character and string types, making it easy to work with text data in binary protocols.
+
+### Character Support
+
+The `char` type is fully supported with proper Unicode validation:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct UnicodeMessage {
+    symbol: char,
+    emoji: char,
+    #[bits(16)]  // Chars can also be used in bit fields
+    compressed_char: char,
+}
+```
+
+Characters are always stored as 4-byte Unicode scalar values with proper validation to ensure they represent valid Unicode code points.
+
+### String Support
+
+BeBytes uses standard Rust `String` types with attributes to control serialization:
+
+#### 1. Fixed-Size Strings
+
+Use `#[With(size(N))]` for strings that must be exactly N bytes:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct NetworkPacket {
+    #[With(size(16))]
+    sender: String,    // Exactly 16 bytes
+    #[With(size(32))]
+    message: String,   // Exactly 32 bytes
+}
+```
+
+**Note**: Fixed-size strings must be exactly the specified length. The user is responsible for padding.
+
+#### 2. Variable-Size Strings
+
+Use `#[FromField(field_name)]` to specify the size from another field:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct Message {
+    name_len: u8,
+    desc_len: u16,
+    #[FromField(name_len)]
+    name: String,      // Size comes from name_len field
+    #[FromField(desc_len)]  
+    description: String,  // Size comes from desc_len field
+}
+```
+
+#### 3. Unbounded Strings (Last Field Only)
+
+If a string is the last field, it can be unbounded and will consume all remaining bytes:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct LogEntry {
+    timestamp: u64,
+    level: u8,
+    message: String,  // Will consume all remaining bytes
+}
+```
+
+### String Features
+
+- **UTF-8 validation**: All strings are validated during deserialization
+- **Standard Rust types**: Uses familiar `String` type, no custom types needed
+- **Flexible sizing**: Fixed, variable, or unbounded sizes supported
+- **No-std compatibility**: Works in embedded environments (requires `alloc`)
+- **Memory safety**: Proper bounds checking and validation
 
 ## Nested Fields
 

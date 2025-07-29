@@ -1,6 +1,6 @@
 # BeBytes Derive
 
-BeBytes Derive is a procedural macro crate that provides a custom derive macro for generating serialization and deserialization methods for network structs in Rust. The macro generates code to convert the struct into a byte representation (serialization) and vice versa (deserialization) supporting both big endian and little endian byte orders. It supports primitive types, characters, strings, enums, arrays, vectors, and nested structs, making it ideal for working with network protocols, binary formats, and message serialization.
+BeBytes Derive is a procedural macro crate that provides a custom derive macro for generating serialization and deserialization methods for network structs in Rust. The macro generates code to convert the struct into a byte representation (serialization) and vice versa (deserialization) supporting both big endian and little endian byte orders. It supports primitive types, characters, strings (with size attributes), enums, arrays, vectors, and nested structs, making it ideal for working with network protocols, binary formats, and message serialization.
 
 **Note: BeBytes Derive is currently in development and has not been thoroughly tested in production environments. Use it with caution and ensure proper testing and validation in your specific use case.**
 
@@ -41,7 +41,7 @@ The BeBytes derive macro will generate the following methods for your struct:
 Here's an example showcasing the usage of the BeBytes Derive:
 
 ```rust
-use bebytes::{BeBytes, FixedString16, VarString8};
+use bebytes::BeBytes;
 
 #[derive(Debug, BeBytes)]
 struct NetworkMessage {
@@ -52,8 +52,11 @@ struct NetworkMessage {
     #[bits(3)]
     priority: u8,
     sender_id: u32,
-    sender_name: FixedString16,    // Fixed-size string field
-    content: VarString8,          // Variable-length string field
+    content_len: u8,
+    #[With(size(16))]
+    sender_name: String,          // Fixed-size string field (16 bytes)
+    #[FromField(content_len)]
+    content: String,              // Variable-length string field
 }
 
 fn main() {
@@ -62,8 +65,9 @@ fn main() {
         message_type: 7,
         priority: 3,
         sender_id: 0x12345678,
-        sender_name: FixedString16::from_str("alice"),
-        content: VarString8::from_str("Hello, Bob!"),
+        content_len: 11,
+        sender_name: "alice           ".to_string(), // Padded to 16 bytes
+        content: "Hello, Bob!".to_string(),
     };
 
     // Big endian serialization
@@ -83,15 +87,15 @@ fn main() {
     println!("Deserialized from LE: {:?}, bytes read: {}", le_deserialized, le_bytes_read);
     
     // Access string fields
-    assert_eq!(be_deserialized.sender_name.as_str(), Some("alice"));
-    assert_eq!(be_deserialized.content.as_str(), Some("Hello, Bob!"));
+    assert_eq!(be_deserialized.sender_name, "alice           ");
+    assert_eq!(be_deserialized.content, "Hello, Bob!");
     
-    assert_eq!(le_deserialized.sender_name.as_str(), Some("alice"));
-    assert_eq!(le_deserialized.content.as_str(), Some("Hello, Bob!"));
+    assert_eq!(le_deserialized.sender_name, "alice           ");
+    assert_eq!(le_deserialized.content, "Hello, Bob!");
 }
 ```
 
-In this example, we define a `NetworkMessage` struct that combines bit fields with string fields. The `#[bits]` attribute is used to specify bit-level fields that are packed together. The struct includes both fixed-length (`FixedString16`) and variable-length (`VarString8`) string types. The BeBytes derive macro generates the serialization and deserialization methods for the struct, handling both the bit packing and string encoding automatically.
+In this example, we define a `NetworkMessage` struct that combines bit fields with string fields. The `#[bits]` attribute is used to specify bit-level fields that are packed together. The struct uses standard Rust `String` types with attributes to control their serialization: `#[With(size(16))]` for fixed-size strings and `#[FromField(content_len)]` for variable-length strings where the size comes from another field. The BeBytes derive macro generates the serialization and deserialization methods for the struct, handling both the bit packing and string encoding automatically.
 
 ## How it works
 
@@ -181,98 +185,101 @@ let msg = UnicodeMessage {
 
 Characters are always stored as 4-byte Unicode scalar values with proper validation to ensure they represent valid Unicode code points.
 
-### String Types
+### String Support
 
-BeBytes offers three string types for different use cases:
+BeBytes uses standard Rust `String` types with attributes to control serialization, similar to how vectors work:
 
-#### 1. Fixed-Length Strings (`FixedString<N>`)
+#### 1. Fixed-Size Strings
 
-Fixed-size strings padded with null bytes, perfect for protocols with predefined field sizes:
+Use `#[With(size(N))]` for strings that must be exactly N bytes:
 
 ```rust
-use bebytes::{BeBytes, FixedString16, FixedString32};
-
 #[derive(BeBytes, Debug, PartialEq)]
 struct NetworkPacket {
-    sender: FixedString16,    // Exactly 16 bytes
-    message: FixedString32,   // Exactly 32 bytes
+    #[With(size(16))]
+    sender: String,    // Exactly 16 bytes
+    #[With(size(32))]
+    message: String,   // Exactly 32 bytes
 }
 
 let packet = NetworkPacket {
-    sender: FixedString16::from_str("alice"),
-    message: FixedString32::from_str("Hello, world!"),
+    sender: "alice           ".to_string(),  // Must be padded to 16 bytes
+    message: "Hello, world!                   ".to_string(), // Padded to 32 bytes
 };
 ```
 
-Available type aliases: `FixedString8`, `FixedString16`, `FixedString32`, `FixedString64`
+**Note**: Fixed-size strings must be exactly the specified length. The user is responsible for padding.
 
-#### 2. Variable-Length Strings (`VarString<T>`)
+#### 2. Variable-Size Strings
 
-Strings with length prefixes, efficient for variable-size text data:
+Use `#[FromField(field_name)]` to specify the size from another field:
 
 ```rust
-use bebytes::{BeBytes, VarString8, VarString16};
-
 #[derive(BeBytes, Debug, PartialEq)]
 struct Message {
     id: u32,
-    short_name: VarString8,   // Length prefix: u8 (max 255 bytes)
-    content: VarString16,     // Length prefix: u16 (max 65KB)
+    name_len: u8,
+    desc_len: u16,
+    #[FromField(name_len)]
+    name: String,      // Size comes from name_len field
+    #[FromField(desc_len)]  
+    description: String,  // Size comes from desc_len field
 }
 
 let msg = Message {
     id: 123,
-    short_name: VarString8::from_str("user123"),
-    content: VarString16::from_str("This is a longer message content..."),
+    name_len: 7,
+    desc_len: 35,
+    name: "user123".to_string(),
+    description: "This is a longer message content...".to_string(),
 };
 ```
 
-Available type aliases: `VarString8` (255 bytes max), `VarString16` (64KB max), `VarString32` (4GB max)
+#### 3. Unbounded Strings (Last Field Only)
 
-#### 3. C-Style Null-Terminated Strings (`CString`)
-
-Compatible with C APIs and legacy systems:
+If a string is the last field, it can be unbounded and will consume all remaining bytes:
 
 ```rust
-use bebytes::{BeBytes, CString};
-
 #[derive(BeBytes, Debug, PartialEq)]
-struct FileEntry {
-    size: u64,
-    filename: CString,  // Null-terminated
-    path: CString,      // Null-terminated
+struct LogEntry {
+    timestamp: u64,
+    level: u8,
+    message: String,  // Will consume all remaining bytes
 }
 
-let entry = FileEntry {
-    size: 1024,
-    filename: CString::from_str("document.txt"),
-    path: CString::from_str("/home/user/document.txt"),
+let entry = LogEntry {
+    timestamp: 1640995200,
+    level: 3,
+    message: "Application started successfully with all modules loaded".to_string(),
 };
 ```
 
 ### String Features
 
-All string types support:
-- **UTF-8 validation**: Ensures data integrity
-- **Unicode handling**: Full support for international text
-- **No-std compatibility**: Works in embedded environments
+- **UTF-8 validation**: All strings are validated during deserialization
+- **Standard Rust types**: Uses familiar `String` type, no custom types needed
+- **Flexible sizing**: Fixed, variable, or unbounded sizes supported
+- **No-std compatibility**: Works in embedded environments (requires `alloc`)
 - **Memory safety**: Proper bounds checking and validation
-- **Endianness independence**: Strings work the same in both byte orders
 
-### String Manipulation
+### Nested Field Access
+
+The `#[FromField]` attribute supports dot notation for accessing nested fields:
 
 ```rust
-let mut name = FixedString16::from_str("Alice");
-assert_eq!(name.as_str(), Some("Alice"));
-assert_eq!(name.len(), 5);
+#[derive(BeBytes, Debug, PartialEq)]
+struct Header {
+    version: u8,
+    name_len: u16,
+}
 
-let mut content = VarString8::from_str("Hello");
-content.push_str(", world!");
-assert_eq!(content.as_str(), Some("Hello, world!"));
-
-let mut path = CString::from_str("/home");
-path.push_str("/user");
-assert_eq!(path.as_str(), Some("/home/user"));
+#[derive(BeBytes, Debug, PartialEq)]
+struct Packet {
+    header: Header,
+    #[FromField(header.name_len)]
+    name: String,  // Size from nested field
+    data: Vec<u8>,
+}
 ```
 
 ## Enums

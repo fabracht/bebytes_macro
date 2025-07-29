@@ -14,7 +14,7 @@ To use BeBytes, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "1.3.0"
+bebytes = "2.1.3"
 ```
 
 Then, import the BeBytes trait from the bebytes crate and derive it for your struct:
@@ -189,12 +189,85 @@ Key features:
 BeBytes supports:
 
 - Primitives: `u8`, `u16`, `u32`, `u64`, `u128`, `i8`, `i16`, `i32`, `i64`, `i128`
+- Characters: `char` with full Unicode support
+- Strings: Standard Rust `String` type with attributes for size control
 - Arrays: `[u8; N]`, `[u16; N]`, etc.
 - Enums with named fields (serialized as a single byte)
 - Enums with `#[bits()]` for automatic bit-width calculation
 - `Option<T>` where T is a primitive
 - Nested structs that also implement `BeBytes`
 - `Vec<T>` with some restrictions (see below)
+
+## String Support
+
+BeBytes provides comprehensive support for Rust's standard `String` type with flexible size control:
+
+### 1. Fixed-Size Strings
+
+Use `#[With(size(N))]` for strings that must be exactly N bytes:
+
+```rust
+#[derive(BeBytes)]
+struct FixedSizeMessage {
+    #[With(size(16))]
+    username: String,    // Exactly 16 bytes
+    #[With(size(64))]
+    message: String,     // Exactly 64 bytes
+}
+```
+
+**Note**: Fixed-size strings must be padded to the exact length by the user.
+
+### 2. Variable-Size Strings
+
+Use `#[FromField(field_name)]` to specify the size from another field:
+
+```rust
+#[derive(BeBytes)]
+struct VariableSizePacket {
+    name_len: u8,
+    desc_len: u16,
+    #[FromField(name_len)]
+    name: String,         // Size comes from name_len field
+    #[FromField(desc_len)]
+    description: String,  // Size comes from desc_len field
+}
+```
+
+### 3. Unbounded Strings
+
+A string as the last field will consume all remaining bytes:
+
+```rust
+#[derive(BeBytes)]
+struct LogMessage {
+    timestamp: u64,
+    level: u8,
+    message: String,  // Consumes all remaining bytes
+}
+```
+
+### String Features
+
+- **UTF-8 Validation**: All strings are validated during deserialization
+- **Standard Types**: Uses Rust's familiar `String` type
+- **Memory Safe**: Proper bounds checking and validation
+- **No-std Support**: Works in embedded environments (requires `alloc`)
+
+## Character Support
+
+The `char` type is fully supported with proper Unicode validation:
+
+```rust
+#[derive(BeBytes)]
+struct UnicodeData {
+    symbol: char,
+    #[bits(16)]  // Chars can be used in bit fields
+    compressed_char: char,
+}
+```
+
+Characters are stored as 4-byte Unicode scalar values with validation to ensure they represent valid Unicode code points.
 
 ## Vector Support
 
@@ -308,7 +381,7 @@ BeBytes supports no_std environments through feature flags:
 
 ```toml
 [dependencies]
-bebytes = { version = "1.3.0", default-features = false }
+bebytes = { version = "2.1.3", default-features = false }
 ```
 
 By default, the `std` feature is enabled. Disable it for no_std support.
