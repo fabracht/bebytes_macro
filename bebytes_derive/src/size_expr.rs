@@ -27,7 +27,7 @@ pub enum SizeExpression {
         op: BinaryOperator,
         right: Box<SizeExpression>,
     },
-    /// Conditional expression: if condition { then_expr } else { else_expr }
+    /// Conditional expression: if condition { `then_expr` } else { `else_expr` }
     Conditional {
         condition: Box<Condition>,
         then_expr: Box<SizeExpression>,
@@ -77,7 +77,7 @@ impl SizeExpression {
         Self::from_syn_expr(&expr)
     }
 
-    /// Convert a syn::Expr to a SizeExpression
+    /// Convert a `syn::Expr` to a `SizeExpression`
     fn from_syn_expr(expr: &Expr) -> Result<Self> {
         match expr {
             Expr::Lit(lit) => {
@@ -85,11 +85,14 @@ impl SizeExpression {
                     let value = int_lit.base10_parse::<u64>()?;
                     Ok(SizeExpression::Literal(value))
                 } else {
-                    Err(Error::new_spanned(lit, "Only integer literals are supported"))
+                    Err(Error::new_spanned(
+                        lit,
+                        "Only integer literals are supported",
+                    ))
                 }
             }
             Expr::Path(path) => {
-                let field_path = FieldPath::from_syn_path(&path.path)?;
+                let field_path = FieldPath::from_syn_path(&path.path);
                 Ok(SizeExpression::FieldRef(field_path))
             }
             Expr::Binary(binary) => {
@@ -100,23 +103,34 @@ impl SizeExpression {
             }
             Expr::If(if_expr) => {
                 let condition = Box::new(Condition::from_syn_expr(&if_expr.cond)?);
-                
+
                 // Extract the then expression from the block
                 let then_expr = if let Some(stmt) = if_expr.then_branch.stmts.first() {
                     match stmt {
                         syn::Stmt::Expr(expr, _) => Box::new(Self::from_syn_expr(expr)?),
-                        _ => return Err(Error::new_spanned(stmt, "Expected expression in then branch")),
+                        _ => {
+                            return Err(Error::new_spanned(
+                                stmt,
+                                "Expected expression in then branch",
+                            ))
+                        }
                     }
                 } else {
-                    return Err(Error::new_spanned(&if_expr.then_branch, "Empty then branch"));
+                    return Err(Error::new_spanned(
+                        &if_expr.then_branch,
+                        "Empty then branch",
+                    ));
                 };
-                
+
                 let else_expr = if let Some((_, else_branch)) = &if_expr.else_branch {
                     Box::new(Self::from_syn_expr(else_branch)?)
                 } else {
-                    return Err(Error::new_spanned(if_expr, "Conditional expressions must have an else clause"));
+                    return Err(Error::new_spanned(
+                        if_expr,
+                        "Conditional expressions must have an else clause",
+                    ));
                 };
-                
+
                 Ok(SizeExpression::Conditional {
                     condition,
                     then_expr,
@@ -163,78 +177,17 @@ impl SizeExpression {
             }
         }
     }
-
-    /// Calculate the maximum possible value this expression can evaluate to
-    /// This is used for compile-time size calculation
-    pub fn calculate_max_size(&self, field_types: &FieldTypeMap) -> Result<usize> {
-        match self {
-            SizeExpression::Literal(value) => Ok(*value as usize),
-            SizeExpression::FieldRef(field_path) => {
-                let field_type = field_types.get_field_type(field_path)?;
-                Ok(field_type.max_value())
-            }
-            SizeExpression::BinaryOp { left, op, right } => {
-                let left_max = left.calculate_max_size(field_types)?;
-                let right_max = right.calculate_max_size(field_types)?;
-                
-                match op {
-                    BinaryOperator::Add => Ok(left_max.saturating_add(right_max)),
-                    BinaryOperator::Subtract => Ok(left_max), // Assume worst case is left operand
-                    BinaryOperator::Multiply => Ok(left_max.saturating_mul(right_max)),
-                    BinaryOperator::Divide => Ok(left_max), // Division reduces size
-                    BinaryOperator::Modulo => Ok(right_max.saturating_sub(1)), // Modulo is < right operand
-                }
-            }
-            SizeExpression::Conditional {
-                then_expr,
-                else_expr,
-                ..
-            } => {
-                let then_max = then_expr.calculate_max_size(field_types)?;
-                let else_max = else_expr.calculate_max_size(field_types)?;
-                Ok(then_max.max(else_max))
-            }
-        }
-    }
-
-    /// Get all field references used in this expression
-    pub fn get_field_references(&self) -> Vec<&FieldPath> {
-        let mut refs = Vec::new();
-        self.collect_field_references(&mut refs);
-        refs
-    }
-
-    fn collect_field_references<'a>(&'a self, refs: &mut Vec<&'a FieldPath>) {
-        match self {
-            SizeExpression::FieldRef(field_path) => refs.push(field_path),
-            SizeExpression::BinaryOp { left, right, .. } => {
-                left.collect_field_references(refs);
-                right.collect_field_references(refs);
-            }
-            SizeExpression::Conditional {
-                condition,
-                then_expr,
-                else_expr,
-            } => {
-                condition.left.collect_field_references(refs);
-                condition.right.collect_field_references(refs);
-                then_expr.collect_field_references(refs);
-                else_expr.collect_field_references(refs);
-            }
-            SizeExpression::Literal(_) => {}
-        }
-    }
 }
 
 impl FieldPath {
-    /// Create a field path from a syn::Path
-    fn from_syn_path(path: &syn::Path) -> Result<Self> {
+    /// Create a field path from a `syn::Path`
+    fn from_syn_path(path: &syn::Path) -> Self {
         let segments = path
             .segments
             .iter()
             .map(|segment| segment.ident.clone())
             .collect();
-        Ok(FieldPath { segments })
+        FieldPath { segments }
     }
 
     /// Generate code to access this field
@@ -326,57 +279,19 @@ impl ComparisonOperator {
     }
 }
 
-/// Maps field names to their types for size calculation
-pub struct FieldTypeMap {
-    // This will be implemented to track field types
-    // For now, it's a placeholder
-}
-
-impl FieldTypeMap {
-    pub fn new() -> Self {
-        FieldTypeMap {}
-    }
-
-    fn get_field_type(&self, _field_path: &FieldPath) -> Result<FieldTypeInfo> {
-        // TODO: Implement field type lookup
-        // For now, return a default u8 type
-        Ok(FieldTypeInfo::U8)
-    }
-}
-
-/// Information about a field's type for size calculation
-pub enum FieldTypeInfo {
-    U8,
-    U16,
-    U32,
-    U64,
-    // Add more types as needed
-}
-
-impl FieldTypeInfo {
-    fn max_value(&self) -> usize {
-        match self {
-            FieldTypeInfo::U8 => u8::MAX as usize,
-            FieldTypeInfo::U16 => u16::MAX as usize,
-            FieldTypeInfo::U32 => u32::MAX as usize,
-            FieldTypeInfo::U64 => usize::MAX, // Cap at usize::MAX for practical purposes
-        }
-    }
-}
-
 impl fmt::Display for SizeExpression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SizeExpression::Literal(value) => write!(f, "{}", value),
-            SizeExpression::FieldRef(field_path) => write!(f, "{}", field_path),
+            SizeExpression::Literal(value) => write!(f, "{value}"),
+            SizeExpression::FieldRef(field_path) => write!(f, "{field_path}"),
             SizeExpression::BinaryOp { left, op, right } => {
-                write!(f, "({} {} {})", left, op, right)
+                write!(f, "({left} {op} {right})")
             }
             SizeExpression::Conditional {
                 condition,
                 then_expr,
                 else_expr,
-            } => write!(f, "if {} {{ {} }} else {{ {} }}", condition, then_expr, else_expr),
+            } => write!(f, "if {condition} {{ {then_expr} }} else {{ {else_expr} }}"),
         }
     }
 }
@@ -386,10 +301,10 @@ impl fmt::Display for FieldPath {
         let path = self
             .segments
             .iter()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join(".");
-        write!(f, "{}", path)
+        write!(f, "{path}")
     }
 }
 
@@ -402,7 +317,7 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::Divide => "/",
             BinaryOperator::Modulo => "%",
         };
-        write!(f, "{}", op)
+        write!(f, "{op}")
     }
 }
 
@@ -422,7 +337,7 @@ impl fmt::Display for ComparisonOperator {
             ComparisonOperator::GreaterThan => ">",
             ComparisonOperator::GreaterThanOrEqual => ">=",
         };
-        write!(f, "{}", op)
+        write!(f, "{op}")
     }
 }
 
@@ -451,9 +366,12 @@ mod tests {
     fn test_parse_binary_operation() {
         let expr = SizeExpression::parse("count * 4").unwrap();
         if let SizeExpression::BinaryOp { left, op, right } = expr {
-            assert_eq!(*left, SizeExpression::FieldRef(FieldPath {
-                segments: vec![syn::parse_str("count").unwrap()]
-            }));
+            assert_eq!(
+                *left,
+                SizeExpression::FieldRef(FieldPath {
+                    segments: vec![syn::parse_str("count").unwrap()]
+                })
+            );
             assert_eq!(op, BinaryOperator::Multiply);
             assert_eq!(*right, SizeExpression::Literal(4));
         } else {

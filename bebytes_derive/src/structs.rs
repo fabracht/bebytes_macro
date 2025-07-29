@@ -11,9 +11,9 @@ use alloc::vec::Vec;
 enum FieldType {
     BitsField(usize), // only size, position is auto-calculated
     PrimitiveType,
-    Array(usize),                                   // array_length
-    Vector(Option<usize>, Option<Vec<syn::Ident>>), // size, vec_size_ident
-    String(Option<usize>, Option<Vec<syn::Ident>>), // size, string_size_ident
+    Array(usize),                                     // array_length
+    Vector(Option<usize>, Option<Vec<syn::Ident>>),   // size, vec_size_ident
+    String(Option<usize>, Option<Vec<syn::Ident>>),   // size, string_size_ident
     SizeExpression(crate::size_expr::SizeExpression), // expression-based sizing
     OptionType,
     CustomType,
@@ -1028,7 +1028,8 @@ fn process_size_expression_functional(
             match &segment.ident {
                 ident if ident == "Vec" => {
                     // Generate Vec<u8> parsing and writing
-                    let (bit_sum, parsing, writing) = generate_size_expression_vector(field_name, &size_calculation);
+                    let (bit_sum, parsing, writing) =
+                        generate_size_expression_vector(field_name, &size_calculation);
                     Ok(crate::functional::FieldProcessResult::new(
                         quote! {},
                         parsing,
@@ -1039,7 +1040,8 @@ fn process_size_expression_functional(
                 }
                 ident if ident == "String" => {
                     // Generate String parsing and writing
-                    let (bit_sum, parsing, writing) = generate_size_expression_string(field_name, &size_calculation);
+                    let (bit_sum, parsing, writing) =
+                        generate_size_expression_string(field_name, &size_calculation);
                     Ok(crate::functional::FieldProcessResult::new(
                         quote! {},
                         parsing,
@@ -1113,7 +1115,7 @@ fn generate_field_size_string(
     proc_macro2::TokenStream,
 ) {
     let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0); // Variable size doesn't contribute to bit sum
-    
+
     let field_access = crate::functional::pure_helpers::generate_field_access_path(ident_path);
 
     let parsing = quote! {
@@ -1223,7 +1225,7 @@ fn generate_size_expression_string(
                 actual: bytes.len(),
             });
         }
-        let string_bytes = &bytes[byte_index..byte_index + field_size]; 
+        let string_bytes = &bytes[byte_index..byte_index + field_size];
         let #field_name = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::from_bytes(string_bytes)?;
         _bit_sum += field_size * 8;
     };
