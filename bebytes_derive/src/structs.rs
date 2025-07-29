@@ -14,6 +14,7 @@ enum FieldType {
     Array(usize),                                   // array_length
     Vector(Option<usize>, Option<Vec<syn::Ident>>), // size, vec_size_ident
     String(Option<usize>, Option<Vec<syn::Ident>>), // size, string_size_ident
+    SizeExpression(crate::size_expr::SizeExpression), // expression-based sizing
     OptionType,
     CustomType,
 }
@@ -52,8 +53,8 @@ fn determine_field_type(
     errors: &mut Vec<proc_macro2::TokenStream>,
 ) -> Option<FieldType> {
     let mut bits_attribute_present = false;
-    let (size, vec_size_ident) =
-        attrs::parse_attributes(attrs, &mut bits_attribute_present, errors);
+    let (size, vec_size_ident, size_expression) =
+        attrs::parse_attributes_with_expressions(attrs, &mut bits_attribute_present, errors);
 
     if bits_attribute_present {
         if let Some(size) = size {
@@ -77,6 +78,37 @@ fn determine_field_type(
         );
         errors.push(error.to_compile_error());
         return None;
+    }
+
+    // Check for size expression
+    if let Some(expr) = size_expression {
+        // Size expressions are only supported for Vec<u8> and String types for now
+        match context.field_type {
+            syn::Type::Path(tp) if !tp.path.segments.is_empty() => {
+                let segment = &tp.path.segments[0];
+                match &segment.ident {
+                    ident if ident == "Vec" || ident == "String" => {
+                        return Some(FieldType::SizeExpression(expr));
+                    }
+                    _ => {
+                        let error = syn::Error::new(
+                            context.field_type.span(),
+                            "Size expressions are only supported for Vec<u8> and String types",
+                        );
+                        errors.push(error.to_compile_error());
+                        return None;
+                    }
+                }
+            }
+            _ => {
+                let error = syn::Error::new(
+                    context.field_type.span(),
+                    "Size expressions are only supported for Vec<u8> and String types",
+                );
+                errors.push(error.to_compile_error());
+                return None;
+            }
+        }
     }
 
     match context.field_type {
@@ -230,6 +262,12 @@ fn process_field_type(
             if let Some(s) = size {
                 *current_bit_position += s * 8;
             }
+            Ok(result)
+        }
+        FieldType::SizeExpression(size_expr) => {
+            let result = process_size_expression_functional(context, size_expr, processing_ctx)?;
+            // Size expressions have variable size, so we can't update bit position
+            // This means no bit fields can come after size expression fields
             Ok(result)
         }
         FieldType::CustomType => {
@@ -969,6 +1007,60 @@ fn process_string_functional(
     ))
 }
 
+// Functional version for Size Expression fields
+fn process_size_expression_functional(
+    context: &FieldContext,
+    size_expr: &crate::size_expr::SizeExpression,
+    _processing_ctx: &crate::functional::ProcessingContext,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+    let field_name = &context.field_name;
+    let field_type = context.field_type;
+
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, true);
+
+    // Generate the size calculation code
+    let size_calculation = size_expr.generate_evaluation_code();
+
+    // Generate parsing and writing code based on field type
+    match field_type {
+        syn::Type::Path(tp) if !tp.path.segments.is_empty() => {
+            let segment = &tp.path.segments[0];
+            match &segment.ident {
+                ident if ident == "Vec" => {
+                    // Generate Vec<u8> parsing and writing
+                    let (bit_sum, parsing, writing) = generate_size_expression_vector(field_name, &size_calculation);
+                    Ok(crate::functional::FieldProcessResult::new(
+                        quote! {},
+                        parsing,
+                        writing,
+                        accessor,
+                        bit_sum,
+                    ))
+                }
+                ident if ident == "String" => {
+                    // Generate String parsing and writing
+                    let (bit_sum, parsing, writing) = generate_size_expression_string(field_name, &size_calculation);
+                    Ok(crate::functional::FieldProcessResult::new(
+                        quote! {},
+                        parsing,
+                        writing,
+                        accessor,
+                        bit_sum,
+                    ))
+                }
+                _ => Err(syn::Error::new_spanned(
+                    field_type,
+                    "Size expressions are only supported for Vec<u8> and String types",
+                )),
+            }
+        }
+        _ => Err(syn::Error::new_spanned(
+            field_type,
+            "Size expressions are only supported for Vec<u8> and String types",
+        )),
+    }
+}
+
 // Generate code for fixed-size strings
 fn generate_fixed_size_string(
     field_name: &syn::Ident,
@@ -1012,6 +1104,84 @@ fn generate_fixed_size_string(
     (bit_sum, parsing, writing)
 }
 
+// Generate code for Vec<u8> with size expressions
+fn generate_size_expression_vector(
+    field_name: &syn::Ident,
+    size_calculation: &proc_macro2::TokenStream,
+) -> (
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+) {
+    let bit_sum = quote! {
+        _bit_sum += #field_name.len() * 8;
+    };
+
+    let parsing = quote! {
+        let field_size = #size_calculation;
+        if bytes.len() < byte_index + field_size {
+            return Err(::bebytes::BeBytesError::InsufficientData {
+                expected: byte_index + field_size,
+                actual: bytes.len(),
+            });
+        }
+        let #field_name = bytes[byte_index..byte_index + field_size].to_vec();
+        byte_index += field_size;
+        _bit_sum += field_size * 8;
+    };
+
+    let writing = quote! {
+        let field_size = #size_calculation;
+        if #field_name.len() != field_size {
+            panic!("Vector size {} does not match expected size {}", #field_name.len(), field_size);
+        }
+        bytes.extend_from_slice(&#field_name);
+        _bit_sum += #field_name.len() * 8;
+    };
+
+    (bit_sum, parsing, writing)
+}
+
+// Generate code for String with size expressions
+fn generate_size_expression_string(
+    field_name: &syn::Ident,
+    size_calculation: &proc_macro2::TokenStream,
+) -> (
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+) {
+    let bit_sum = quote! {
+        _bit_sum += #field_name.len() * 8;
+    };
+
+    let parsing = quote! {
+        let field_size = #size_calculation;
+        if bytes.len() < byte_index + field_size {
+            return Err(::bebytes::BeBytesError::InsufficientData {
+                expected: byte_index + field_size,
+                actual: bytes.len(),
+            });
+        }
+        let string_bytes = &bytes[byte_index..byte_index + field_size]; 
+        let #field_name = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::from_bytes(string_bytes)?;
+        byte_index += field_size;
+        _bit_sum += field_size * 8;
+    };
+
+    let writing = quote! {
+        let string_bytes = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::to_bytes(&#field_name);
+        let field_size = #size_calculation;
+        if string_bytes.len() != field_size {
+            panic!("String size {} does not match expected size {}", string_bytes.len(), field_size);
+        }
+        bytes.extend_from_slice(string_bytes);
+        _bit_sum += string_bytes.len() * 8;
+    };
+
+    (bit_sum, parsing, writing)
+}
+
 // Generate code for field-size strings
 fn generate_field_size_string(
     field_name: &syn::Ident,
@@ -1050,6 +1220,84 @@ fn generate_field_size_string(
     (bit_sum, parsing, writing)
 }
 
+// Generate code for Vec<u8> with size expressions
+fn generate_size_expression_vector(
+    field_name: &syn::Ident,
+    size_calculation: &proc_macro2::TokenStream,
+) -> (
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+) {
+    let bit_sum = quote! {
+        _bit_sum += #field_name.len() * 8;
+    };
+
+    let parsing = quote! {
+        let field_size = #size_calculation;
+        if bytes.len() < byte_index + field_size {
+            return Err(::bebytes::BeBytesError::InsufficientData {
+                expected: byte_index + field_size,
+                actual: bytes.len(),
+            });
+        }
+        let #field_name = bytes[byte_index..byte_index + field_size].to_vec();
+        byte_index += field_size;
+        _bit_sum += field_size * 8;
+    };
+
+    let writing = quote! {
+        let field_size = #size_calculation;
+        if #field_name.len() != field_size {
+            panic!("Vector size {} does not match expected size {}", #field_name.len(), field_size);
+        }
+        bytes.extend_from_slice(&#field_name);
+        _bit_sum += #field_name.len() * 8;
+    };
+
+    (bit_sum, parsing, writing)
+}
+
+// Generate code for String with size expressions
+fn generate_size_expression_string(
+    field_name: &syn::Ident,
+    size_calculation: &proc_macro2::TokenStream,
+) -> (
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+) {
+    let bit_sum = quote! {
+        _bit_sum += #field_name.len() * 8;
+    };
+
+    let parsing = quote! {
+        let field_size = #size_calculation;
+        if bytes.len() < byte_index + field_size {
+            return Err(::bebytes::BeBytesError::InsufficientData {
+                expected: byte_index + field_size,
+                actual: bytes.len(),
+            });
+        }
+        let string_bytes = &bytes[byte_index..byte_index + field_size]; 
+        let #field_name = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::from_bytes(string_bytes)?;
+        byte_index += field_size;
+        _bit_sum += field_size * 8;
+    };
+
+    let writing = quote! {
+        let string_bytes = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::to_bytes(&#field_name);
+        let field_size = #size_calculation;
+        if string_bytes.len() != field_size {
+            panic!("String size {} does not match expected size {}", string_bytes.len(), field_size);
+        }
+        bytes.extend_from_slice(string_bytes);
+        _bit_sum += string_bytes.len() * 8;
+    };
+
+    (bit_sum, parsing, writing)
+}
+
 // Generate code for unbounded strings
 fn generate_unbounded_string(
     field_name: &syn::Ident,
@@ -1070,6 +1318,84 @@ fn generate_unbounded_string(
     let writing = quote! {
         let string_bytes = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::to_bytes(&#field_name);
         bytes.reserve(string_bytes.len());
+        bytes.extend_from_slice(string_bytes);
+        _bit_sum += string_bytes.len() * 8;
+    };
+
+    (bit_sum, parsing, writing)
+}
+
+// Generate code for Vec<u8> with size expressions
+fn generate_size_expression_vector(
+    field_name: &syn::Ident,
+    size_calculation: &proc_macro2::TokenStream,
+) -> (
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+) {
+    let bit_sum = quote! {
+        _bit_sum += #field_name.len() * 8;
+    };
+
+    let parsing = quote! {
+        let field_size = #size_calculation;
+        if bytes.len() < byte_index + field_size {
+            return Err(::bebytes::BeBytesError::InsufficientData {
+                expected: byte_index + field_size,
+                actual: bytes.len(),
+            });
+        }
+        let #field_name = bytes[byte_index..byte_index + field_size].to_vec();
+        byte_index += field_size;
+        _bit_sum += field_size * 8;
+    };
+
+    let writing = quote! {
+        let field_size = #size_calculation;
+        if #field_name.len() != field_size {
+            panic!("Vector size {} does not match expected size {}", #field_name.len(), field_size);
+        }
+        bytes.extend_from_slice(&#field_name);
+        _bit_sum += #field_name.len() * 8;
+    };
+
+    (bit_sum, parsing, writing)
+}
+
+// Generate code for String with size expressions
+fn generate_size_expression_string(
+    field_name: &syn::Ident,
+    size_calculation: &proc_macro2::TokenStream,
+) -> (
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+) {
+    let bit_sum = quote! {
+        _bit_sum += #field_name.len() * 8;
+    };
+
+    let parsing = quote! {
+        let field_size = #size_calculation;
+        if bytes.len() < byte_index + field_size {
+            return Err(::bebytes::BeBytesError::InsufficientData {
+                expected: byte_index + field_size,
+                actual: bytes.len(),
+            });
+        }
+        let string_bytes = &bytes[byte_index..byte_index + field_size]; 
+        let #field_name = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::from_bytes(string_bytes)?;
+        byte_index += field_size;
+        _bit_sum += field_size * 8;
+    };
+
+    let writing = quote! {
+        let string_bytes = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::to_bytes(&#field_name);
+        let field_size = #size_calculation;
+        if string_bytes.len() != field_size {
+            panic!("String size {} does not match expected size {}", string_bytes.len(), field_size);
+        }
         bytes.extend_from_slice(string_bytes);
         _bit_sum += string_bytes.len() * 8;
     };

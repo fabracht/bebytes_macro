@@ -9,6 +9,7 @@ mod bit_validation;
 mod consts;
 mod enums;
 mod functional;
+mod size_expr;
 mod structs;
 mod utils;
 
