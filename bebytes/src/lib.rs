@@ -7,8 +7,6 @@ extern crate std;
 extern crate alloc;
 #[cfg(not(feature = "std"))]
 pub use alloc::borrow::ToOwned;
-#[cfg(not(feature = "std"))]
-use alloc::vec;
 
 // Re-export Vec for use in generated code
 #[cfg(not(feature = "std"))]

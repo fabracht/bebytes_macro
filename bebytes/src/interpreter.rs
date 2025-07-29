@@ -2,6 +2,9 @@
 
 use crate::BeBytesError;
 
+#[cfg(not(feature = "std"))]
+use alloc::{borrow::ToOwned, string::String};
+
 /// Trait for interpreting byte sequences as strings
 pub trait StringInterpreter {
     /// Convert bytes to a String
