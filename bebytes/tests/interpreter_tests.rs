@@ -29,7 +29,7 @@ fn test_struct_with_interpreter() {
 
     // Serialize
     let bytes = msg.to_be_bytes();
-    
+
     // Deserialize
     let (decoded, _) = Message::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(decoded, msg);
@@ -44,7 +44,7 @@ impl StringInterpreter for Base64Interpreter {
         // For now, just treat it as UTF-8
         Utf8::from_bytes(bytes)
     }
-    
+
     fn to_bytes(s: &str) -> &[u8] {
         // This is just a placeholder - in real implementation you'd encode to base64
         // For now, just return raw bytes

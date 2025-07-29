@@ -13,13 +13,13 @@ proptest! {
         }
 
         let original = TestU8 { field: value };
-        
+
         // Test big-endian
         let be_bytes = original.to_be_bytes();
         let (be_decoded, be_consumed) = TestU8::try_from_be_bytes(&be_bytes).unwrap();
         prop_assert_eq!(&original, &be_decoded);
         prop_assert_eq!(be_consumed, 1);
-        
+
         // Test little-endian
         let le_bytes = original.to_le_bytes();
         let (le_decoded, le_consumed) = TestU8::try_from_le_bytes(&le_bytes).unwrap();
@@ -35,13 +35,13 @@ proptest! {
         }
 
         let original = TestU16 { field: value };
-        
+
         // Test big-endian
         let be_bytes = original.to_be_bytes();
         let (be_decoded, be_consumed) = TestU16::try_from_be_bytes(&be_bytes).unwrap();
         prop_assert_eq!(&original, &be_decoded);
         prop_assert_eq!(be_consumed, 2);
-        
+
         // Test little-endian
         let le_bytes = original.to_le_bytes();
         let (le_decoded, le_consumed) = TestU16::try_from_le_bytes(&le_bytes).unwrap();
@@ -57,7 +57,7 @@ proptest! {
         }
 
         let original = TestU32 { field: value };
-        
+
         // Test round-trip
         let bytes = original.to_be_bytes();
         let (decoded, _) = TestU32::try_from_be_bytes(&bytes).unwrap();
@@ -80,12 +80,12 @@ proptest! {
             field_c: c,
             field_d: d,
         };
-        
+
         // Test big-endian
         let be_bytes = original.to_be_bytes();
         let (be_decoded, _) = TestMixed::try_from_be_bytes(&be_bytes).unwrap();
         prop_assert_eq!(&original, &be_decoded);
-        
+
         // Test little-endian
         let le_bytes = original.to_le_bytes();
         let (le_decoded, _) = TestMixed::try_from_le_bytes(&le_bytes).unwrap();
@@ -108,15 +108,15 @@ proptest! {
         // Mask values to fit in their bit fields
         let three_bits = value & 0b111;
         let five_bits = (value >> 3) & 0b11111;
-        
+
         let original = TestBits {
             three_bits,
             five_bits,
         };
-        
+
         let bytes = original.to_be_bytes();
         let (decoded, _) = TestBits::try_from_be_bytes(&bytes).unwrap();
-        
+
         prop_assert_eq!(original.three_bits, decoded.three_bits);
         prop_assert_eq!(original.five_bits, decoded.five_bits);
     }
@@ -136,16 +136,16 @@ proptest! {
         let small = (value & 0xF) as u8;
         let medium = (value >> 4) & 0x3FF;
         let tiny = ((value >> 14) & 0x3) as u8;
-        
+
         let original = TestMultiByteBits {
             small,
             medium,
             tiny,
         };
-        
+
         let bytes = original.to_be_bytes();
         let (decoded, _) = TestMultiByteBits::try_from_be_bytes(&bytes).unwrap();
-        
+
         prop_assert_eq!(&original, &decoded);
     }
 }
@@ -163,10 +163,10 @@ proptest! {
         let original = TestFixedString {
             name: s,
         };
-        
+
         let bytes = original.to_be_bytes();
         let (decoded, _) = TestFixedString::try_from_be_bytes(&bytes).unwrap();
-        
+
         prop_assert_eq!(&original, &decoded);
     }
 
@@ -183,10 +183,10 @@ proptest! {
             len: s.len() as u8,
             content: s,
         };
-        
+
         let bytes = original.to_be_bytes();
         let (decoded, _) = TestVarString::try_from_be_bytes(&bytes).unwrap();
-        
+
         prop_assert_eq!(&original, &decoded);
     }
 
@@ -204,10 +204,10 @@ proptest! {
             len: s.len() as u16,
             content: s,
         };
-        
+
         let bytes = original.to_be_bytes();
         let (decoded, _) = TestUnicodeString::try_from_be_bytes(&bytes).unwrap();
-        
+
         prop_assert_eq!(&original, &decoded);
     }
 }
@@ -222,14 +222,14 @@ proptest! {
         }
 
         let data = TestEndian { field: value };
-        
+
         let be_bytes = data.to_be_bytes();
         let le_bytes = data.to_le_bytes();
-        
+
         // Verify that BE and LE are byte-reversed
         prop_assert_eq!(be_bytes.len(), le_bytes.len());
         prop_assert_eq!(be_bytes.len(), 4);
-        
+
         // The bytes should be reversed
         prop_assert_eq!(be_bytes[0], le_bytes[3]);
         prop_assert_eq!(be_bytes[1], le_bytes[2]);
@@ -245,17 +245,17 @@ proptest! {
         }
 
         let original = TestEndian { field: value };
-        
+
         // Serialize with BE, deserialize with BE
         let be_bytes = original.to_be_bytes();
         let (be_decoded, _) = TestEndian::try_from_be_bytes(&be_bytes).unwrap();
         prop_assert_eq!(&original, &be_decoded);
-        
+
         // Serialize with LE, deserialize with LE
         let le_bytes = original.to_le_bytes();
         let (le_decoded, _) = TestEndian::try_from_le_bytes(&le_bytes).unwrap();
         prop_assert_eq!(&original, &le_decoded);
-        
+
         // Cross-endian should NOT work correctly (values should differ)
         if value != 0 && value != u32::from_be_bytes(value.to_le_bytes()) {
             let (cross_decoded, _) = TestEndian::try_from_be_bytes(&le_bytes).unwrap();
@@ -274,10 +274,10 @@ proptest! {
         }
 
         let data = TestSize { field: value };
-        
+
         let be_bytes = data.to_be_bytes();
         let le_bytes = data.to_le_bytes();
-        
+
         // Size should match field_size()
         prop_assert_eq!(be_bytes.len(), TestSize::field_size());
         prop_assert_eq!(le_bytes.len(), TestSize::field_size());
@@ -305,9 +305,9 @@ proptest! {
             field_b: b,
             name: s,
         };
-        
+
         let bytes = data.to_be_bytes();
-        
+
         // Total size: u8(1) + bits(1) + u16(2) + string(10) = 14 bytes
         prop_assert_eq!(bytes.len(), 14);
         prop_assert_eq!(TestComplexSize::field_size(), 14);
@@ -324,10 +324,10 @@ proptest! {
         }
 
         let original = TestArray { data: arr };
-        
+
         let bytes = original.to_be_bytes();
         let (decoded, _) = TestArray::try_from_be_bytes(&bytes).unwrap();
-        
+
         prop_assert_eq!(&original, &decoded);
     }
 }
@@ -342,10 +342,10 @@ proptest! {
         }
 
         let original = TestOption { maybe: value };
-        
+
         let bytes = original.to_be_bytes();
         let (decoded, _) = TestOption::try_from_be_bytes(&bytes).unwrap();
-        
+
         prop_assert_eq!(&original, &decoded);
     }
 }
@@ -361,7 +361,7 @@ proptest! {
 
         // Trying to parse u32 from less than 4 bytes should fail
         let result = TestU32::try_from_be_bytes(&bytes);
-        
+
         if bytes.is_empty() {
             prop_assert!(result.is_err());
             if let Err(e) = result {

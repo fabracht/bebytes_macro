@@ -5,12 +5,12 @@ use crate::BeBytesError;
 /// Trait for interpreting byte sequences as strings
 pub trait StringInterpreter {
     /// Convert bytes to a String
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `BeBytesError::InvalidDiscriminant` if the bytes cannot be interpreted as a valid string
     fn from_bytes(bytes: &[u8]) -> Result<String, BeBytesError>;
-    
+
     /// Convert a string to bytes
     fn to_bytes(s: &str) -> &[u8];
 }
@@ -20,14 +20,14 @@ pub struct Utf8;
 
 impl StringInterpreter for Utf8 {
     fn from_bytes(bytes: &[u8]) -> Result<String, BeBytesError> {
-        core::str::from_utf8(bytes)
-            .map(str::to_owned)
-            .map_err(|_| BeBytesError::InvalidDiscriminant {
+        core::str::from_utf8(bytes).map(str::to_owned).map_err(|_| {
+            BeBytesError::InvalidDiscriminant {
                 value: 0,
                 type_name: "String (invalid UTF-8)",
-            })
+            }
+        })
     }
-    
+
     fn to_bytes(s: &str) -> &[u8] {
         s.as_bytes()
     }
