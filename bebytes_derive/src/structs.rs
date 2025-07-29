@@ -13,6 +13,7 @@ enum FieldType {
     PrimitiveType,
     Array(usize),                                   // array_length
     Vector(Option<usize>, Option<Vec<syn::Ident>>), // size, vec_size_ident
+    VarString,                                      // Variable-length string with prefix
     OptionType,
     CustomType,
 }
@@ -97,6 +98,7 @@ fn determine_field_type(
             match &segment.ident {
                 ident if ident == "Vec" => Some(FieldType::Vector(size, vec_size_ident)),
                 ident if ident == "Option" => Some(FieldType::OptionType),
+                ident if ident == "VarString" || ident == "VarString8" || ident == "VarString16" || ident == "VarString32" => Some(FieldType::VarString),
                 ident if !utils::is_primitive_identity(ident) => Some(FieldType::CustomType),
                 _ => None,
             }
@@ -219,6 +221,11 @@ fn process_field_type(
                     *current_bit_position += field_size * 8;
                 }
             }
+            Ok(result)
+        }
+        FieldType::VarString => {
+            let result = process_var_string_functional(context, processing_ctx);
+            // VarString has variable size, can't track bit position
             Ok(result)
         }
         FieldType::CustomType => {
@@ -830,6 +837,44 @@ fn process_custom_type_functional(
         end_byte_index = usize::min(bytes.len(), byte_index + predicted_size);
         let (#field_name, bytes_read) = #field_type::#try_from_bytes_method(&bytes[byte_index..end_byte_index])?;
         _bit_sum += bytes_read * 8;
+    };
+
+    let writing = quote_spanned! { context.field.span() =>
+        let bytes_data = &BeBytes::#to_bytes_method(&#field_name);
+        // Optimized: Reserve capacity to avoid reallocation
+        bytes.reserve(bytes_data.len());
+        bytes.extend_from_slice(bytes_data);
+        _bit_sum += bytes_data.len() * 8;
+    };
+
+    crate::functional::FieldProcessResult::new(quote! {}, parsing, writing, accessor, bit_sum)
+}
+
+// Functional version for VarString fields
+fn process_var_string_functional(
+    context: &FieldContext,
+    processing_ctx: &crate::functional::ProcessingContext,
+) -> crate::functional::FieldProcessResult {
+    let field_name = &context.field_name;
+    let field_type = context.field_type;
+
+    let needs_owned = !utils::is_copy(field_type);
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, needs_owned);
+
+    // VarString is variable size, so we can't predict bit_sum at compile time
+    // We don't add anything to bit_sum because the size is variable
+    let bit_sum = quote! {
+        // VarString fields don't contribute to compile-time size calculation
+    };
+
+    let try_from_bytes_method = utils::get_try_from_bytes_method(processing_ctx.endianness);
+    let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
+
+    let parsing = quote_spanned! { context.field.span() =>
+        byte_index = _bit_sum / 8;
+        let (temp_value, bytes_consumed) = #field_type::#try_from_bytes_method(&bytes[byte_index..])?;
+        let #field_name = temp_value;
+        _bit_sum += bytes_consumed * 8;
     };
 
     let writing = quote_spanned! { context.field.span() =>
