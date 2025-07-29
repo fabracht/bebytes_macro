@@ -405,7 +405,7 @@ pub mod pure_helpers {
         size: usize,
     ) -> TokenStream {
         let mask: u128 = (1 << size) - 1;
-        
+
         // Special handling for char type
         if let syn::Type::Path(tp) = field_type {
             if tp.path.is_ident("char") {
@@ -417,7 +417,7 @@ pub mod pure_helpers {
                 };
             }
         }
-        
+
         quote! {
             if #field_name > #mask as #field_type {
                 panic!("Value of field {} is out of range (max value: {})",
