@@ -203,7 +203,7 @@ pub mod pure_helpers {
     /// Create a field accessor without side effects
     pub fn create_field_accessor(field_name: &Ident, needs_owned: bool) -> TokenStream {
         if needs_owned {
-            quote! { let #field_name = self.#field_name.to_owned(); }
+            quote! { let #field_name = self.#field_name.clone(); }
         } else {
             quote! { let #field_name = self.#field_name; }
         }

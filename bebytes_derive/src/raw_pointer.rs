@@ -17,12 +17,12 @@ pub fn generate_raw_pointer_writing(
             return match endianness {
                 crate::consts::Endianness::Big => Ok(quote! {
                     let char_bytes = (self.#field_name as u32).to_be_bytes();
-                    std::ptr::copy_nonoverlapping(char_bytes.as_ptr(), ptr.add(#offset_var), 4);
+                    ::core::ptr::copy_nonoverlapping(char_bytes.as_ptr(), ptr.add(#offset_var), 4);
                     #offset_var += 4;
                 }),
                 crate::consts::Endianness::Little => Ok(quote! {
                     let char_bytes = (self.#field_name as u32).to_le_bytes();
-                    std::ptr::copy_nonoverlapping(char_bytes.as_ptr(), ptr.add(#offset_var), 4);
+                    ::core::ptr::copy_nonoverlapping(char_bytes.as_ptr(), ptr.add(#offset_var), 4);
                     #offset_var += 4;
                 }),
             };
@@ -37,48 +37,48 @@ pub fn generate_raw_pointer_writing(
         2 => match endianness {
             crate::consts::Endianness::Big => Ok(quote! {
                 let field_bytes = (self.#field_name as u16).to_be_bytes();
-                std::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 2);
+                ::core::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 2);
                 #offset_var += 2;
             }),
             crate::consts::Endianness::Little => Ok(quote! {
                 let field_bytes = (self.#field_name as u16).to_le_bytes();
-                std::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 2);
+                ::core::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 2);
                 #offset_var += 2;
             }),
         },
         4 => match endianness {
             crate::consts::Endianness::Big => Ok(quote! {
                 let field_bytes = (self.#field_name as u32).to_be_bytes();
-                std::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 4);
+                ::core::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 4);
                 #offset_var += 4;
             }),
             crate::consts::Endianness::Little => Ok(quote! {
                 let field_bytes = (self.#field_name as u32).to_le_bytes();
-                std::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 4);
+                ::core::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 4);
                 #offset_var += 4;
             }),
         },
         8 => match endianness {
             crate::consts::Endianness::Big => Ok(quote! {
                 let field_bytes = (self.#field_name as u64).to_be_bytes();
-                std::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 8);
+                ::core::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 8);
                 #offset_var += 8;
             }),
             crate::consts::Endianness::Little => Ok(quote! {
                 let field_bytes = (self.#field_name as u64).to_le_bytes();
-                std::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 8);
+                ::core::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 8);
                 #offset_var += 8;
             }),
         },
         16 => match endianness {
             crate::consts::Endianness::Big => Ok(quote! {
                 let field_bytes = (self.#field_name as u128).to_be_bytes();
-                std::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 16);
+                ::core::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 16);
                 #offset_var += 16;
             }),
             crate::consts::Endianness::Little => Ok(quote! {
                 let field_bytes = (self.#field_name as u128).to_le_bytes();
-                std::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 16);
+                ::core::ptr::copy_nonoverlapping(field_bytes.as_ptr(), ptr.add(#offset_var), 16);
                 #offset_var += 16;
             }),
         },
@@ -96,7 +96,7 @@ pub fn generate_raw_pointer_array_writing(
     offset_var: &syn::Ident,
 ) -> proc_macro2::TokenStream {
     quote! {
-        std::ptr::copy_nonoverlapping(self.#field_name.as_ptr(), ptr.add(#offset_var), #array_length);
+        ::core::ptr::copy_nonoverlapping(self.#field_name.as_ptr(), ptr.add(#offset_var), #array_length);
         #offset_var += #array_length;
     }
 }
