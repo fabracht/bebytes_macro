@@ -2,7 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.3.0] - Unreleased
+## [2.4.0] - 2025-07-30
+
+### Added
+- **Direct Buffer Writing**: New performance-oriented API for zero-allocation encoding
+  - `encode_be_to()` and `encode_le_to()` methods for writing directly to `BufMut`
+  - Feature-gated behind `bytes` feature flag
+  - Eliminates intermediate Vec allocation in encoding path
+  - Comprehensive test suite for direct buffer writing
+  - Default implementation maintains backward compatibility
+
+### Changed
+- Added `#[inline]` annotations to all generated trait methods for better optimization
+- Updated documentation with performance optimization section
+
+## [2.3.0] - 2025-07-29
 
 ### Added
 - **Size Expressions**: Dynamic field sizing using mathematical expressions

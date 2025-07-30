@@ -472,7 +472,7 @@ BeBytes supports no_std environments through feature flags:
 
 ```toml
 [dependencies]
-bebytes = { version = "2.3.0", default-features = false }
+bebytes = { version = "2.4.0", default-features = false }
 ```
 
 By default, the `std` feature is enabled. Disable it for no_std support.
