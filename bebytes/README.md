@@ -296,25 +296,177 @@ struct NetworkMessage {
 ### Protocol Examples
 
 ```rust
-// MQTT Packet
+// MQTT Connect Packet with variable header and payload
 #[derive(BeBytes)]
-struct MqttPacket {
-    fixed_header: u8,
-    remaining_length: u8,
-    #[With(size(remaining_length))]
-    payload: Vec<u8>,
+struct MqttConnectPacket {
+    // Fixed header
+    #[bits(4)]
+    packet_type: u8,      // Should be 1 for CONNECT
+    #[bits(4)]
+    flags: u8,
+    remaining_length: u8,  // Length of variable header + payload
+    
+    // Variable header
+    protocol_name_len: u16,
+    #[With(size(protocol_name_len))]
+    protocol_name: String,  // "MQTT"
+    protocol_level: u8,     // 4 for MQTT 3.1.1
+    connect_flags: u8,
+    keep_alive: u16,
+    
+    // Payload
+    client_id_len: u16,
+    #[With(size(client_id_len))]
+    client_id: String,
+    
+    // Optional fields based on connect_flags
+    will_topic_len: u16,
+    #[With(size(will_topic_len))]
+    will_topic: String,
+    will_msg_len: u16,
+    #[With(size(will_msg_len))]
+    will_message: Vec<u8>,
 }
 
-// IPv4 Packet  
+// DNS Query with label compression
 #[derive(BeBytes)]
-struct Ipv4Packet {
-    version: u8,
-    header_length: u8,
-    // ... other fields ...
-    #[With(size(4))]  // IPv4 addresses are 4 bytes
-    source_address: Vec<u8>,
-    #[With(size(4))]
-    dest_address: Vec<u8>,
+struct DnsQuery {
+    transaction_id: u16,
+    #[bits(1)]
+    qr: u8,          // 0 = query, 1 = response
+    #[bits(4)]
+    opcode: u8,      // Standard query = 0
+    #[bits(1)]
+    aa: u8,          // Authoritative answer
+    #[bits(1)]
+    tc: u8,          // Truncated
+    #[bits(1)]
+    rd: u8,          // Recursion desired
+    #[bits(1)]
+    ra: u8,          // Recursion available
+    #[bits(3)]
+    z: u8,           // Reserved
+    #[bits(4)]
+    rcode: u8,       // Response code
+    
+    question_count: u16,
+    answer_count: u16,
+    authority_count: u16,
+    additional_count: u16,
+    
+    #[FromField(question_count)]
+    questions: Vec<DnsQuestion>,
+}
+
+#[derive(BeBytes)]
+struct DnsQuestion {
+    name: DnsName,     // Variable length domain name
+    qtype: u16,        // Query type (A=1, AAAA=28, etc)
+    qclass: u16,       // Query class (IN=1)
+}
+
+#[derive(BeBytes)]
+struct DnsName {
+    labels: Vec<DnsLabel>,  // Sequence of labels ending with 0-length
+}
+
+#[derive(BeBytes)]
+struct DnsLabel {
+    length: u8,
+    #[FromField(length)]
+    data: Vec<u8>,
+}
+
+// Game Protocol: Player state update with bit-packed data
+#[derive(BeBytes)]
+struct PlayerStateUpdate {
+    packet_id: u8,      // Packet type identifier
+    timestamp: u32,     // Server tick
+    player_count: u8,
+    
+    #[FromField(player_count)]
+    players: Vec<PlayerState>,
+}
+
+#[derive(BeBytes)]
+struct PlayerState {
+    player_id: u16,
+    
+    // Position (24 bits each for sub-meter precision)
+    #[bits(24)]
+    x_pos: u32,
+    #[bits(24)]
+    y_pos: u32,
+    #[bits(16)]
+    z_pos: u16,
+    
+    // Rotation (10 bits = 360 degrees / 1024)
+    #[bits(10)]
+    yaw: u16,
+    #[bits(10)]
+    pitch: u16,
+    #[bits(10)]
+    roll: u16,
+    #[bits(2)]
+    _padding: u8,
+    
+    // State flags
+    #[bits(1)]
+    is_jumping: u8,
+    #[bits(1)]
+    is_crouching: u8,
+    #[bits(1)]
+    is_sprinting: u8,
+    #[bits(1)]
+    is_shooting: u8,
+    #[bits(4)]
+    weapon_id: u8,
+    
+    health: u8,
+    armor: u8,
+}
+
+// HTTP/2 Frame with dynamic payload
+#[derive(BeBytes)]
+struct Http2Frame {
+    // Frame header (9 bytes)
+    #[bits(24)]
+    length: u32,        // Payload length (max 16MB)
+    frame_type: u8,     // DATA=0, HEADERS=1, etc.
+    flags: u8,          // Frame-specific flags
+    #[bits(1)]
+    reserved: u8,       // Must be 0
+    #[bits(31)]
+    stream_id: u32,     // Stream identifier
+    
+    // Payload
+    #[With(size(length))]
+    payload: Vec<u8>,   // Frame-specific data
+}
+
+// WebSocket Frame with masking
+#[derive(BeBytes)]
+struct WebSocketFrame {
+    #[bits(1)]
+    fin: u8,            // Final fragment flag
+    #[bits(3)]
+    rsv: u8,            // Reserved bits
+    #[bits(4)]
+    opcode: u8,         // Frame type
+    
+    #[bits(1)]
+    masked: u8,         // Client must set to 1
+    #[bits(7)]
+    payload_len: u8,    // 0-125, 126=16bit, 127=64bit
+    
+    // Extended payload length for larger messages
+    extended_len: u16,  // If payload_len == 126
+    extended_len_64: u64, // If payload_len == 127
+    
+    masking_key: u32,   // Present if masked == 1
+    
+    // Payload size calculation would need custom logic
+    payload: Vec<u8>,
 }
 ```
 
