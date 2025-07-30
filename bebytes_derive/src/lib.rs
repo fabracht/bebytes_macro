@@ -26,7 +26,7 @@ use alloc::vec::Vec;
 use consts::Endianness;
 
 /// Generate optimized direct writing methods for structs with bit fields
-/// Uses stack-allocated arrays when possible to reduce allocation overhead  
+/// Uses stack-allocated arrays when possible to reduce allocation overhead
 fn generate_bit_field_optimized_methods(
     _struct_field_names: &[&Option<syn::Ident>],
     _named_fields: &[proc_macro2::TokenStream],
@@ -46,8 +46,8 @@ fn generate_bit_field_optimized_methods(
                 });
             }
 
-            // For bit field structs, fallback to heap allocation
-            // TODO: Implement true zero-allocation stack buffer approach
+            // For bit field structs, use existing to_be_bytes implementation
+            // (Future optimization: implement true zero-allocation for small structs)
             let field_bytes = self.to_be_bytes();
             buf.put_slice(&field_bytes);
 
@@ -65,8 +65,8 @@ fn generate_bit_field_optimized_methods(
                 });
             }
 
-            // For bit field structs, fallback to heap allocation
-            // TODO: Implement true zero-allocation stack buffer approach
+            // For bit field structs, use existing to_le_bytes implementation
+            // (Future optimization: implement true zero-allocation for small structs)
             let field_bytes = self.to_le_bytes();
             buf.put_slice(&field_bytes);
 
