@@ -14,12 +14,17 @@ BeBytes is a Rust procedural macro library for binary serialization/deserializat
 - Bit manipulation is done in-place without intermediate allocations
 - Only allocates when necessary (strings, vectors)
 
-### 2. Compile-Time Validation
+### 2. Professional Buffer Management (2.6.0+)
+- Uses `bytes` crate for buffer management
+- `BytesMut` for internal operations, `Bytes` for zero-copy sharing
+- Compatible with async ecosystem (tokio, hyper, tonic)
+
+### 3. Compile-Time Validation
 - Bit field completeness is validated at compile time
 - Type safety is enforced through the type system
 - Clear error messages guide users to fix issues
 
-### 3. Functional Programming Approach
+### 4. Functional Programming Approach
 - Pure functions for code generation
 - Immutable data structures in macro processing
 - Separation of parsing and code generation phases
@@ -199,3 +204,63 @@ Users can implement custom interpreters for:
 - Default UTF-8 behavior unchanged
 - All existing code continues to work
 - New features are additive only
+
+## bytes Crate Integration (2.6.0+)
+
+### Design Philosophy
+
+BeBytes 2.6.0+ integrates the `bytes` crate to provide professional buffer management capabilities while maintaining full backward compatibility.
+
+### Architecture Changes
+
+#### Buffer Management
+- **Internal Operations**: `BytesMut::with_capacity()` replaces `Vec::with_capacity()`
+- **Generated Code**: Uses `BytesMut` for all internal buffer operations
+- **Compatibility**: All existing `Vec<u8>` methods unchanged
+
+#### New API Methods
+```rust
+// Zero-copy Bytes buffer methods
+fn to_be_bytes_buf(&self) -> Bytes;
+fn to_le_bytes_buf(&self) -> Bytes;
+
+// Direct BufMut writing methods  
+fn encode_be_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>;
+fn encode_le_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>;
+```
+
+### Implementation Details
+
+#### Code Generation Changes
+1. **Buffer Creation**: `BytesMut::with_capacity(capacity)` instead of `Vec::with_capacity(capacity)`
+2. **Primitive Writing**: Uses `BufMut::put_u8()`, `put_u16()`, etc. for optimized serialization
+3. **Compatibility Alias**: `let bytes = &mut buf;` maintains compatibility with existing field writing code
+4. **Conversion**: `buf.to_vec()` for Vec methods, `buf.freeze()` for Bytes methods
+
+#### Endianness Handling
+- bytes crate is endianness-agnostic
+- BeBytes handles endianness via `to_be_bytes()` / `to_le_bytes()` conversion
+- Uses `put_slice()` for consistent byte order control
+
+#### Memory Management
+- **BytesMut**: Growable, mutable buffer for construction
+- **Bytes**: Immutable, reference-counted buffer for sharing
+- **Zero-copy**: `BytesMut::freeze()` converts to `Bytes` without copying
+- **Sharing**: `Bytes::clone()` increments reference count
+
+### Ecosystem Integration
+
+#### Async Compatibility
+- Works with tokio's `AsyncRead` and `AsyncWrite` traits
+- Compatible with hyper's HTTP handling
+- Integrates with tonic's gRPC implementation
+
+#### Standard Patterns
+- Follows established Rust networking library patterns
+- Uses same buffer management as major crates
+- Reference-counted sharing reduces allocation overhead
+
+### Feature Flags
+- **No Feature Flags**: bytes is a native dependency
+- **std/no_std**: Handled via bytes crate's feature system
+- **Backward Compatibility**: All existing code works unchanged

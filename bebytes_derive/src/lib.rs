@@ -9,6 +9,7 @@ mod bit_validation;
 mod consts;
 mod enums;
 mod functional;
+mod raw_pointer;
 mod size_expr;
 mod structs;
 mod utils;
@@ -25,6 +26,224 @@ use alloc::vec::Vec;
 
 use consts::Endianness;
 
+/// Calculate the total size of a struct based on its fields
+fn calculate_struct_size(fields: &syn::FieldsNamed) -> Option<usize> {
+    let mut total_size = 0usize;
+
+    for field in &fields.named {
+        let field_type = &field.ty;
+
+        // Check if this is a bit field (has #[bits(N)] attribute)
+        let is_bit_field = field.attrs.iter().any(|attr| attr.path().is_ident("bits"));
+        if is_bit_field {
+            return None;
+        }
+
+        // Try to get size of primitive types and arrays
+        if let Ok(size) = crate::utils::get_primitive_type_size(field_type) {
+            total_size += size;
+        } else if let syn::Type::Array(array_type) = field_type {
+            if let syn::Type::Path(element_type) = &*array_type.elem {
+                if element_type.path.is_ident("u8") {
+                    if let syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Int(len),
+                        ..
+                    }) = &array_type.len
+                    {
+                        if let Ok(array_len) = len.base10_parse::<usize>() {
+                            total_size += array_len;
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        } else {
+            return None;
+        }
+    }
+
+    if total_size > 0 && total_size <= 256 {
+        Some(total_size)
+    } else {
+        None
+    }
+}
+
+/// Generate the "not supported" response for raw pointer methods
+fn generate_raw_pointer_not_supported() -> proc_macro2::TokenStream {
+    quote! {
+        /// Check if this struct supports raw pointer encoding
+        pub const fn supports_raw_pointer_encoding() -> bool {
+            false
+        }
+    }
+}
+
+/// Generate raw pointer methods for ultra-high-performance encoding
+/// These methods bypass all abstractions and write directly to memory
+fn generate_raw_pointer_methods(
+    fields: &syn::FieldsNamed,
+    has_bit_fields: bool,
+) -> proc_macro2::TokenStream {
+    // Only generate for structs without bit fields
+    if has_bit_fields {
+        return generate_raw_pointer_not_supported();
+    }
+
+    // Calculate struct size
+    let Some(total_size) = calculate_struct_size(fields) else {
+        return generate_raw_pointer_not_supported();
+    };
+
+    // Generate the raw pointer writing code for big-endian
+    let Ok(be_writing) = raw_pointer::generate_raw_pointer_struct_writing(fields, Endianness::Big)
+    else {
+        return generate_raw_pointer_not_supported();
+    };
+
+    // Generate the raw pointer writing code for little-endian
+    let Ok(le_writing) =
+        raw_pointer::generate_raw_pointer_struct_writing(fields, Endianness::Little)
+    else {
+        return generate_raw_pointer_not_supported();
+    };
+
+    quote! {
+        /// Check if this struct supports raw pointer encoding
+        pub const fn supports_raw_pointer_encoding() -> bool {
+            true
+        }
+
+        /// Get the compile-time known size of this struct
+        pub const RAW_POINTER_SIZE: usize = #total_size;
+
+        /// Encode to a stack-allocated array using raw pointer operations (big-endian)
+        /// This is the fastest possible encoding method with zero allocations
+        ///
+        /// # Compile-time Safety
+        /// The array size is determined at compile time based on struct fields.
+        #[inline(always)]
+        pub fn encode_be_to_raw_stack(&self) -> [u8; #total_size] {
+            let mut result = [0u8; #total_size];
+            unsafe {
+                let ptr = result.as_mut_ptr();
+                let mut offset = 0;
+                #be_writing
+            }
+            result
+        }
+
+        /// Encode to a stack-allocated array using raw pointer operations (little-endian)
+        /// This is the fastest possible encoding method with zero allocations
+        ///
+        /// # Compile-time Safety
+        /// The array size is determined at compile time based on struct fields.
+        #[inline(always)]
+        pub fn encode_le_to_raw_stack(&self) -> [u8; #total_size] {
+            let mut result = [0u8; #total_size];
+            unsafe {
+                let ptr = result.as_mut_ptr();
+                let mut offset = 0;
+                #le_writing
+            }
+            result
+        }
+
+        /// Encode directly to a mutable buffer using raw pointer operations (big-endian)
+        /// This method is unsafe and requires the buffer to have sufficient capacity
+        #[inline(always)]
+        pub unsafe fn encode_be_to_raw_mut<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+            let required_capacity = Self::field_size();
+            if buf.remaining_mut() < required_capacity {
+                return Err(::bebytes::BeBytesError::InsufficientData {
+                    expected: required_capacity,
+                    actual: buf.remaining_mut(),
+                });
+            }
+
+            let ptr = buf.chunk_mut().as_mut_ptr();
+            let mut offset = 0;
+            #be_writing
+            buf.advance_mut(required_capacity);
+            Ok(())
+        }
+
+        /// Encode directly to a mutable buffer using raw pointer operations (little-endian)
+        /// This method is unsafe and requires the buffer to have sufficient capacity
+        #[inline(always)]
+        pub unsafe fn encode_le_to_raw_mut<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+            let required_capacity = Self::field_size();
+            if buf.remaining_mut() < required_capacity {
+                return Err(::bebytes::BeBytesError::InsufficientData {
+                    expected: required_capacity,
+                    actual: buf.remaining_mut(),
+                });
+            }
+
+            let ptr = buf.chunk_mut().as_mut_ptr();
+            let mut offset = 0;
+            #le_writing
+            buf.advance_mut(required_capacity);
+            Ok(())
+        }
+    }
+}
+
+/// Generate optimized direct writing methods for structs with bit fields
+/// Uses stack-allocated arrays when possible to reduce allocation overhead
+fn generate_bit_field_optimized_methods(
+    _struct_field_names: &[&Option<syn::Ident>],
+    _named_fields: &[proc_macro2::TokenStream],
+    _le_named_fields: &[proc_macro2::TokenStream],
+    _be_field_writing: &[proc_macro2::TokenStream],
+    _le_field_writing: &[proc_macro2::TokenStream],
+) -> proc_macro2::TokenStream {
+    quote! {
+        #[inline]
+        fn encode_be_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+            let required_capacity = Self::field_size();
+            if buf.remaining_mut() < required_capacity {
+                return Err(::bebytes::BeBytesError::InsufficientData {
+                    expected: required_capacity,
+                    actual: buf.remaining_mut(),
+                });
+            }
+
+            // For bit field structs, use existing to_be_bytes implementation
+            // (Future optimization: implement true zero-allocation for small structs)
+            let field_bytes = self.to_be_bytes();
+            buf.put_slice(&field_bytes);
+
+            Ok(())
+        }
+
+        #[inline]
+        fn encode_le_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+            let required_capacity = Self::field_size();
+            if buf.remaining_mut() < required_capacity {
+                return Err(::bebytes::BeBytesError::InsufficientData {
+                    expected: required_capacity,
+                    actual: buf.remaining_mut(),
+                });
+            }
+
+            // For bit field structs, use existing to_le_bytes implementation
+            // (Future optimization: implement true zero-allocation for small structs)
+            let field_bytes = self.to_le_bytes();
+            buf.put_slice(&field_bytes);
+
+            Ok(())
+        }
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 #[proc_macro_derive(BeBytes, attributes(bits, With, FromField, bebytes))]
 pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
@@ -39,10 +258,13 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     // For big-endian implementation
     let mut be_field_parsing = Vec::new();
     let mut be_field_writing = Vec::new();
+    let mut be_direct_writing = Vec::new();
+    let mut has_bit_fields = false;
 
     // For little-endian implementation
     let mut le_field_parsing = Vec::new();
     let mut le_field_writing = Vec::new();
+    let mut le_direct_writing: Vec<proc_macro2::TokenStream> = Vec::new();
 
     // Common elements
     let mut bit_sum = Vec::new();
@@ -60,9 +282,11 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     field_parsing: &mut be_field_parsing,
                     bit_sum: &mut bit_sum,
                     field_writing: &mut be_field_writing,
+                    direct_writing: &mut be_direct_writing,
                     named_fields: &mut named_fields,
                     fields: &fields,
                     endianness: Endianness::Big,
+                    has_bit_fields: &mut has_bit_fields,
                 };
                 structs::handle_struct(&mut be_context);
 
@@ -72,15 +296,19 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 let mut le_named_fields = Vec::new();
                 let mut le_dummy_field_limit = Vec::new(); // Dummy vector since we don't need to populate it again
                 let mut le_dummy_bit_sum = Vec::new(); // Dummy vector since we don't need to populate it again
+                let mut _le_dummy_direct_writing: Vec<proc_macro2::TokenStream> = Vec::new(); // Dummy vector since we use the shared direct_writing
+                let mut le_dummy_has_bit_fields = false; // Dummy since bit fields are endian-independent
                 let mut le_context = structs::StructContext {
                     field_limit_check: &mut le_dummy_field_limit,
                     errors: &mut errors,
                     field_parsing: &mut le_field_parsing,
                     bit_sum: &mut le_dummy_bit_sum,
                     field_writing: &mut le_field_writing,
+                    direct_writing: &mut le_direct_writing,
                     named_fields: &mut le_named_fields,
                     fields: &fields,
                     endianness: Endianness::Little,
+                    has_bit_fields: &mut le_dummy_has_bit_fields,
                 };
                 structs::handle_struct(&mut le_context);
 
@@ -97,6 +325,60 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     let field_type = &f.ty;
                     quote! { #field_ident: #field_type }
                 });
+
+                // Generate direct writing methods for all structs
+                // Bit field structs get stack-allocated optimization when possible
+                let direct_writing_methods = if has_bit_fields {
+                    // For structs with bit fields, generate optimized fallback methods
+                    generate_bit_field_optimized_methods(
+                        &struct_field_names,
+                        &named_fields,
+                        &le_named_fields,
+                        &be_field_writing,
+                        &le_field_writing,
+                    )
+                } else {
+                    quote! {
+                        #[inline]
+                        fn encode_be_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+                            let required_capacity = Self::field_size();
+                            if buf.remaining_mut() < required_capacity {
+                                return Err(::bebytes::BeBytesError::InsufficientData {
+                                    expected: required_capacity,
+                                    actual: buf.remaining_mut(),
+                                });
+                            }
+
+                            let mut _bit_sum = 0;
+                            #(
+                                #named_fields
+                                #be_direct_writing
+                            )*
+                            Ok(())
+                        }
+
+                        #[inline]
+                        fn encode_le_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+                            let required_capacity = Self::field_size();
+                            if buf.remaining_mut() < required_capacity {
+                                return Err(::bebytes::BeBytesError::InsufficientData {
+                                    expected: required_capacity,
+                                    actual: buf.remaining_mut(),
+                                });
+                            }
+
+                            let mut _bit_sum = 0;
+                            #(
+                                #le_named_fields
+                                #le_direct_writing
+                            )*
+                            Ok(())
+                        }
+                    }
+                };
+
+                // Generate raw pointer methods for eligible structs
+                let raw_pointer_methods = generate_raw_pointer_methods(&fields, has_bit_fields);
 
                 let expanded = quote! {
                     impl #my_trait_path for #name {
@@ -127,13 +409,32 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         #[inline]
                         fn to_be_bytes(&self) -> Vec<u8> {
                             let capacity = Self::field_size();
-                            let mut bytes = Vec::with_capacity(capacity);
+                            let mut buf = ::bebytes::BytesMut::with_capacity(capacity);
                             let mut _bit_sum = 0;
                             #(
                                 #named_fields
-                                #be_field_writing
+                                {
+                                    let bytes = &mut buf;
+                                    #be_field_writing
+                                }
                             )*
-                            bytes
+                            buf.to_vec()
+                        }
+
+                        /// Convert to big-endian bytes as a zero-copy Bytes buffer
+                        #[inline]
+                        fn to_be_bytes_buf(&self) -> ::bebytes::Bytes {
+                            let capacity = Self::field_size();
+                            let mut buf = ::bebytes::BytesMut::with_capacity(capacity);
+                            let mut _bit_sum = 0;
+                            #(
+                                #named_fields
+                                {
+                                    let bytes = &mut buf;
+                                    #be_field_writing
+                                }
+                            )*
+                            buf.freeze()
                         }
 
                         // Little-endian implementation
@@ -156,14 +457,37 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         #[inline]
                         fn to_le_bytes(&self) -> Vec<u8> {
                             let capacity = Self::field_size();
-                            let mut bytes = Vec::with_capacity(capacity);
+                            let mut buf = ::bebytes::BytesMut::with_capacity(capacity);
                             let mut _bit_sum = 0;
                             #(
                                 #le_named_fields
-                                #le_field_writing
+                                {
+                                    let bytes = &mut buf;
+                                    #le_field_writing
+                                }
                             )*
-                            bytes
+                            buf.to_vec()
                         }
+
+                        /// Convert to little-endian bytes as a zero-copy Bytes buffer
+                        #[inline]
+                        fn to_le_bytes_buf(&self) -> ::bebytes::Bytes {
+                            let capacity = Self::field_size();
+                            let mut buf = ::bebytes::BytesMut::with_capacity(capacity);
+                            let mut _bit_sum = 0;
+                            #(
+                                #le_named_fields
+                                {
+                                    let bytes = &mut buf;
+                                    #le_field_writing
+                                }
+                            )*
+                            buf.freeze()
+                        }
+
+                        // Direct buffer writing methods (conditionally generated)
+                        #direct_writing_methods
+
                     }
 
                     impl #name {
@@ -174,6 +498,9 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 #( #struct_field_names, )*
                             }
                         }
+
+                        // Raw pointer methods for ultra-high-performance encoding
+                        #raw_pointer_methods
                     }
                 };
 
@@ -269,12 +596,12 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
                     #[inline]
                     fn to_be_bytes(&self) -> Vec<u8> {
-                        let mut bytes = Vec::with_capacity(1);
+                        let mut buf = ::bebytes::BytesMut::with_capacity(1);
                         let val = match self {
                             #(#to_be_bytes_arms)*
                         };
-                        bytes.push(val);
-                        bytes
+                        ::bebytes::BufMut::put_u8(&mut buf, val);
+                        buf.to_vec()
                     }
 
                     // Little-endian implementation
@@ -295,12 +622,12 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
                     #[inline]
                     fn to_le_bytes(&self) -> Vec<u8> {
-                        let mut bytes = Vec::with_capacity(1);
+                        let mut buf = ::bebytes::BytesMut::with_capacity(1);
                         let val = match self {
                             #(#to_le_bytes_arms)*
                         };
-                        bytes.push(val);
-                        bytes
+                        ::bebytes::BufMut::put_u8(&mut buf, val);
+                        buf.to_vec()
                     }
                 }
             };

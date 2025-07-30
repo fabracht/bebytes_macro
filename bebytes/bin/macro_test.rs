@@ -1043,7 +1043,7 @@ fn demo_string_support() {
     // Unbounded string (last field)
     println!("\nUnbounded string as last field:");
     let log_entry = LogEntry {
-        timestamp: 1640995200,
+        timestamp: 1_640_995_200,
         level: 3,
         message: "Application started successfully with all modules loaded".to_string(),
     };

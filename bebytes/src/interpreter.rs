@@ -1,6 +1,6 @@
 //! Internal string interpretation traits
 //!
-//! This module is for internal use by the BeBytes derive macro.
+//! This module is for internal use by the `BeBytes` derive macro.
 //! The traits and types are exposed publicly but are not intended for external use.
 //! The derive macro is currently hardcoded to use UTF-8 encoding.
 

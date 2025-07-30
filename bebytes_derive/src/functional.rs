@@ -44,6 +44,7 @@ pub struct FieldProcessResult {
     pub limit_check: TokenStream,
     pub parsing: TokenStream,
     pub writing: TokenStream,
+    pub direct_writing: TokenStream, // New: direct buffer writing
     pub accessor: TokenStream,
     pub bit_sum: TokenStream,
 }
@@ -53,6 +54,7 @@ impl FieldProcessResult {
         limit_check: TokenStream,
         parsing: TokenStream,
         writing: TokenStream,
+        direct_writing: TokenStream,
         accessor: TokenStream,
         bit_sum: TokenStream,
     ) -> Self {
@@ -60,6 +62,7 @@ impl FieldProcessResult {
             limit_check,
             parsing,
             writing,
+            direct_writing,
             accessor,
             bit_sum,
         }
@@ -71,6 +74,7 @@ pub struct FieldDataBuilder {
     limit_checks: Vec<TokenStream>,
     parsings: Vec<TokenStream>,
     writings: Vec<TokenStream>,
+    direct_writings: Vec<TokenStream>, // New: direct buffer writings
     accessors: Vec<TokenStream>,
     bit_sums: Vec<TokenStream>,
 }
@@ -81,6 +85,7 @@ impl FieldDataBuilder {
             limit_checks: Vec::new(),
             parsings: Vec::new(),
             writings: Vec::new(),
+            direct_writings: Vec::new(),
             accessors: Vec::new(),
             bit_sums: Vec::new(),
         }
@@ -90,6 +95,7 @@ impl FieldDataBuilder {
         self.limit_checks.push(result.limit_check);
         self.parsings.push(result.parsing);
         self.writings.push(result.writing);
+        self.direct_writings.push(result.direct_writing);
         self.accessors.push(result.accessor);
         self.bit_sums.push(result.bit_sum);
         self
@@ -102,6 +108,7 @@ impl FieldDataBuilder {
             field_parsing: self.parsings,
             bit_sum: self.bit_sums,
             field_writing: self.writings,
+            direct_writing: self.direct_writings,
             named_fields: self.accessors,
             total_size: 0,
         }
@@ -196,7 +203,7 @@ pub mod pure_helpers {
     /// Create a field accessor without side effects
     pub fn create_field_accessor(field_name: &Ident, needs_owned: bool) -> TokenStream {
         if needs_owned {
-            quote! { let #field_name = self.#field_name.to_owned(); }
+            quote! { let #field_name = self.#field_name.clone(); }
         } else {
             quote! { let #field_name = self.#field_name; }
         }
@@ -363,8 +370,24 @@ pub mod pure_helpers {
         match endianness {
             crate::consts::Endianness::Big => match type_size {
                 1 => Ok(quote! {
-                    bytes.push(#field_name as u8);
+                    ::bebytes::BufMut::put_u8(bytes, #field_name as u8);
                     _bit_sum += 8;
+                }),
+                2 => Ok(quote! {
+                    ::bebytes::BufMut::put_u16(bytes, #field_name as u16);
+                    _bit_sum += 16;
+                }),
+                4 => Ok(quote! {
+                    ::bebytes::BufMut::put_u32(bytes, #field_name as u32);
+                    _bit_sum += 32;
+                }),
+                8 => Ok(quote! {
+                    ::bebytes::BufMut::put_u64(bytes, #field_name as u64);
+                    _bit_sum += 64;
+                }),
+                16 => Ok(quote! {
+                    ::bebytes::BufMut::put_u128(bytes, #field_name as u128);
+                    _bit_sum += 128;
                 }),
                 _ => Ok(quote! {
                     let field_slice = &#field_name.to_be_bytes();
@@ -374,8 +397,24 @@ pub mod pure_helpers {
             },
             crate::consts::Endianness::Little => match type_size {
                 1 => Ok(quote! {
-                    bytes.push(#field_name as u8);
+                    ::bebytes::BufMut::put_u8(bytes, #field_name as u8);
                     _bit_sum += 8;
+                }),
+                2 => Ok(quote! {
+                    ::bebytes::BufMut::put_u16_le(bytes, #field_name as u16);
+                    _bit_sum += 16;
+                }),
+                4 => Ok(quote! {
+                    ::bebytes::BufMut::put_u32_le(bytes, #field_name as u32);
+                    _bit_sum += 32;
+                }),
+                8 => Ok(quote! {
+                    ::bebytes::BufMut::put_u64_le(bytes, #field_name as u64);
+                    _bit_sum += 64;
+                }),
+                16 => Ok(quote! {
+                    ::bebytes::BufMut::put_u128_le(bytes, #field_name as u128);
+                    _bit_sum += 128;
                 }),
                 _ => Ok(quote! {
                     let field_slice = &#field_name.to_le_bytes();
@@ -1112,6 +1151,7 @@ mod tests {
             quote! { check },
             quote! { parse },
             quote! { write },
+            quote! { direct_write },
             quote! { access },
             quote! { bit_sum },
         );
