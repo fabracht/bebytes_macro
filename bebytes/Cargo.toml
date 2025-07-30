@@ -21,7 +21,7 @@ path = "./bin/performance_benchmark.rs"
 required-features = ["std"]
 
 [dependencies]
-bebytes_derive = { version = "2.4.0", path = "../bebytes_derive" }
+bebytes_derive = { version = "2.4.0" }
 bytes = { version = "1.5", default-features = false, optional = true }
 
 [dev-dependencies]
