@@ -211,4 +211,3 @@ fn test_multiple_writes_to_same_buffer() {
     let expected = [packet1.to_be_bytes(), packet2.to_be_bytes()].concat();
     assert_eq!(buf.to_vec(), expected);
 }
-
