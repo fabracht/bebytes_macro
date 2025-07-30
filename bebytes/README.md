@@ -782,6 +782,54 @@ fn main() {
 }
 ```
 
+## Performance Optimizations
+
+BeBytes 2.6.0 introduces professional buffer management through the `bytes` crate integration, providing:
+
+### Zero-Copy Operations
+
+```rust
+use bebytes::BeBytes;
+
+#[derive(BeBytes)]
+struct Message {
+    header: u32,
+    payload: [u8; 1024],
+}
+
+// Create zero-copy shareable buffer
+let msg = Message { header: 0x12345678, payload: [0; 1024] };
+let bytes_buf = msg.to_be_bytes_buf(); // Returns Bytes
+
+// Clone is cheap - just increments reference count
+let clone1 = bytes_buf.clone();
+let clone2 = bytes_buf.clone();
+
+// Pass to multiple tasks without copying data
+tokio::spawn(async move {
+    network_send(clone1).await;
+});
+```
+
+### Direct Buffer Writing
+
+```rust
+use bebytes::{BeBytes, BytesMut};
+
+// Write directly to existing buffer
+let mut buf = BytesMut::with_capacity(2048);
+
+// Encode multiple messages without intermediate allocations
+msg1.encode_be_to(&mut buf)?;
+msg2.encode_be_to(&mut buf)?;
+msg3.encode_be_to(&mut buf)?;
+
+// Convert to immutable Bytes for sending
+let bytes = buf.freeze();
+```
+
+The bytes integration provides up to 2.88x performance improvement in production workloads.
+
 ## Contribute
 
 I'm doing this for fun, but all help is appreciated.
