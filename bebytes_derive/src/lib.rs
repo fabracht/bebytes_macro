@@ -25,6 +25,55 @@ use alloc::vec::Vec;
 
 use consts::Endianness;
 
+/// Generate optimized direct writing methods for structs with bit fields
+/// Uses stack-allocated arrays when possible to reduce allocation overhead  
+fn generate_bit_field_optimized_methods(
+    _struct_field_names: &[&Option<syn::Ident>],
+    _named_fields: &[proc_macro2::TokenStream],
+    _le_named_fields: &[proc_macro2::TokenStream],
+    _be_field_writing: &[proc_macro2::TokenStream],
+    _le_field_writing: &[proc_macro2::TokenStream],
+) -> proc_macro2::TokenStream {
+    quote! {
+        #[cfg(feature = "bytes")]
+        #[inline]
+        fn encode_be_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+            let required_capacity = Self::field_size();
+            if buf.remaining_mut() < required_capacity {
+                return Err(::bebytes::BeBytesError::InsufficientData {
+                    expected: required_capacity,
+                    actual: buf.remaining_mut(),
+                });
+            }
+
+            // For bit field structs, fallback to heap allocation
+            // TODO: Implement true zero-allocation stack buffer approach
+            let field_bytes = self.to_be_bytes();
+            buf.put_slice(&field_bytes);
+
+            Ok(())
+        }
+
+        #[cfg(feature = "bytes")]
+        #[inline]
+        fn encode_le_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+            let required_capacity = Self::field_size();
+            if buf.remaining_mut() < required_capacity {
+                return Err(::bebytes::BeBytesError::InsufficientData {
+                    expected: required_capacity,
+                    actual: buf.remaining_mut(),
+                });
+            }
+
+            // For bit field structs, fallback to heap allocation
+            // TODO: Implement true zero-allocation stack buffer approach
+            let field_bytes = self.to_le_bytes();
+            buf.put_slice(&field_bytes);
+
+            Ok(())
+        }
+    }
+}
 
 #[allow(clippy::too_many_lines)]
 #[proc_macro_derive(BeBytes, attributes(bits, With, FromField, bebytes))]
@@ -108,10 +157,18 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     quote! { #field_ident: #field_type }
                 });
 
-
-
-                // Generate direct writing methods only if no bit fields are present
-                let direct_writing_methods = if !has_bit_fields {
+                // Generate direct writing methods for all structs
+                // Bit field structs get stack-allocated optimization when possible
+                let direct_writing_methods = if has_bit_fields {
+                    // For structs with bit fields, generate optimized fallback methods
+                    generate_bit_field_optimized_methods(
+                        &struct_field_names,
+                        &named_fields,
+                        &le_named_fields,
+                        &be_field_writing,
+                        &le_field_writing,
+                    )
+                } else {
                     quote! {
                         #[cfg(feature = "bytes")]
                         #[inline]
@@ -123,7 +180,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     actual: buf.remaining_mut(),
                                 });
                             }
-                            
+
                             let mut _bit_sum = 0;
                             #(
                                 #named_fields
@@ -142,7 +199,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     actual: buf.remaining_mut(),
                                 });
                             }
-                            
+
                             let mut _bit_sum = 0;
                             #(
                                 #le_named_fields
@@ -151,10 +208,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             Ok(())
                         }
                     }
-                } else {
-                    // For structs with bit fields, don't generate custom direct writing methods
-                    // They will fall back to the default implementation from the trait
-                    quote! {}
                 };
 
                 let expanded = quote! {

@@ -44,7 +44,7 @@ pub struct FieldProcessResult {
     pub limit_check: TokenStream,
     pub parsing: TokenStream,
     pub writing: TokenStream,
-    pub direct_writing: TokenStream,  // New: direct buffer writing
+    pub direct_writing: TokenStream, // New: direct buffer writing
     pub accessor: TokenStream,
     pub bit_sum: TokenStream,
 }
@@ -74,7 +74,7 @@ pub struct FieldDataBuilder {
     limit_checks: Vec<TokenStream>,
     parsings: Vec<TokenStream>,
     writings: Vec<TokenStream>,
-    direct_writings: Vec<TokenStream>,  // New: direct buffer writings
+    direct_writings: Vec<TokenStream>, // New: direct buffer writings
     accessors: Vec<TokenStream>,
     bit_sums: Vec<TokenStream>,
 }
