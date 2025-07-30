@@ -14,7 +14,7 @@ To use BeBytes, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "2.4.0"
+bebytes = "2.6.0"
 ```
 
 Then, import the BeBytes trait from the bebytes crate and derive it for your struct:
@@ -38,12 +38,12 @@ fn build_with_le_bytes(input: impl BeBytes) -> Vec<u8> {
 }
 
 // Deserializing from big-endian bytes
-fn build_from_be_bytes(input: &[u8]) -> Result<(Dummy, usize), Box<dyn std::error::Error>> {
+fn build_from_be_bytes(input: &[u8]) -> Result<(Dummy, usize), bebytes::BeBytesError> {
     Dummy::try_from_be_bytes(input)
 }
 
 // Deserializing from little-endian bytes
-fn build_from_le_bytes(input: &[u8]) -> Result<(Dummy, usize), Box<dyn std::error::Error>> {
+fn build_from_le_bytes(input: &[u8]) -> Result<(Dummy, usize), bebytes::BeBytesError> {
     Dummy::try_from_le_bytes(input)
 }
 ```
@@ -56,13 +56,20 @@ The BeBytes derive macro generates the following methods for your struct:
 
 **Big-endian methods:**
 
-- `try_from_be_bytes(&[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>>`: A method to convert a big-endian byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
+- `try_from_be_bytes(&[u8]) -> Result<(Self, usize), BeBytesError>`: A method to convert a big-endian byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
 - `to_be_bytes(&self) -> Vec<u8>`: A method to convert the struct into a big-endian byte representation. It returns a `Vec<u8>` containing the serialized bytes.
 
 **Little-endian methods:**
 
-- `try_from_le_bytes(&[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>>`: A method to convert a little-endian byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
+- `try_from_le_bytes(&[u8]) -> Result<(Self, usize), BeBytesError>`: A method to convert a little-endian byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
 - `to_le_bytes(&self) -> Vec<u8>`: A method to convert the struct into a little-endian byte representation. It returns a `Vec<u8>` containing the serialized bytes.
+
+**bytes Crate Integration (New in 2.6.0):**
+
+- `to_be_bytes_buf(&self) -> Bytes`: Convert to big-endian Bytes buffer.
+- `to_le_bytes_buf(&self) -> Bytes`: Convert to little-endian Bytes buffer.
+- `encode_be_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to buffer (big-endian).
+- `encode_le_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to buffer (little-endian).
 
 ## Bit Field Manipulation
 
@@ -577,11 +584,74 @@ For vectors of custom types, the following rules apply:
 - When used elsewhere, you must specify size information with `#[FromField]` or `#[With]`
 - Each item in the vector is serialized/deserialized using its own BeBytes implementation
 
+## bytes Crate Integration (New in 2.6.0)
+
+BeBytes now natively integrates the `bytes` crate for buffer management and zero-copy operations:
+
+```rust
+use bebytes::BeBytes;
+use bytes::{Bytes, BytesMut};
+
+#[derive(BeBytes)]
+struct NetworkPacket {
+    header: u32,
+    payload_len: u16,
+    #[FromField(payload_len)]
+    payload: Vec<u8>,
+}
+
+let packet = NetworkPacket {
+    header: 0x12345678,
+    payload_len: 13,
+    payload: b"Hello, world!".to_vec(),
+};
+
+// Traditional Vec<u8> approach (still available)
+let vec_bytes = packet.to_be_bytes();
+
+// NEW: Zero-copy Bytes buffer
+let bytes_buffer: Bytes = packet.to_be_bytes_buf();
+
+// Zero-copy sharing between tasks
+let shared_buffer = bytes_buffer.clone(); // Just increments reference count
+tokio::spawn(async move {
+    send_to_network(shared_buffer).await;
+});
+
+// NEW: Direct buffer writing
+let mut buf = BytesMut::with_capacity(packet.field_size());
+packet.encode_be_to(&mut buf).unwrap();
+let final_bytes = buf.freeze(); // Convert to immutable Bytes
+
+// All methods produce identical results
+assert_eq!(vec_bytes, bytes_buffer.as_ref());
+assert_eq!(vec_bytes, final_bytes.as_ref());
+```
+
+### bytes Integration Benefits
+
+1. **Zero-copy sharing**: `Bytes` can be shared between tasks without copying data
+2. **Memory efficiency**: Reference-counted buffers with automatic cleanup
+3. **Ecosystem compatibility**: Works with tokio, hyper, tonic, and async networking
+4. **Standard patterns**: Uses established buffer management techniques
+
+### Migration Guide
+
+Existing code continues to work unchanged. To leverage bytes benefits:
+
+```rust
+// Before (still works)
+let data = packet.to_be_bytes();
+send_data(data).await;
+
+// After (zero-copy sharing)
+let data = packet.to_be_bytes_buf();
+send_data(data).await; // Same signature, better performance
+```
+
 ## Performance Optimizations
 
-### Direct Buffer Writing (New in 2.4.0)
-
-BeBytes now supports direct buffer writing to avoid intermediate allocations:
+### Direct Buffer Writing
 
 ```rust
 use bebytes::BeBytes;
@@ -607,26 +677,68 @@ The `encode_be_to` and `encode_le_to` methods write directly to any `BufMut` imp
 
 - **Inline annotations**: All generated methods use `#[inline]` for better optimization
 - **Pre-allocated capacity**: The `to_bytes` methods pre-allocate exact capacity
-- **Direct buffer writing**: Available with the `bytes` feature flag
+- **Direct buffer writing**: Native bytes crate integration
 - **Zero-copy parsing**: Deserialization works directly from byte slices
 
-To enable direct buffer writing:
+### Raw Pointer Methods (New in 2.5.0)
 
-```toml
-[dependencies]
-bebytes = { version = "2.4.0", features = ["bytes"] }
+BeBytes provides raw pointer-based encoding methods for eligible structs:
+
+```rust
+use bebytes::BeBytes;
+
+#[derive(BeBytes)]
+struct Packet {
+    header: u16,
+    data: [u8; 8],
+    footer: u32,
+}
+
+let packet = Packet {
+    header: 0x1234,
+    data: [1, 2, 3, 4, 5, 6, 7, 8],
+    footer: 0xABCD,
+};
+
+// Check if struct supports raw pointer encoding
+if Packet::supports_raw_pointer_encoding() {
+    // Stack-allocated encoding (fastest, zero allocations, compile-time safe)
+    let bytes = packet.encode_be_to_raw_stack(); // Returns [u8; 14] automatically
+    
+    // Direct buffer writing (unsafe, but extremely fast)
+    let mut buf = BytesMut::with_capacity(Packet::field_size());
+    unsafe {
+        packet.encode_be_to_raw_mut(&mut buf).unwrap();
+    }
+}
 ```
+
+Raw pointer methods provide:
+- **Zero allocations** with stack-based methods
+- **Direct memory writes** using compile-time known offsets
+- **Pointer arithmetic and memcpy operations**
+
+Raw pointer methods are available for structs that:
+- Have no bit fields
+- Are 256 bytes or smaller
+- Contain only primitive types and fixed-size arrays
+
+Safety guarantees:
+- Stack methods are safe with compile-time array sizing
+- Compiler enforces correctness at build time
+- Direct buffer methods include capacity validation
+- Methods only generated for eligible structs
 
 ## No-STD Support
 
-BeBytes supports no_std environments through feature flags:
+BeBytes supports no_std environments:
 
 ```toml
 [dependencies]
-bebytes = { version = "2.4.0", default-features = false }
+bebytes = { version = "2.6.0", default-features = false }
 ```
 
-By default, the `std` feature is enabled. Disable it for no_std support.
+By default, the `std` feature is enabled. Disable it for no_std support. The bytes crate also supports no_std with `alloc`.
 
 ## Example: DNS Name Parsing
 

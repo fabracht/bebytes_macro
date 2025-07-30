@@ -370,8 +370,24 @@ pub mod pure_helpers {
         match endianness {
             crate::consts::Endianness::Big => match type_size {
                 1 => Ok(quote! {
-                    bytes.push(#field_name as u8);
+                    ::bebytes::BufMut::put_u8(bytes, #field_name as u8);
                     _bit_sum += 8;
+                }),
+                2 => Ok(quote! {
+                    ::bebytes::BufMut::put_u16(bytes, #field_name as u16);
+                    _bit_sum += 16;
+                }),
+                4 => Ok(quote! {
+                    ::bebytes::BufMut::put_u32(bytes, #field_name as u32);
+                    _bit_sum += 32;
+                }),
+                8 => Ok(quote! {
+                    ::bebytes::BufMut::put_u64(bytes, #field_name as u64);
+                    _bit_sum += 64;
+                }),
+                16 => Ok(quote! {
+                    ::bebytes::BufMut::put_u128(bytes, #field_name as u128);
+                    _bit_sum += 128;
                 }),
                 _ => Ok(quote! {
                     let field_slice = &#field_name.to_be_bytes();
@@ -381,8 +397,24 @@ pub mod pure_helpers {
             },
             crate::consts::Endianness::Little => match type_size {
                 1 => Ok(quote! {
-                    bytes.push(#field_name as u8);
+                    ::bebytes::BufMut::put_u8(bytes, #field_name as u8);
                     _bit_sum += 8;
+                }),
+                2 => Ok(quote! {
+                    ::bebytes::BufMut::put_u16_le(bytes, #field_name as u16);
+                    _bit_sum += 16;
+                }),
+                4 => Ok(quote! {
+                    ::bebytes::BufMut::put_u32_le(bytes, #field_name as u32);
+                    _bit_sum += 32;
+                }),
+                8 => Ok(quote! {
+                    ::bebytes::BufMut::put_u64_le(bytes, #field_name as u64);
+                    _bit_sum += 64;
+                }),
+                16 => Ok(quote! {
+                    ::bebytes::BufMut::put_u128_le(bytes, #field_name as u128);
+                    _bit_sum += 128;
                 }),
                 _ => Ok(quote! {
                     let field_slice = &#field_name.to_le_bytes();

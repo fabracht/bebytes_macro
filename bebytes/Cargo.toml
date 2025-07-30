@@ -1,8 +1,8 @@
 [package]
 name = "bebytes"
-version = "2.4.0"
+version = "2.6.0"
 edition = "2021"
-rust-version = "1.73.0"
+rust-version = "1.75.0"
 license = "MIT"
 repository = "https://github.com/fabracht/bebytes_macro"
 description = "A Rust library for serialization and deserialization of network structs."
@@ -21,8 +21,8 @@ path = "./bin/performance_benchmark.rs"
 required-features = ["std"]
 
 [dependencies]
-bebytes_derive = { version = "2.4.0" }
-bytes = { version = "1.5", default-features = false, optional = true }
+bebytes_derive = { version = "2.6.0" }
+bytes = { version = "1.5", default-features = false }
 
 [dev-dependencies]
 trybuild = { version = "1.0.102", features = ["diff"] }
@@ -66,6 +66,5 @@ name = "property_based"
 path = "tests/property_based.rs"
 
 [features]
-default = ["std", "bytes"]
-std = ["bytes?/std"]
-bytes = ["dep:bytes"]
+default = ["std"]
+std = ["bytes/std"]

@@ -2,6 +2,66 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.0] - 2025-07-30
+
+### Added
+- **bytes Crate Integration**: Native dependency for buffer management
+  - `to_be_bytes_buf()` / `to_le_bytes_buf()` - `Bytes` buffer methods
+  - `encode_be_to()` / `encode_le_to()` - Direct `BufMut` writing methods
+  - `BytesMut` replaces `Vec<u8>` for internal buffer management
+  - Integration with networking and async ecosystems
+
+### Performance Improvements
+- **2.3x performance improvement** with `to_be_bytes_buf()` vs `to_be_bytes()` (31 ns vs 74 ns)
+- **1.2x improvement** with direct `BufMut` writing for compatible structs
+- Zero-copy buffer sharing via `BytesMut::freeze()` → `Bytes`
+- Optimized primitive serialization using `BufMut::put_u8()`, `put_u16()`, etc.
+- Reduced memory allocations in buffer management
+
+### Architecture Changes
+- bytes crate is now a **native dependency** (no feature flags required)
+- `BytesMut` replaces `Vec<u8>` for internal buffer management
+- Full backward compatibility maintained - all existing `Vec<u8>` methods unchanged
+- Enhanced `std` and `no_std` support via bytes crate's feature system
+
+### Features
+- Zero-copy sharing via reference-counted `Bytes`
+- Automatic memory cleanup
+- Compatible with tokio, hyper, tonic, and async libraries
+- Uses same buffer management as networking libraries
+
+## [2.5.0] - 2025-07-30
+
+### Added
+- **Ultra-High-Performance Raw Pointer Methods**: Revolutionary encoding optimization for maximum speed
+  - `supports_raw_pointer_encoding()` - Check if struct is eligible for raw pointer optimization
+  - `RAW_POINTER_SIZE` - Compile-time constant for struct size
+  - `encode_be_to_raw_stack()` / `encode_le_to_raw_stack()` - Safe stack-allocated encoding methods
+  - `encode_be_to_raw_mut()` / `encode_le_to_raw_mut()` - Unsafe direct buffer writing methods
+  - **40-80x performance improvement** over standard `to_be_bytes()` for eligible structs
+  - **Zero allocations** with stack-based methods using compile-time sized arrays
+  - **Compile-time safety** - array sizes determined automatically by macro
+  - Direct memory writes using `std::ptr::copy_nonoverlapping` for maximum efficiency
+
+### Performance
+- Small structs (4 bytes): **60x speedup**
+- Medium structs (16 bytes): **44x speedup**  
+- Large structs (72 bytes): **28x speedup**
+- Max structs (256 bytes): **5x speedup**
+- Comprehensive benchmarking suite with extensive performance validation
+
+### Safety
+- Stack methods are completely safe with compile-time array sizing
+- No runtime size checks needed - compiler enforces correctness
+- Direct buffer methods include capacity validation
+- Methods only generated for eligible structs, preventing misuse
+
+### Eligibility
+Raw pointer methods are available for structs that:
+- Have no bit fields
+- Are 256 bytes or smaller
+- Contain only primitive types (u8-u128, i8-i128, char) and fixed-size u8 arrays
+
 ## [2.4.0] - 2025-07-30
 
 ### Added

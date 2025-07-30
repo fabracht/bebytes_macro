@@ -1,5 +1,3 @@
-#![cfg(feature = "bytes")]
-
 use bebytes::BeBytes;
 use bytes::BytesMut;
 

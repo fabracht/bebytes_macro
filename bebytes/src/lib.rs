@@ -20,9 +20,8 @@ pub use bebytes_derive::BeBytes;
 #[doc(hidden)]
 pub use interpreter::{StringInterpreter, Utf8};
 
-// Re-export bytes::BufMut when the bytes feature is enabled
-#[cfg(feature = "bytes")]
-pub use bytes::BufMut;
+// Re-export bytes types for generated code
+pub use bytes::{BufMut, Bytes, BytesMut};
 
 /// Error type for `BeBytes` operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +94,24 @@ pub trait BeBytes {
     #[cfg(not(feature = "std"))]
     fn to_le_bytes(&self) -> alloc::vec::Vec<u8>;
 
+    /// Convert to big-endian bytes as a Bytes buffer
+    ///
+    /// Returns a reference-counted Bytes instance that can be shared
+    /// between tasks without copying data.
+    fn to_be_bytes_buf(&self) -> bytes::Bytes {
+        // Default implementation for backward compatibility
+        bytes::Bytes::from(self.to_be_bytes())
+    }
+
+    /// Convert to little-endian bytes as a Bytes buffer
+    ///
+    /// Returns a reference-counted Bytes instance that can be shared
+    /// between tasks without copying data.
+    fn to_le_bytes_buf(&self) -> bytes::Bytes {
+        // Default implementation for backward compatibility
+        bytes::Bytes::from(self.to_le_bytes())
+    }
+
     /// Try to parse a struct from little-endian bytes
     ///
     /// # Errors
@@ -107,12 +124,10 @@ pub trait BeBytes {
     where
         Self: Sized;
 
-    // Direct buffer writing methods (when bytes feature is enabled)
-    #[cfg(feature = "bytes")]
     /// Encode directly to a buffer in big-endian format
     ///
-    /// This method avoids intermediate allocations by writing directly to the provided buffer.
-    /// It's more efficient than `to_be_bytes()` for performance-critical code.
+    /// Writes struct data directly to the provided buffer without intermediate
+    /// allocations.
     ///
     /// # Errors
     ///
@@ -130,11 +145,10 @@ pub trait BeBytes {
         Ok(())
     }
 
-    #[cfg(feature = "bytes")]
     /// Encode directly to a buffer in little-endian format
     ///
-    /// This method avoids intermediate allocations by writing directly to the provided buffer.
-    /// It's more efficient than `to_le_bytes()` for performance-critical code.
+    /// Writes struct data directly to the provided buffer without intermediate
+    /// allocations.
     ///
     /// # Errors
     ///
