@@ -2,6 +2,22 @@ use crate::{attrs, utils};
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 
+
+/// Convert Vec-based writing code to BufMut-based direct writing (fallback)
+fn convert_to_direct_writing(writing_code: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    // Fallback: use temp Vec to avoid variable name conflicts
+    quote! {
+        {
+            let mut field_bytes = Vec::new();
+            {
+                let bytes = &mut field_bytes; // Create alias to avoid conflicts with 'bytes' crate
+                #writing_code
+            }
+            buf.put_slice(&field_bytes);
+        }
+    }
+}
+
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
@@ -32,6 +48,7 @@ pub struct FieldData {
     pub field_parsing: Vec<proc_macro2::TokenStream>,
     pub bit_sum: Vec<proc_macro2::TokenStream>,
     pub field_writing: Vec<proc_macro2::TokenStream>,
+    pub direct_writing: Vec<proc_macro2::TokenStream>,  // New: direct buffer writing
     pub named_fields: Vec<proc_macro2::TokenStream>,
     pub total_size: usize,
 }
@@ -42,21 +59,25 @@ pub struct StructContext<'a> {
     pub field_parsing: &'a mut Vec<proc_macro2::TokenStream>,
     pub bit_sum: &'a mut Vec<proc_macro2::TokenStream>,
     pub field_writing: &'a mut Vec<proc_macro2::TokenStream>,
+    pub direct_writing: &'a mut Vec<proc_macro2::TokenStream>,  // New: direct buffer writing
     pub named_fields: &'a mut Vec<proc_macro2::TokenStream>,
     pub fields: &'a syn::FieldsNamed,
     pub endianness: crate::consts::Endianness,
+    pub has_bit_fields: &'a mut bool,  // Track if any fields have bit attributes
 }
 
 fn determine_field_type(
     context: &FieldContext,
     attrs: &[syn::Attribute],
     errors: &mut Vec<proc_macro2::TokenStream>,
+    has_bit_fields: &mut bool,
 ) -> Option<FieldType> {
     let mut bits_attribute_present = false;
     let (size, vec_size_ident, size_expression) =
         attrs::parse_attributes_with_expressions(attrs, &mut bits_attribute_present, errors);
 
     if bits_attribute_present {
+        *has_bit_fields = true;  // Mark that this struct has bit fields
         if let Some(size) = size {
             // Explicit size: #[bits(N)]
             if let syn::Type::Path(tp) = context.field_type {
@@ -173,7 +194,7 @@ pub fn handle_struct(context: &mut StructContext) {
             .with_bit_position(current_bit_position)
             .with_last_field(is_last);
 
-        if let Some(field_type) = determine_field_type(&field_context, &field.attrs, &mut errors) {
+        if let Some(field_type) = determine_field_type(&field_context, &field.attrs, &mut errors, context.has_bit_fields) {
             let result = process_field_type(
                 &field_context,
                 field_type,
@@ -202,6 +223,7 @@ pub fn handle_struct(context: &mut StructContext) {
     context.field_parsing.extend(field_data.field_parsing);
     context.bit_sum.extend(field_data.bit_sum);
     context.field_writing.extend(field_data.field_writing);
+    context.direct_writing.extend(field_data.direct_writing);
     context.named_fields.extend(field_data.named_fields);
 }
 
@@ -323,10 +345,12 @@ fn process_bits_field_functional(
         generate_single_byte_bit_field(field_name, field_type, size, mask, processing_ctx)
     };
 
+    let direct_writing = convert_to_direct_writing(&writing);
     Ok(crate::functional::FieldProcessResult::new(
         limit_check,
         parsing,
         writing,
+        direct_writing,
         accessor,
         bit_sum,
     ))
@@ -579,11 +603,13 @@ fn process_primitive_type_functional(
         field_type,
         processing_ctx.endianness,
     )?;
-
+    
+    let direct_writing = convert_to_direct_writing(&writing);
     Ok(crate::functional::FieldProcessResult::new(
         quote! {},
         parsing,
         writing,
+        direct_writing,
         accessor,
         bit_sum,
     ))
@@ -619,11 +645,13 @@ fn process_array_functional(
                     bytes.extend_from_slice(&#field_name);
                     _bit_sum += #length * 8;
                 };
-
+                
+                let direct_writing = convert_to_direct_writing(&writing);
                 return Ok(crate::functional::FieldProcessResult::new(
                     quote! {},
                     parsing,
                     writing,
+                    direct_writing,
                     accessor,
                     bit_sum,
                 ));
@@ -804,11 +832,13 @@ fn process_vector_functional(
                     is_last_field,
                     field,
                 )?;
-
+                
+                let direct_writing = convert_to_direct_writing(&writing);
                 return Ok(crate::functional::FieldProcessResult::new(
                     quote! {},
                     parsing,
                     writing,
+                    direct_writing,
                     accessor,
                     bit_sum,
                 ));
@@ -853,11 +883,13 @@ fn process_vector_functional(
                     _bit_sum += item_bytes.len() * 8;
                 }
             };
-
+            
+            let direct_writing = convert_to_direct_writing(&writing);
             return Ok(crate::functional::FieldProcessResult::new(
                 quote! {},
                 parsing,
                 writing,
+                direct_writing,
                 accessor,
                 quote! { bit_sum = 4096 * 8; }, // Variable size
             ));
@@ -911,11 +943,13 @@ fn process_option_type_functional(
                         bytes.extend_from_slice(bytes_data);
                         _bit_sum += bytes_data.len() * 8;
                     };
-
+                    
+                    let direct_writing = convert_to_direct_writing(&writing);
                     return Ok(crate::functional::FieldProcessResult::new(
                         quote! {},
                         parsing,
                         writing,
+                        direct_writing,
                         accessor,
                         bit_sum,
                     ));
@@ -963,8 +997,9 @@ fn process_custom_type_functional(
         bytes.extend_from_slice(bytes_data);
         _bit_sum += bytes_data.len() * 8;
     };
-
-    crate::functional::FieldProcessResult::new(quote! {}, parsing, writing, accessor, bit_sum)
+    
+    let direct_writing = convert_to_direct_writing(&writing);
+    crate::functional::FieldProcessResult::new(quote! {}, parsing, writing, direct_writing, accessor, bit_sum)
 }
 
 // Functional version for String fields
@@ -997,11 +1032,13 @@ fn process_string_functional(
             generate_unbounded_string(field_name)
         }
     };
-
+    
+    let direct_writing = convert_to_direct_writing(&writing);
     Ok(crate::functional::FieldProcessResult::new(
         quote! {},
         parsing,
         writing,
+        direct_writing,
         accessor,
         bit_sum,
     ))
@@ -1030,10 +1067,12 @@ fn process_size_expression_functional(
                     // Generate Vec<u8> parsing and writing
                     let (bit_sum, parsing, writing) =
                         generate_size_expression_vector(field_name, &size_calculation);
+                    let direct_writing = convert_to_direct_writing(&writing);
                     Ok(crate::functional::FieldProcessResult::new(
                         quote! {},
                         parsing,
                         writing,
+                        direct_writing,
                         accessor,
                         bit_sum,
                     ))
@@ -1042,10 +1081,12 @@ fn process_size_expression_functional(
                     // Generate String parsing and writing
                     let (bit_sum, parsing, writing) =
                         generate_size_expression_string(field_name, &size_calculation);
+                    let direct_writing = convert_to_direct_writing(&writing);
                     Ok(crate::functional::FieldProcessResult::new(
                         quote! {},
                         parsing,
                         writing,
+                        direct_writing,
                         accessor,
                         bit_sum,
                     ))

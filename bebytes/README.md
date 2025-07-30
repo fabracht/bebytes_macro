@@ -354,8 +354,7 @@ struct DnsQuery {
     authority_count: u16,
     additional_count: u16,
     
-    #[FromField(question_count)]
-    questions: Vec<DnsQuestion>,
+    questions: Vec<DnsQuestion>,  // Variable length, last field
 }
 
 #[derive(BeBytes)]

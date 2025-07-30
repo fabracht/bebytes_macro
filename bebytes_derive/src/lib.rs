@@ -25,6 +25,7 @@ use alloc::vec::Vec;
 
 use consts::Endianness;
 
+
 #[allow(clippy::too_many_lines)]
 #[proc_macro_derive(BeBytes, attributes(bits, With, FromField, bebytes))]
 pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
@@ -39,10 +40,13 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     // For big-endian implementation
     let mut be_field_parsing = Vec::new();
     let mut be_field_writing = Vec::new();
+    let mut be_direct_writing = Vec::new();
+    let mut has_bit_fields = false;
 
     // For little-endian implementation
     let mut le_field_parsing = Vec::new();
     let mut le_field_writing = Vec::new();
+    let mut le_direct_writing: Vec<proc_macro2::TokenStream> = Vec::new();
 
     // Common elements
     let mut bit_sum = Vec::new();
@@ -60,9 +64,11 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     field_parsing: &mut be_field_parsing,
                     bit_sum: &mut bit_sum,
                     field_writing: &mut be_field_writing,
+                    direct_writing: &mut be_direct_writing,
                     named_fields: &mut named_fields,
                     fields: &fields,
                     endianness: Endianness::Big,
+                    has_bit_fields: &mut has_bit_fields,
                 };
                 structs::handle_struct(&mut be_context);
 
@@ -72,15 +78,19 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 let mut le_named_fields = Vec::new();
                 let mut le_dummy_field_limit = Vec::new(); // Dummy vector since we don't need to populate it again
                 let mut le_dummy_bit_sum = Vec::new(); // Dummy vector since we don't need to populate it again
+                let mut _le_dummy_direct_writing: Vec<proc_macro2::TokenStream> = Vec::new(); // Dummy vector since we use the shared direct_writing
+                let mut le_dummy_has_bit_fields = false; // Dummy since bit fields are endian-independent
                 let mut le_context = structs::StructContext {
                     field_limit_check: &mut le_dummy_field_limit,
                     errors: &mut errors,
                     field_parsing: &mut le_field_parsing,
                     bit_sum: &mut le_dummy_bit_sum,
                     field_writing: &mut le_field_writing,
+                    direct_writing: &mut le_direct_writing,
                     named_fields: &mut le_named_fields,
                     fields: &fields,
                     endianness: Endianness::Little,
+                    has_bit_fields: &mut le_dummy_has_bit_fields,
                 };
                 structs::handle_struct(&mut le_context);
 
@@ -97,6 +107,55 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     let field_type = &f.ty;
                     quote! { #field_ident: #field_type }
                 });
+
+
+
+                // Generate direct writing methods only if no bit fields are present
+                let direct_writing_methods = if !has_bit_fields {
+                    quote! {
+                        #[cfg(feature = "bytes")]
+                        #[inline]
+                        fn encode_be_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+                            let required_capacity = Self::field_size();
+                            if buf.remaining_mut() < required_capacity {
+                                return Err(::bebytes::BeBytesError::InsufficientData {
+                                    expected: required_capacity,
+                                    actual: buf.remaining_mut(),
+                                });
+                            }
+                            
+                            let mut _bit_sum = 0;
+                            #(
+                                #named_fields
+                                #be_direct_writing
+                            )*
+                            Ok(())
+                        }
+
+                        #[cfg(feature = "bytes")]
+                        #[inline]
+                        fn encode_le_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+                            let required_capacity = Self::field_size();
+                            if buf.remaining_mut() < required_capacity {
+                                return Err(::bebytes::BeBytesError::InsufficientData {
+                                    expected: required_capacity,
+                                    actual: buf.remaining_mut(),
+                                });
+                            }
+                            
+                            let mut _bit_sum = 0;
+                            #(
+                                #le_named_fields
+                                #le_direct_writing
+                            )*
+                            Ok(())
+                        }
+                    }
+                } else {
+                    // For structs with bit fields, don't generate custom direct writing methods
+                    // They will fall back to the default implementation from the trait
+                    quote! {}
+                };
 
                 let expanded = quote! {
                     impl #my_trait_path for #name {
@@ -164,6 +223,10 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             )*
                             bytes
                         }
+
+                        // Direct buffer writing methods (conditionally generated)
+                        #direct_writing_methods
+
                     }
 
                     impl #name {

@@ -44,6 +44,7 @@ pub struct FieldProcessResult {
     pub limit_check: TokenStream,
     pub parsing: TokenStream,
     pub writing: TokenStream,
+    pub direct_writing: TokenStream,  // New: direct buffer writing
     pub accessor: TokenStream,
     pub bit_sum: TokenStream,
 }
@@ -53,6 +54,7 @@ impl FieldProcessResult {
         limit_check: TokenStream,
         parsing: TokenStream,
         writing: TokenStream,
+        direct_writing: TokenStream,
         accessor: TokenStream,
         bit_sum: TokenStream,
     ) -> Self {
@@ -60,6 +62,7 @@ impl FieldProcessResult {
             limit_check,
             parsing,
             writing,
+            direct_writing,
             accessor,
             bit_sum,
         }
@@ -71,6 +74,7 @@ pub struct FieldDataBuilder {
     limit_checks: Vec<TokenStream>,
     parsings: Vec<TokenStream>,
     writings: Vec<TokenStream>,
+    direct_writings: Vec<TokenStream>,  // New: direct buffer writings
     accessors: Vec<TokenStream>,
     bit_sums: Vec<TokenStream>,
 }
@@ -81,6 +85,7 @@ impl FieldDataBuilder {
             limit_checks: Vec::new(),
             parsings: Vec::new(),
             writings: Vec::new(),
+            direct_writings: Vec::new(),
             accessors: Vec::new(),
             bit_sums: Vec::new(),
         }
@@ -90,6 +95,7 @@ impl FieldDataBuilder {
         self.limit_checks.push(result.limit_check);
         self.parsings.push(result.parsing);
         self.writings.push(result.writing);
+        self.direct_writings.push(result.direct_writing);
         self.accessors.push(result.accessor);
         self.bit_sums.push(result.bit_sum);
         self
@@ -102,6 +108,7 @@ impl FieldDataBuilder {
             field_parsing: self.parsings,
             bit_sum: self.bit_sums,
             field_writing: self.writings,
+            direct_writing: self.direct_writings,
             named_fields: self.accessors,
             total_size: 0,
         }
@@ -1112,6 +1119,7 @@ mod tests {
             quote! { check },
             quote! { parse },
             quote! { write },
+            quote! { direct_write },
             quote! { access },
             quote! { bit_sum },
         );
