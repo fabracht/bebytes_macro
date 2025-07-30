@@ -386,7 +386,6 @@ pub mod pure_helpers {
         }
     }
 
-
     /// Create limit check for bit fields
     pub fn create_bit_field_limit_check(
         field_name: &Ident,
