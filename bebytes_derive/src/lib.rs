@@ -100,6 +100,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
                 let expanded = quote! {
                     impl #my_trait_path for #name {
+                        #[inline(always)]
                         fn field_size() -> usize {
                             let mut bit_sum = 0;
                             #(#bit_sum)*
@@ -107,6 +108,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
 
                         // Big-endian implementation
+                        #[inline]
                         fn try_from_be_bytes(bytes: &[u8]) -> ::core::result::Result<(Self, usize), ::bebytes::BeBytesError> {
                             if bytes.is_empty() {
                                 return Err(::bebytes::BeBytesError::EmptyBuffer);
@@ -122,6 +124,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             }, usize::div_ceil(_bit_sum as usize, 8)))
                         }
 
+                        #[inline]
                         fn to_be_bytes(&self) -> Vec<u8> {
                             let capacity = Self::field_size();
                             let mut bytes = Vec::with_capacity(capacity);
@@ -134,6 +137,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
 
                         // Little-endian implementation
+                        #[inline]
                         fn try_from_le_bytes(bytes: &[u8]) -> ::core::result::Result<(Self, usize), ::bebytes::BeBytesError> {
                             if bytes.is_empty() {
                                 return Err(::bebytes::BeBytesError::EmptyBuffer);
@@ -149,6 +153,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             }, usize::div_ceil(_bit_sum as usize, 8)))
                         }
 
+                        #[inline]
                         fn to_le_bytes(&self) -> Vec<u8> {
                             let capacity = Self::field_size();
                             let mut bytes = Vec::with_capacity(capacity);
@@ -241,11 +246,13 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 }
 
                 impl #my_trait_path for #name {
+                    #[inline(always)]
                     fn field_size() -> usize {
                         core::mem::size_of::<Self>()
                     }
 
                     // Big-endian implementation
+                    #[inline]
                     fn try_from_be_bytes(bytes: &[u8]) -> ::core::result::Result<(Self, usize), ::bebytes::BeBytesError> {
                         if bytes.is_empty() {
                             return Err(::bebytes::BeBytesError::EmptyBuffer);
@@ -260,6 +267,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
                     }
 
+                    #[inline]
                     fn to_be_bytes(&self) -> Vec<u8> {
                         let mut bytes = Vec::with_capacity(1);
                         let val = match self {
@@ -270,6 +278,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     }
 
                     // Little-endian implementation
+                    #[inline]
                     fn try_from_le_bytes(bytes: &[u8]) -> ::core::result::Result<(Self, usize), ::bebytes::BeBytesError> {
                         if bytes.is_empty() {
                             return Err(::bebytes::BeBytesError::EmptyBuffer);
@@ -284,6 +293,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
                     }
 
+                    #[inline]
                     fn to_le_bytes(&self) -> Vec<u8> {
                         let mut bytes = Vec::with_capacity(1);
                         let val = match self {

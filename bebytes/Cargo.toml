@@ -22,6 +22,7 @@ required-features = ["std"]
 
 [dependencies]
 bebytes_derive = { version = "2.3.0" }
+bytes = { version = "1.5", default-features = false, optional = true }
 
 [dev-dependencies]
 trybuild = { version = "1.0.102", features = ["diff"] }
@@ -65,5 +66,6 @@ name = "property_based"
 path = "tests/property_based.rs"
 
 [features]
-default = ["std"]
-std = []
+default = ["std", "bytes"]
+std = ["bytes?/std"]
+bytes = ["dep:bytes"]
