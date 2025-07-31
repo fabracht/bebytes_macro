@@ -9,6 +9,7 @@ mod bit_validation;
 mod consts;
 mod enums;
 mod functional;
+mod optimization;
 mod raw_pointer;
 mod size_expr;
 mod structs;
@@ -275,6 +276,9 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             Fields::Named(fields) => {
                 let struct_field_names = fields.named.iter().map(|f| &f.ident).collect::<Vec<_>>();
 
+                // Analyze struct for optimization opportunities
+                let optimization_analysis = optimization::StructAnalysis::analyze_struct(&fields);
+
                 // Generate big-endian implementation
                 let mut be_context = structs::StructContext {
                     field_limit_check: &mut field_limit_check,
@@ -380,7 +384,14 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 // Generate raw pointer methods for eligible structs
                 let raw_pointer_methods = generate_raw_pointer_methods(&fields, has_bit_fields);
 
+                // Generate optimization methods
+                let performance_docs = optimization_analysis.generate_performance_docs();
+                let optimization_method_hint = optimization_analysis.generate_optimal_method_hint();
+                let smart_method_selection =
+                    optimization::generate_smart_method_selection(&optimization_analysis);
+                let buffer_reuse_helpers = optimization::generate_buffer_reuse_helpers();
                 let expanded = quote! {
+                    #performance_docs
                     impl #my_trait_path for #name {
                         #[inline(always)]
                         fn field_size() -> usize {
@@ -501,6 +512,15 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
 
                         // Raw pointer methods for ultra-high-performance encoding
                         #raw_pointer_methods
+
+                        // Performance optimization methods
+                        #optimization_method_hint
+
+                        // Smart method selection for optimal performance
+                        #smart_method_selection
+
+                        // Buffer reuse helpers for batch operations
+                        #buffer_reuse_helpers
                     }
                 };
 
@@ -628,6 +648,50 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         };
                         ::bebytes::BufMut::put_u8(&mut buf, val);
                         buf.to_vec()
+                    }
+
+                    /// Convert to big-endian bytes as a Bytes buffer
+                    #[inline]
+                    fn to_be_bytes_buf(&self) -> ::bebytes::Bytes {
+                        ::bebytes::Bytes::from(self.to_be_bytes())
+                    }
+
+                    /// Convert to little-endian bytes as a Bytes buffer
+                    #[inline]
+                    fn to_le_bytes_buf(&self) -> ::bebytes::Bytes {
+                        ::bebytes::Bytes::from(self.to_le_bytes())
+                    }
+
+                    /// Encode directly to a buffer in big-endian format
+                    #[inline]
+                    fn encode_be_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+                        if buf.remaining_mut() < 1 {
+                            return Err(::bebytes::BeBytesError::InsufficientData {
+                                expected: 1,
+                                actual: buf.remaining_mut(),
+                            });
+                        }
+                        let val = match self {
+                            #(#to_be_bytes_arms)*
+                        };
+                        buf.put_u8(val);
+                        Ok(())
+                    }
+
+                    /// Encode directly to a buffer in little-endian format
+                    #[inline]
+                    fn encode_le_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+                        if buf.remaining_mut() < 1 {
+                            return Err(::bebytes::BeBytesError::InsufficientData {
+                                expected: 1,
+                                actual: buf.remaining_mut(),
+                            });
+                        }
+                        let val = match self {
+                            #(#to_le_bytes_arms)*
+                        };
+                        buf.put_u8(val);
+                        Ok(())
                     }
                 }
             };
