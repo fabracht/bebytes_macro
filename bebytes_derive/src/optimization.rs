@@ -1,4 +1,4 @@
-//! Optimization analysis module for BeBytes
+//! Optimization analysis module for `BeBytes`
 //!
 //! This module analyzes struct characteristics to determine the optimal
 //! serialization method and provides performance hints.
@@ -14,6 +14,7 @@ use alloc::vec::Vec;
 /// Analysis of a struct's characteristics for optimization decisions
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct StructAnalysis {
     /// Total size in bytes (if deterministic)
     pub size: Option<usize>,
@@ -56,6 +57,7 @@ pub struct PerformanceHint {
 
 impl StructAnalysis {
     /// Analyze a struct's fields to determine optimization characteristics
+    #[allow(clippy::too_many_lines)]
     pub fn analyze_struct(fields: &FieldsNamed) -> Self {
         let mut size = Some(0usize);
         let mut has_bit_fields = false;
