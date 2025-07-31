@@ -649,6 +649,50 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         ::bebytes::BufMut::put_u8(&mut buf, val);
                         buf.to_vec()
                     }
+
+                    /// Convert to big-endian bytes as a Bytes buffer
+                    #[inline]
+                    fn to_be_bytes_buf(&self) -> ::bebytes::Bytes {
+                        ::bebytes::Bytes::from(self.to_be_bytes())
+                    }
+
+                    /// Convert to little-endian bytes as a Bytes buffer
+                    #[inline]
+                    fn to_le_bytes_buf(&self) -> ::bebytes::Bytes {
+                        ::bebytes::Bytes::from(self.to_le_bytes())
+                    }
+
+                    /// Encode directly to a buffer in big-endian format
+                    #[inline]
+                    fn encode_be_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+                        if buf.remaining_mut() < 1 {
+                            return Err(::bebytes::BeBytesError::InsufficientData {
+                                expected: 1,
+                                actual: buf.remaining_mut(),
+                            });
+                        }
+                        let val = match self {
+                            #(#to_be_bytes_arms)*
+                        };
+                        buf.put_u8(val);
+                        Ok(())
+                    }
+
+                    /// Encode directly to a buffer in little-endian format
+                    #[inline]
+                    fn encode_le_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
+                        if buf.remaining_mut() < 1 {
+                            return Err(::bebytes::BeBytesError::InsufficientData {
+                                expected: 1,
+                                actual: buf.remaining_mut(),
+                            });
+                        }
+                        let val = match self {
+                            #(#to_le_bytes_arms)*
+                        };
+                        buf.put_u8(val);
+                        Ok(())
+                    }
                 }
             };
 

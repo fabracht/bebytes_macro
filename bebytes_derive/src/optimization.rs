@@ -278,27 +278,27 @@ pub fn generate_buffer_reuse_helpers() -> proc_macro2::TokenStream {
         /// Create a pre-sized buffer for batch serialization (big-endian)
         /// This helps avoid repeated allocations when serializing multiple instances
         pub fn create_batch_buffer_be(capacity: usize) -> ::bebytes::BytesMut {
-            ::bebytes::BytesMut::with_capacity(capacity * Self::field_size())
+            ::bebytes::BytesMut::with_capacity(capacity * <Self as ::bebytes::BeBytes>::field_size())
         }
 
         /// Create a pre-sized buffer for batch serialization (little-endian)
         /// This helps avoid repeated allocations when serializing multiple instances
         pub fn create_batch_buffer_le(capacity: usize) -> ::bebytes::BytesMut {
-            ::bebytes::BytesMut::with_capacity(capacity * Self::field_size())
+            ::bebytes::BytesMut::with_capacity(capacity * <Self as ::bebytes::BeBytes>::field_size())
         }
 
         /// Encode to a reusable buffer with optimal method selection (big-endian)
         /// This method automatically chooses the best encoding approach for performance
         #[inline]
         pub fn encode_be_to_reused(&self, buf: &mut ::bebytes::BytesMut) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
-            self.encode_be_to(buf)
+            <Self as ::bebytes::BeBytes>::encode_be_to(self, buf)
         }
 
         /// Encode to a reusable buffer with optimal method selection (little-endian)
         /// This method automatically chooses the best encoding approach for performance
         #[inline]
         pub fn encode_le_to_reused(&self, buf: &mut ::bebytes::BytesMut) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
-            self.encode_le_to(buf)
+            <Self as ::bebytes::BeBytes>::encode_le_to(self, buf)
         }
     }
 }
@@ -332,7 +332,7 @@ pub fn generate_smart_method_selection(analysis: &StructAnalysis) -> proc_macro2
                 #[inline]
                 pub fn to_be_bytes_optimal(&self) -> ::core::result::Result<::bebytes::Bytes, ::bebytes::BeBytesError> {
                     // Use Bytes buffer approach for better performance
-                    Ok(self.to_be_bytes_buf())
+                    Ok(<Self as ::bebytes::BeBytes>::to_be_bytes_buf(self))
                 }
 
                 /// Automatically select the optimal serialization method (little-endian)
@@ -340,7 +340,7 @@ pub fn generate_smart_method_selection(analysis: &StructAnalysis) -> proc_macro2
                 #[inline]
                 pub fn to_le_bytes_optimal(&self) -> ::core::result::Result<::bebytes::Bytes, ::bebytes::BeBytesError> {
                     // Use Bytes buffer approach for better performance
-                    Ok(self.to_le_bytes_buf())
+                    Ok(<Self as ::bebytes::BeBytes>::to_le_bytes_buf(self))
                 }
             }
         }
@@ -351,7 +351,7 @@ pub fn generate_smart_method_selection(analysis: &StructAnalysis) -> proc_macro2
                 #[inline]
                 pub fn to_be_bytes_optimal(&self) -> ::core::result::Result<::bebytes::Bytes, ::bebytes::BeBytesError> {
                     // Use standard Vec approach for complex types
-                    Ok(::bebytes::Bytes::from(self.to_be_bytes()))
+                    Ok(::bebytes::Bytes::from(<Self as ::bebytes::BeBytes>::to_be_bytes(self)))
                 }
 
                 /// Automatically select the optimal serialization method (little-endian)
@@ -359,7 +359,7 @@ pub fn generate_smart_method_selection(analysis: &StructAnalysis) -> proc_macro2
                 #[inline]
                 pub fn to_le_bytes_optimal(&self) -> ::core::result::Result<::bebytes::Bytes, ::bebytes::BeBytesError> {
                     // Use standard Vec approach for complex types
-                    Ok(::bebytes::Bytes::from(self.to_le_bytes()))
+                    Ok(::bebytes::Bytes::from(<Self as ::bebytes::BeBytes>::to_le_bytes(self)))
                 }
             }
         }
