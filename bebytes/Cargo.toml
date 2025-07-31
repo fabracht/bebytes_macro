@@ -28,6 +28,7 @@ bytes = { version = "1.5", default-features = false }
 trybuild = { version = "1.0.102", features = ["diff"] }
 test-case = "3.3.1"
 proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [[test]]
 name = "core"
@@ -64,6 +65,22 @@ path = "tests/compile_fail.rs"
 [[test]]
 name = "property_based"
 path = "tests/property_based.rs"
+
+[[bench]]
+name = "serialization"
+harness = false
+
+[[bench]]
+name = "memory_allocation"
+harness = false
+
+[[bench]]
+name = "cache_performance"
+harness = false
+
+[[bench]]
+name = "network_protocols"
+harness = false
 
 [features]
 default = ["std"]
