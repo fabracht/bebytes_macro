@@ -1,6 +1,6 @@
 //! Optimization analysis module for BeBytes
-//! 
-//! This module analyzes struct characteristics to determine the optimal 
+//!
+//! This module analyzes struct characteristics to determine the optimal
 //! serialization method and provides performance hints.
 
 use syn::{FieldsNamed, Type};
@@ -96,7 +96,9 @@ impl StructAnalysis {
                             "String" => has_strings = true,
                             _ => {
                                 // Try to get primitive type size
-                                if let Ok(field_size) = crate::utils::get_primitive_type_size(&field.ty) {
+                                if let Ok(field_size) =
+                                    crate::utils::get_primitive_type_size(&field.ty)
+                                {
                                     if let Some(current_size) = size {
                                         size = Some(current_size + field_size);
                                     }
@@ -140,10 +142,10 @@ impl StructAnalysis {
         }
 
         // Determine if raw pointer optimization is supported
-        let supports_raw_pointer = !has_bit_fields 
-            && !has_vectors 
-            && !has_strings 
-            && size.is_some() 
+        let supports_raw_pointer = !has_bit_fields
+            && !has_vectors
+            && !has_strings
+            && size.is_some()
             && size.unwrap_or(0) <= 256;
 
         // Determine recommended method based on analysis
@@ -190,7 +192,7 @@ impl StructAnalysis {
         let improvement = self.performance_hint.improvement_factor;
         let allocation = self.performance_hint.allocation_pattern;
         let recommendation = self.performance_hint.recommendation;
-        
+
         let method_doc = match self.recommended_method {
             OptimizationMethod::RawPointer => {
                 "Consider using `encode_be_to_raw_stack()` for maximum performance (5.4x improvement)"
@@ -277,7 +279,7 @@ pub fn generate_buffer_reuse_helpers() -> proc_macro2::TokenStream {
             ::bebytes::BytesMut::with_capacity(capacity * Self::field_size())
         }
 
-        /// Create a pre-sized buffer for batch serialization (little-endian)  
+        /// Create a pre-sized buffer for batch serialization (little-endian)
         /// This helps avoid repeated allocations when serializing multiple instances
         pub fn create_batch_buffer_le(capacity: usize) -> ::bebytes::BytesMut {
             ::bebytes::BytesMut::with_capacity(capacity * Self::field_size())

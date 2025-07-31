@@ -387,7 +387,8 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 // Generate optimization methods
                 let performance_docs = optimization_analysis.generate_performance_docs();
                 let optimization_method_hint = optimization_analysis.generate_optimal_method_hint();
-                let smart_method_selection = optimization::generate_smart_method_selection(&optimization_analysis);
+                let smart_method_selection =
+                    optimization::generate_smart_method_selection(&optimization_analysis);
                 let buffer_reuse_helpers = optimization::generate_buffer_reuse_helpers();
                 let expanded = quote! {
                     #performance_docs
