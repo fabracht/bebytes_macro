@@ -1,0 +1,96 @@
+[config]
+default_to_workspace = false
+
+[tasks.help]
+description = "Show available commands and common workflows"
+script = '''
+echo "BeBytes Macro - Available Commands"
+echo "=================================="
+echo ""
+echo "📋 COMMON WORKFLOWS:"
+echo "  cargo make dev-test-flow     # Development workflow (format + build + test)"
+echo "  cargo make ci-flow           # CI workflow (build + test with verbose output)"
+echo "  cargo make format            # Format code with rustfmt"
+echo "  cargo make clippy            # Run clippy linter"
+echo "  cargo make test              # Run all tests"
+echo "  cargo make bench             # Run benchmarks"
+echo "  cargo make docs              # Generate documentation"
+echo ""
+echo "🔧 BUILD COMMANDS:"
+echo "  cargo make build             # Standard build"
+echo "  cargo make build-release     # Release build"
+echo "  cargo make check             # Check compilation without building"
+echo "  cargo make clean             # Clean build artifacts"
+echo ""
+echo "🧪 TESTING COMMANDS:"
+echo "  cargo make test              # Run all tests"
+echo "  cargo make test-flow         # Test with pre/post hooks"
+echo "  cargo make bench             # Run benchmarks"
+echo "  cargo make coverage          # Generate test coverage"
+echo ""
+echo "📚 DOCUMENTATION:"
+echo "  cargo make docs              # Generate API documentation"
+echo "  cargo make workspace-docs    # Generate workspace documentation"
+echo ""
+echo "🚀 RELEASE WORKFLOW (from CLAUDE.md):"
+echo "  git checkout -b feature-name"
+echo "  cargo make format"
+echo "  cargo make clippy"
+echo "  # Make changes and commit"
+echo "  # Follow PR workflow in CLAUDE.md"
+echo ""
+echo "📖 MORE COMMANDS:"
+echo "  cargo make --list-all-steps  # Show all available tasks"
+echo "  cargo make help              # Show this help menu"
+echo ""
+echo "For project-specific workflows, see CLAUDE.md"
+'''
+
+[tasks.menu]
+alias = "help"
+
+[tasks.h]
+alias = "help"
+
+# Override default task to show help
+[tasks.default]
+alias = "help"
+
+# Quick development workflow
+[tasks.dev]
+description = "Quick development workflow: format, clippy, test"
+dependencies = [
+  "format",
+  "clippy", 
+  "test"
+]
+
+# Full CI-like workflow
+[tasks.full-check]
+description = "Full validation: format, clippy, build, test, bench-compile"
+dependencies = [
+  "format",
+  "clippy",
+  "build",
+  "test",
+  "bench-compile"
+]
+
+# Project-specific quick test
+[tasks.quick-test]
+description = "Run compile-time tests specifically"
+command = "cargo"
+args = ["test", "--test", "compile_fail"]
+
+# BeBytes specific workflow matching CLAUDE.md
+[tasks.pre-commit]
+description = "Pre-commit workflow matching CLAUDE.md requirements"
+dependencies = [
+  "format",
+  "clippy-pedantic"
+]
+
+[tasks.clippy-pedantic]
+description = "Run clippy with pedantic warnings"
+command = "cargo"
+args = ["clippy", "--", "-W", "clippy::pedantic"]
