@@ -19,6 +19,9 @@ help: the type constructed contains `fn(u32) -> DataVariants {DataVariants::Tupl
    |          ^^^^^^^ this argument influences the type of `Ok`
 note: tuple variant defined here
   --> $RUST/core/src/result.rs
+   |
+   |     Ok(#[stable(feature = "rust1", since = "1.0.0")] T),
+   |     ^^
    = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0533]: expected value, found struct variant `Self::Struct`
