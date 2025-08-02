@@ -8,7 +8,6 @@ fn test_handle_enum_returns_valid_result() {
     // Test that handle_enum doesn't just return Default::default()
 
     #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-    #[repr(u8)]
     enum TestEnum {
         A = 0,
         B = 1,

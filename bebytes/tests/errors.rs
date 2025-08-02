@@ -108,7 +108,6 @@ mod error_variants {
     }
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     enum TestEnum {
         A = 0,
         B = 1,

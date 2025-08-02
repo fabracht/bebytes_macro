@@ -5,6 +5,7 @@ Examples of BeBytes macro code generation.
 ## Basic Struct Example
 
 ### Input
+
 ```rust
 #[derive(BeBytes)]
 struct Simple {
@@ -15,6 +16,7 @@ struct Simple {
 ```
 
 ### Generated Code
+
 ```rust
 impl BeBytes for Simple {
     fn field_size() -> usize {
@@ -94,6 +96,7 @@ impl BeBytes for Simple {
 ## Bit Fields Example
 
 ### Input
+
 ```rust
 #[derive(BeBytes)]
 struct BitPacked {
@@ -108,6 +111,7 @@ struct BitPacked {
 ```
 
 ### Generated Code
+
 ```rust
 impl BeBytes for BitPacked {
     fn field_size() -> usize {
@@ -183,6 +187,7 @@ impl BitPacked {
 ## Multi-Byte Bit Fields
 
 ### Input
+
 ```rust
 #[derive(BeBytes)]
 struct CrossByteBits {
@@ -194,6 +199,7 @@ struct CrossByteBits {
 ```
 
 ### Generated Code (Parsing)
+
 ```rust
 // For 12-bit id field spanning 2 bytes
 let mut id = 0u16;
@@ -202,7 +208,7 @@ if _bit_sum % 8 != 0 && _bit_sum / 8 < (_bit_sum + 12) / 8 {
     let bits_in_current_byte = 8 - (_bit_sum % 8);
     let mask = (1u16 << bits_in_current_byte) - 1;
     id = (bytes[byte_index] & mask as u8) as u16;
-    
+
     byte_index += 1;
     let remaining_bits = 12 - bits_in_current_byte;
     let shift = 8 - remaining_bits;
@@ -216,6 +222,7 @@ _bit_sum += 12;
 ## Vector with Dynamic Size
 
 ### Input
+
 ```rust
 #[derive(BeBytes)]
 struct Dynamic {
@@ -228,6 +235,7 @@ struct Dynamic {
 ```
 
 ### Generated Code
+
 ```rust
 // Parsing
 let count = u16::from_be_bytes([bytes[4], bytes[5]]);
@@ -253,9 +261,9 @@ bytes.extend_from_slice(&self.items);
 ## Enum Example
 
 ### Input
+
 ```rust
 #[derive(BeBytes)]
-#[repr(u8)]
 enum Status {
     Idle = 0,
     Running = 1,
@@ -272,6 +280,7 @@ struct WithEnum {
 ```
 
 ### Generated Code (For Enum)
+
 ```rust
 impl BeBytes for Status {
     fn field_size() -> usize {
@@ -282,7 +291,7 @@ impl BeBytes for Status {
         if bytes.is_empty() {
             return Err(BeBytesError::EmptyBuffer);
         }
-        
+
         match bytes[0] {
             0 => Ok((Status::Idle, 1)),
             1 => Ok((Status::Running, 1)),
@@ -298,7 +307,7 @@ impl BeBytes for Status {
 
 impl TryFrom<u8> for Status {
     type Error = BeBytesError;
-    
+
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Status::Idle),
@@ -313,10 +322,10 @@ impl TryFrom<u8> for Status {
 ## Flag Enum Example
 
 ### Input
+
 ```rust
 #[derive(BeBytes)]
 #[bebytes(flags)]
-#[repr(u8)]
 enum Permissions {
     None = 0,
     Read = 1,
@@ -326,10 +335,11 @@ enum Permissions {
 ```
 
 ### Generated Code (Additional Implementations)
+
 ```rust
 impl std::ops::BitOr for Permissions {
     type Output = u8;
-    
+
     fn bitor(self, rhs: Self) -> Self::Output {
         self as u8 | rhs as u8
     }
@@ -337,7 +347,7 @@ impl std::ops::BitOr for Permissions {
 
 impl std::ops::BitOr<u8> for Permissions {
     type Output = u8;
-    
+
     fn bitor(self, rhs: u8) -> Self::Output {
         self as u8 | rhs
     }
@@ -347,7 +357,7 @@ impl Permissions {
     pub fn contains(&self, flag: Self) -> bool {
         (*self as u8) & (flag as u8) != 0
     }
-    
+
     pub fn from_bits(bits: u8) -> Option<u8> {
         // Validate all bits are valid flags
         let valid_mask = 0 | 1 | 2 | 4; // All valid discriminants OR'd
@@ -363,6 +373,7 @@ impl Permissions {
 ## Complex Nested Structure
 
 ### Input
+
 ```rust
 #[derive(BeBytes)]
 struct Header {
@@ -385,6 +396,7 @@ struct Packet {
 ```
 
 ### Generated Code Structure
+
 ```mermaid
 flowchart TD
     A[Packet::try_from_be_bytes] --> B[Parse header]
@@ -392,13 +404,13 @@ flowchart TD
     C --> D[Parse magic: u32]
     C --> E[Parse version: u8]
     C --> F[Parse flags: u8]
-    
+
     B --> G[Continue Packet parsing]
     G --> H[Parse priority: 4 bits]
     G --> I[Parse sequence: 12 bits]
     G --> J[Parse payload_size: u16]
     G --> K[Parse payload: Vec<payload_size>]
-    
+
     subgraph "Bit Accumulation"
         L[header: 48 bits]
         M[priority: 4 bits]
@@ -410,6 +422,7 @@ flowchart TD
 ## Error Handling Patterns
 
 ### Buffer Validation
+
 ```rust
 // Generated for each field
 if byte_index + size_needed > buffer_size {
@@ -418,6 +431,7 @@ if byte_index + size_needed > buffer_size {
 ```
 
 ### Enum Validation
+
 ```rust
 // For regular enums
 match discriminant {
@@ -428,6 +442,7 @@ match discriminant {
 ```
 
 ### Compile-Time Validation
+
 ```rust
 // In generated new() method
 assert!(
@@ -439,6 +454,7 @@ assert!(
 ## Optimization Patterns
 
 ### Capacity Pre-allocation
+
 ```rust
 fn to_be_bytes(&self) -> Vec<u8> {
     let capacity = Self::field_size();
@@ -448,6 +464,7 @@ fn to_be_bytes(&self) -> Vec<u8> {
 ```
 
 ### Minimal Copying
+
 ```rust
 // For arrays - direct slice extension
 bytes.extend_from_slice(&self.array_field);
@@ -457,9 +474,9 @@ bytes.extend_from_slice(&self.vec_field);
 ```
 
 ### Bit Packing Efficiency
+
 ```rust
 // Multiple bit fields in same byte are combined
 let packed_byte = (field1 << 6) | (field2 << 3) | field3;
 bytes.push(packed_byte);
 ```
-

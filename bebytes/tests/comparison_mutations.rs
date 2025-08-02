@@ -107,7 +107,6 @@ fn test_enum_discriminant_comparison() {
     // Test enum discriminant boundary checks
 
     #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-    #[repr(u8)]
     enum BoundaryEnum {
         Zero = 0,
         One = 1,

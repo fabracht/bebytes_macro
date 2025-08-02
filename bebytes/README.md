@@ -157,7 +157,6 @@ BeBytes supports flag-style Enums marked with `#[bebytes(flags)]`. These Enums a
 ```rust
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 #[bebytes(flags)]
-#[repr(u8)]
 enum Permissions {
     None = 0,
     Read = 1,
@@ -285,10 +284,10 @@ BeBytes now supports dynamic field sizing using mathematical expressions. This p
 struct NetworkMessage {
     header_size: u8,
     payload_count: u16,
-    
+
     #[With(size(header_size))]        // Size from field
     header: Vec<u8>,
-    
+
     #[With(size(payload_count * 8))]   // Mathematical expression
     payload: Vec<u8>,
 }
@@ -312,7 +311,7 @@ struct MqttConnectPacket {
     #[bits(4)]
     flags: u8,
     remaining_length: u8,  // Length of variable header + payload
-    
+
     // Variable header
     protocol_name_len: u16,
     #[With(size(protocol_name_len))]
@@ -320,12 +319,12 @@ struct MqttConnectPacket {
     protocol_level: u8,     // 4 for MQTT 3.1.1
     connect_flags: u8,
     keep_alive: u16,
-    
+
     // Payload
     client_id_len: u16,
     #[With(size(client_id_len))]
     client_id: String,
-    
+
     // Optional fields based on connect_flags
     will_topic_len: u16,
     #[With(size(will_topic_len))]
@@ -355,12 +354,12 @@ struct DnsQuery {
     z: u8,           // Reserved
     #[bits(4)]
     rcode: u8,       // Response code
-    
+
     question_count: u16,
     answer_count: u16,
     authority_count: u16,
     additional_count: u16,
-    
+
     questions: Vec<DnsQuestion>,  // Variable length, last field
 }
 
@@ -389,7 +388,7 @@ struct PlayerStateUpdate {
     packet_id: u8,      // Packet type identifier
     timestamp: u32,     // Server tick
     player_count: u8,
-    
+
     #[FromField(player_count)]
     players: Vec<PlayerState>,
 }
@@ -397,7 +396,7 @@ struct PlayerStateUpdate {
 #[derive(BeBytes)]
 struct PlayerState {
     player_id: u16,
-    
+
     // Position (24 bits each for sub-meter precision)
     #[bits(24)]
     x_pos: u32,
@@ -405,7 +404,7 @@ struct PlayerState {
     y_pos: u32,
     #[bits(16)]
     z_pos: u16,
-    
+
     // Rotation (10 bits = 360 degrees / 1024)
     #[bits(10)]
     yaw: u16,
@@ -415,7 +414,7 @@ struct PlayerState {
     roll: u16,
     #[bits(2)]
     _padding: u8,
-    
+
     // State flags
     #[bits(1)]
     is_jumping: u8,
@@ -427,7 +426,7 @@ struct PlayerState {
     is_shooting: u8,
     #[bits(4)]
     weapon_id: u8,
-    
+
     health: u8,
     armor: u8,
 }
@@ -444,7 +443,7 @@ struct Http2Frame {
     reserved: u8,       // Must be 0
     #[bits(31)]
     stream_id: u32,     // Stream identifier
-    
+
     // Payload
     #[With(size(length))]
     payload: Vec<u8>,   // Frame-specific data
@@ -459,18 +458,18 @@ struct WebSocketFrame {
     rsv: u8,            // Reserved bits
     #[bits(4)]
     opcode: u8,         // Frame type
-    
+
     #[bits(1)]
     masked: u8,         // Client must set to 1
     #[bits(7)]
     payload_len: u8,    // 0-125, 126=16bit, 127=64bit
-    
+
     // Extended payload length for larger messages
     extended_len: u16,  // If payload_len == 126
     extended_len_64: u64, // If payload_len == 127
-    
+
     masking_key: u32,   // Present if masked == 1
-    
+
     // Payload size calculation would need custom logic
     payload: Vec<u8>,
 }
@@ -704,7 +703,7 @@ let packet = Packet {
 if Packet::supports_raw_pointer_encoding() {
     // Stack-allocated encoding (fastest, zero allocations, compile-time safe)
     let bytes = packet.encode_be_to_raw_stack(); // Returns [u8; 14] automatically
-    
+
     // Direct buffer writing (unsafe, but extremely fast)
     let mut buf = BytesMut::with_capacity(Packet::field_size());
     unsafe {
@@ -714,16 +713,19 @@ if Packet::supports_raw_pointer_encoding() {
 ```
 
 Raw pointer methods provide:
+
 - **Zero allocations** with stack-based methods
 - **Direct memory writes** using compile-time known offsets
 - **Pointer arithmetic and memcpy operations**
 
 Raw pointer methods are available for structs that:
+
 - Have no bit fields
 - Are 256 bytes or smaller
 - Contain only primitive types and fixed-size arrays
 
 Safety guarantees:
+
 - Stack methods are safe with compile-time array sizing
 - Compiler enforces correctness at build time
 - Direct buffer methods include capacity validation

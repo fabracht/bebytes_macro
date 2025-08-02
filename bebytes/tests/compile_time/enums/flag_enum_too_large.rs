@@ -5,7 +5,6 @@ use bebytes::BeBytes;
 
 #[derive(BeBytes, Debug, PartialEq)]
 #[bebytes(flags)]
-#[repr(u8)]
 enum FlagEnumTooLarge {
     Flag1 = 1,
     Flag2 = 2,

@@ -12,7 +12,6 @@ mod basic_enums {
     use super::*;
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     enum SimpleEnum {
         First = 0,
         Second = 1,
@@ -76,7 +75,6 @@ mod auto_sized_enums {
     use super::*;
 
     #[derive(Debug, Clone, Copy, PartialEq, BeBytes)]
-    #[repr(u8)]
     enum TwoBitEnum {
         A = 0,
         B = 1,
@@ -85,7 +83,6 @@ mod auto_sized_enums {
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, BeBytes)]
-    #[repr(u8)]
     enum ThreeBitEnum {
         V0 = 0,
         V1 = 1,
@@ -95,7 +92,6 @@ mod auto_sized_enums {
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, BeBytes)]
-    #[repr(u8)]
     enum FiveBitEnum {
         V0 = 0,
         V1 = 1,
@@ -171,7 +167,6 @@ mod flag_enums {
     use super::*;
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     #[bebytes(flags)]
     enum StatusFlags {
         None = 0,
@@ -182,7 +177,6 @@ mod flag_enums {
     }
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     #[bebytes(flags)]
     enum PermissionFlags {
         Read = 1,
@@ -360,7 +354,6 @@ mod enum_bit_packing {
     use super::*;
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     enum PackedEnum {
         A = 0,
         B = 1,
@@ -400,7 +393,6 @@ mod enum_bit_packing {
     #[test]
     fn test_non_contiguous_enum_values() {
         #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-        #[repr(u8)]
         enum NonContiguous {
             First = 0,
             Second = 5,

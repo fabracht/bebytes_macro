@@ -247,7 +247,6 @@ fn test_consecutive_bit_fields() {
 fn test_enum_with_attributes() {
     // Test enums work correctly with bit fields
     #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-    #[repr(u8)]
     enum TestEnum {
         A = 0,
         B = 1,

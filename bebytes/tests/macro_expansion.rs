@@ -67,7 +67,6 @@ fn test_derive_with_bit_fields() {
 #[test]
 fn test_derive_with_enums() {
     #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-    #[repr(u8)]
     enum TestEnum {
         First = 1,
         Second = 2,

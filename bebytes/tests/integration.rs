@@ -14,7 +14,6 @@ mod packet_protocols {
 
     // Simulated network packet protocol
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     enum PacketType {
         Data = 0x01,
         Ack = 0x02,
@@ -23,7 +22,6 @@ mod packet_protocols {
     }
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     #[bebytes(flags)]
     enum PacketFlags {
         None = 0,
@@ -124,7 +122,6 @@ mod tlv_structures {
     use super::*;
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     enum TlvType {
         Integer = 0x01,
         String = 0x02,
@@ -214,7 +211,6 @@ mod complex_protocols {
 
     // Simulate a complex protocol with mixed features
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     enum CommandType {
         Read = 0x10,
         Write = 0x20,
@@ -353,7 +349,6 @@ mod edge_case_integration {
 
     // Test structure with all supported features
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     #[bebytes(flags)]
     enum FeatureFlags {
         None = 0,
@@ -364,7 +359,6 @@ mod edge_case_integration {
     }
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     enum Mode {
         Normal = 0,
         Extended = 1,

@@ -4,7 +4,6 @@
 use bebytes::BeBytes;
 
 #[derive(BeBytes, Debug, PartialEq)]
-#[repr(u8)]
 enum DataVariants {
     Unit = 0,
     // Error: Data variants not supported

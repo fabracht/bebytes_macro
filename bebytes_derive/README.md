@@ -27,17 +27,21 @@ struct MyStruct {
 The BeBytes derive macro will generate the following methods for your struct:
 
 **Core methods:**
+
 - `field_size() -> usize`: Calculate the size (in bytes) of the struct.
 
 **Big-endian methods:**
+
 - `try_from_be_bytes(&[u8]) -> Result<(Self, usize), BeBytesError>`: Convert a big-endian byte slice into the struct.
 - `to_be_bytes(&self) -> Vec<u8>`: Convert the struct into a big-endian byte representation.
 
 **Little-endian methods:**
+
 - `try_from_le_bytes(&[u8]) -> Result<(Self, usize), BeBytesError>`: Convert a little-endian byte slice into the struct.
 - `to_le_bytes(&self) -> Vec<u8>`: Convert the struct into a little-endian byte representation.
 
 **bytes crate integration:**
+
 - `to_be_bytes_buf(&self) -> Bytes`: Convert to big-endian `Bytes` buffer.
 - `to_le_bytes_buf(&self) -> Bytes`: Convert to little-endian `Bytes` buffer.
 - `encode_be_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to a buffer (big-endian).
@@ -45,6 +49,7 @@ The BeBytes derive macro will generate the following methods for your struct:
 
 **Ultra-high-performance raw pointer methods (New in 2.5.0):**
 For eligible structs (no bit fields, ≤256 bytes, primitives/arrays only):
+
 - `supports_raw_pointer_encoding() -> bool`: Check if raw pointer methods are available.
 - `RAW_POINTER_SIZE: usize`: Compile-time constant for struct size.
 - `encode_be_to_raw_stack(&self) -> [u8; N]`: **40-80x faster** stack-allocated encoding (big-endian).
@@ -112,15 +117,15 @@ fn main() {
     // Check if raw pointer optimization is available
     if FastPacket::supports_raw_pointer_encoding() {
         println!("Struct size: {} bytes", FastPacket::RAW_POINTER_SIZE);
-        
+
         // Stack-allocated encoding (completely safe, zero allocations)
         let bytes = packet.encode_be_to_raw_stack();
         println!("Fast encoding: {:?}", bytes);
-        
+
         // Compare with standard method for correctness
         let standard_bytes = packet.to_be_bytes();
         assert_eq!(bytes.as_slice(), standard_bytes.as_slice());
-        
+
         println!("✅ Raw pointer method is 40-80x faster!");
     } else {
         println!("❌ Struct not eligible for raw pointer optimization (has bit fields, too large, or contains unsupported types)");
@@ -131,6 +136,7 @@ fn main() {
 ### Raw Pointer Method Eligibility
 
 Raw pointer methods are generated for structs that meet all criteria:
+
 - **No bit fields** - Structs with `#[bits(N)]` attributes are not eligible
 - **Size ≤ 256 bytes** - Larger structs use standard methods
 - **Primitive types only** - Supported types:
@@ -141,6 +147,7 @@ Raw pointer methods are generated for structs that meet all criteria:
 ### Performance Characteristics
 
 Benchmarked performance improvements over `to_be_bytes()`:
+
 - **Small structs (4 bytes)**: 60x speedup
 - **Medium structs (16 bytes)**: 44x speedup
 - **Large structs (72 bytes)**: 28x speedup
@@ -215,7 +222,7 @@ And so on.
 
 **The same rules apply here. Your bit fields must complete a byte, even if they span over multiple bytes.**
 
-*The following primitives can be used with the `bits` attribute: u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, char*
+_The following primitives can be used with the `bits` attribute: u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, char_
 
 ## Enums
 
@@ -237,7 +244,6 @@ Enums can now be used with the `#[bits()]` attribute for automatic bit-width cal
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
-#[repr(u8)]
 enum Status {
     Idle = 0,
     Running = 1,
@@ -257,6 +263,7 @@ struct PacketHeader {
 ```
 
 The macro:
+
 - Calculates minimum bits as `ceil(log2(max_discriminant + 1))`
 - Generates a `__BEBYTES_MIN_BITS` constant for each enum
 - Implements `TryFrom<u8>` for safe conversion from discriminant values
@@ -269,7 +276,6 @@ BeBytes supports flag-style enums marked with `#[bebytes(flags)]`. These enums a
 ```rust
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 #[bebytes(flags)]
-#[repr(u8)]
 enum Permissions {
     None = 0,
     Read = 1,
@@ -292,6 +298,7 @@ assert_eq!(Permissions::from_bits(16), None);    // Invalid: 16 is not a valid f
 ```
 
 Requirements for flag enums:
+
 - All enum variants must have power-of-2 values (1, 2, 4, 8, etc.)
 - Zero value is allowed for "None" or empty flags
 - Must use `#[repr(u8)]` representation
@@ -343,9 +350,9 @@ pub struct DummyStruct {
 }
 ```
 
-### FromField(*fieldname*)
+### FromField(_fieldname_)
 
-FromField(*fieldname*) will tell the macro to use the value of the field with the specified name.
+FromField(_fieldname_) will tell the macro to use the value of the field with the specified name.
 Example:
 
 ```rust
@@ -387,13 +394,13 @@ struct ComplexMessage {
     width: u8,
     height: u8,
     padding: u8,
-    
+
     #[With(size(width + height))]           // Addition
     simple_data: Vec<u8>,
-    
-    #[With(size(width * height))]           // Multiplication  
+
+    #[With(size(width * height))]           // Multiplication
     image_data: Vec<u8>,
-    
+
     #[With(size((width * height) + padding))] // Complex expression
     padded_data: Vec<u8>,
 }
@@ -407,7 +414,7 @@ struct ComplexMessage {
 struct MqttPacket {
     fixed_header: u8,
     remaining_length: u8,
-    
+
     #[With(size(remaining_length))]    // Payload size from header
     payload: Vec<u8>,
 }
@@ -419,10 +426,10 @@ struct DnsMessage {
     flags: u16,
     question_count: u16,
     answer_count: u16,
-    
+
     #[With(size(question_count * 5))]  // ~5 bytes per question
     questions: Vec<u8>,
-    
+
     #[With(size(answer_count * 12))]   // ~12 bytes per answer
     answers: Vec<u8>,
 }
@@ -437,10 +444,10 @@ Size expressions work with both `Vec<u8>` and `String` fields:
 struct StringMessage {
     name_length: u8,
     content_length: u16,
-    
+
     #[With(size(name_length))]
     name: String,
-    
+
     #[With(size(content_length))]
     content: String,
 }
@@ -512,7 +519,7 @@ struct Message {
     desc_len: u16,
     #[FromField(name_len)]
     name: String,      // Size comes from name_len field
-    #[FromField(desc_len)]  
+    #[FromField(desc_len)]
     description: String,  // Size comes from desc_len field
 }
 ```

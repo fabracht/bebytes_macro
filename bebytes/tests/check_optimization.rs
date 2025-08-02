@@ -1,7 +1,6 @@
 use bebytes::BeBytes;
 
 #[derive(BeBytes, Clone, Copy, Debug, PartialEq)]
-#[repr(u8)]
 enum E {
     A = 0,
     B = 1,
