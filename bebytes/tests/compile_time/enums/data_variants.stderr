@@ -60,4 +60,3 @@ error[E0533]: expected unit struct, unit variant or constant, found struct varia
   |          ^^^^^^^ not a unit struct, unit variant or constant
   |
   = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
-
