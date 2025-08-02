@@ -48,6 +48,22 @@ pub fn get_primitive_type_size(field_type: &syn::Type) -> Result<usize, syn::Err
     }
 }
 
+/// Get the maximum number of bits that can be stored in a primitive type
+pub fn get_primitive_type_max_bits(field_type: &syn::Type) -> Result<usize, syn::Error> {
+    match field_type {
+        syn::Type::Path(tp) if tp.path.is_ident("i8") || tp.path.is_ident("u8") => Ok(8),
+        syn::Type::Path(tp) if tp.path.is_ident("i16") || tp.path.is_ident("u16") => Ok(16),
+        syn::Type::Path(tp) if tp.path.is_ident("i32") || tp.path.is_ident("u32") => Ok(32),
+        syn::Type::Path(tp) if tp.path.is_ident("i64") || tp.path.is_ident("u64") => Ok(64),
+        syn::Type::Path(tp) if tp.path.is_ident("i128") || tp.path.is_ident("u128") => Ok(128),
+        syn::Type::Path(tp) if tp.path.is_ident("char") => Ok(32),
+        _ => Err(syn::Error::new_spanned(
+            field_type,
+            "Unsupported type for bits attribute",
+        )),
+    }
+}
+
 pub fn solve_for_inner_type(input: &syn::TypePath, identifier: &str) -> Option<syn::Type> {
     let syn::TypePath {
         path: syn::Path { segments, .. },

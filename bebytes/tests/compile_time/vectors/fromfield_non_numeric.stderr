@@ -1,0 +1,5 @@
+error: Unbounded strings can only be used as the last field of a struct
+  --> tests/compile_time/vectors/fromfield_non_numeric.rs:10:11
+   |
+10 |     name: String,
+   |           ^^^^^^

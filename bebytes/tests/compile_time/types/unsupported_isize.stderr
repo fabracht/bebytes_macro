@@ -1,5 +1,5 @@
 error: Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) and char are supported
-  --> tests/compile_time/unsupported_f64.rs:10:13
+  --> tests/compile_time/types/unsupported_isize.rs:10:13
    |
-10 |     second: f64,
-   |             ^^^
+10 |     second: isize,
+   |             ^^^^^

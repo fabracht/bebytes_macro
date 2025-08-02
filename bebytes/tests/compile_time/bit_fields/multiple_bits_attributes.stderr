@@ -1,0 +1,5 @@
+error: Multiple #[bits] attributes on the same field are not allowed
+  --> tests/compile_time/bit_fields/multiple_bits_attributes.rs:11:5
+   |
+11 |     #[bits(4)]
+   |     ^^^^^^^^^^

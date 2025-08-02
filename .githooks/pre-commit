@@ -1,0 +1,63 @@
+#!/bin/sh
+# Pre-commit hook for BeBytes project
+# This runs the same validations as the CI pipeline
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Check if we're in the right directory
+if [ ! -f "Cargo.toml" ]; then
+    echo "Error: This script must be run from the project root directory"
+    exit 1
+fi
+
+# 1. Check formatting
+echo "1/6 Checking formatting..."
+if ! cargo fmt -- --check; then
+    echo "❌ Formatting check failed. Run 'cargo fmt' to fix."
+    exit 1
+fi
+echo "✅ Formatting check passed"
+
+# 2. Run clippy with pedantic warnings
+echo "2/6 Running clippy (pedantic)..."
+if ! cargo clippy -- -W clippy::pedantic; then
+    echo "❌ Clippy check failed. Fix the warnings above."
+    exit 1
+fi
+echo "✅ Clippy check passed"
+
+# 3. Build with std features
+echo "3/6 Building with std features..."
+if ! cargo build; then
+    echo "❌ Build failed (std features)"
+    exit 1
+fi
+echo "✅ Build passed (std features)"
+
+# 4. Build without std features
+echo "4/6 Building without std features..."
+if ! cargo build --no-default-features; then
+    echo "❌ Build failed (no_std)"
+    exit 1
+fi
+echo "✅ Build passed (no_std)"
+
+# 5. Run tests with std features
+echo "5/6 Running tests with std features..."
+if ! cargo test; then
+    echo "❌ Tests failed (std features)"
+    exit 1
+fi
+echo "✅ Tests passed (std features)"
+
+# 6. Run tests without std features
+echo "6/6 Running tests without std features..."
+if ! cargo test --no-default-features; then
+    echo "❌ Tests failed (no_std)"
+    exit 1
+fi
+echo "✅ Tests passed (no_std)"
+
+echo "✅ All pre-commit checks passed!"

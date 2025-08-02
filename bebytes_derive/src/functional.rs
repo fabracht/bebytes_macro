@@ -935,6 +935,18 @@ pub mod functional_attrs {
     pub fn parse_attributes_functional(
         attributes: &[syn::Attribute],
     ) -> ParseResult<AttributeData> {
+        // Check for multiple bits attributes first
+        let bits_count = attributes
+            .iter()
+            .filter(|attr| attr.path().is_ident("bits"))
+            .count();
+        if bits_count > 1 {
+            return Err(vec![syn::Error::new_spanned(
+                attributes.first().unwrap(),
+                "Multiple #[bits] attributes on the same field are not allowed",
+            )]);
+        }
+
         let results: Vec<Result<Option<AttributeData>, syn::Error>> = attributes
             .iter()
             .map(|attr| {

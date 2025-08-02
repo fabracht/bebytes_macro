@@ -1,0 +1,40 @@
+#!/bin/sh
+# Fast pre-commit hook for BeBytes project
+# This runs only essential checks for quick feedback
+
+set -e
+
+echo "Running fast pre-commit checks..."
+
+# Check if we're in the right directory
+if [ ! -f "Cargo.toml" ]; then
+    echo "Error: This script must be run from the project root directory"
+    exit 1
+fi
+
+# 1. Check formatting (very fast)
+echo "1/3 Checking formatting..."
+if ! cargo fmt -- --check; then
+    echo "❌ Formatting check failed. Run 'cargo fmt' to fix."
+    exit 1
+fi
+echo "✅ Formatting check passed"
+
+# 2. Run clippy (reasonably fast)
+echo "2/3 Running clippy..."
+if ! cargo clippy -- -D warnings; then
+    echo "❌ Clippy check failed. Fix the errors above."
+    exit 1
+fi
+echo "✅ Clippy check passed"
+
+# 3. Check that it compiles (faster than full build)
+echo "3/3 Checking compilation..."
+if ! cargo check; then
+    echo "❌ Compilation check failed"
+    exit 1
+fi
+echo "✅ Compilation check passed"
+
+echo "✅ Fast pre-commit checks passed!"
+echo "💡 Run '.githooks/pre-commit' for full validation"

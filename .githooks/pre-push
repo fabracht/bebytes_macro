@@ -1,0 +1,18 @@
+#!/bin/sh
+# Pre-push hook for BeBytes project
+# This runs all validations before pushing to ensure CI will pass
+
+set -e
+
+echo "Running pre-push checks..."
+
+# Check if we're in the right directory
+if [ ! -f "Cargo.toml" ]; then
+    echo "Error: This script must be run from the project root directory"
+    exit 1
+fi
+
+# Run the same checks as pre-commit (all CI validations)
+.githooks/pre-commit
+
+echo "✅ All pre-push checks passed! Safe to push."

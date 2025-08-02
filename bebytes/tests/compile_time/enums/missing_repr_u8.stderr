@@ -1,0 +1,5 @@
+error: BeBytes requires enums to have #[repr(u8)] attribute to ensure consistent representation across platforms
+ --> tests/compile_time/enums/missing_repr_u8.rs:8:6
+  |
+8 | enum MissingRepr {
+  |      ^^^^^^^^^^^

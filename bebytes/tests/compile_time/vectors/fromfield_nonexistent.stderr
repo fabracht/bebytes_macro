@@ -1,0 +1,5 @@
+error[E0425]: cannot find value `missing_field` in this scope
+  --> tests/compile_time/vectors/fromfield_nonexistent.rs:12:17
+   |
+12 |     #[FromField(missing_field)]
+   |                 ^^^^^^^^^^^^^ not found in this scope
