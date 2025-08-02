@@ -541,25 +541,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             }
         },
         Data::Enum(data_enum) => {
-            // Check for #[repr(u8)] attribute
-            let has_repr_u8 = input.attrs.iter().any(|attr| {
-                attr.path().is_ident("repr") && {
-                    if let Ok(ident) = attr.parse_args::<syn::Ident>() {
-                        ident == "u8"
-                    } else {
-                        false
-                    }
-                }
-            });
-
-            if !has_repr_u8 {
-                let error = syn::Error::new(
-                    name.span(),
-                    "BeBytes requires enums to have #[repr(u8)] attribute to ensure consistent representation across platforms",
-                );
-                return error.to_compile_error().into();
-            }
-
             // Check if this is a flags enum
             let is_flags_enum = input.attrs.iter().any(|attr| {
                 attr.path().is_ident("bebytes") && {
