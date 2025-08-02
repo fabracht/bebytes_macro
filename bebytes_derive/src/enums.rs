@@ -26,7 +26,7 @@ pub fn handle_enum(
         .enumerate()
         .map(|(index, variant)| {
             let ident = &variant.ident;
-            
+
             // Check for data variants (not supported by BeBytes)
             match &variant.fields {
                 syn::Fields::Named(_) => {
