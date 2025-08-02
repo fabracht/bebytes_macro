@@ -94,3 +94,4 @@ dependencies = [
 description = "Run clippy with pedantic warnings"
 command = "cargo"
 args = ["clippy", "--", "-W", "clippy::pedantic"]
+
