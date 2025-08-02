@@ -1,68 +1,17 @@
+error: BeBytes does not support enums with tuple variants. Use unit variants only.
+  --> tests/compile_time/enums/data_variants.rs:10:5
+   |
+10 |     Tuple(u32),
+   |     ^^^^^
+
+error: BeBytes does not support enums with struct variants. Use unit variants only.
+  --> tests/compile_time/enums/data_variants.rs:11:5
+   |
+11 |     Struct { field: u16 },
+   |     ^^^^^^
+
 error[E0732]: `#[repr(inttype)]` must be specified
  --> tests/compile_time/enums/data_variants.rs:7:1
   |
 7 | enum DataVariants {
   | ^^^^^^^^^^^^^^^^^
-
-error[E0308]: mismatched types
-  --> tests/compile_time/enums/data_variants.rs:6:10
-   |
-6  | #[derive(BeBytes, Debug, PartialEq)]
-   |          ^^^^^^^
-   |          |
-   |          expected `DataVariants`, found enum constructor
-   |          arguments to this enum variant are incorrect
-...
-10 |     Tuple(u32),
-   |     ----- `Tuple` defines an enum variant constructor here, which should be called
-   |
-   = note:          expected enum `DataVariants`
-           found enum constructor `fn(u32) -> DataVariants {DataVariants::Tuple}`
-help: the type constructed contains `fn(u32) -> DataVariants {DataVariants::Tuple}` due to the type of the argument passed
-  --> tests/compile_time/enums/data_variants.rs:6:10
-   |
-6  | #[derive(BeBytes, Debug, PartialEq)]
-   |          ^^^^^^^ this argument influences the type of `Ok`
-note: tuple variant defined here
-  --> $RUST/core/src/result.rs
-   |
-   |     Ok(#[stable(feature = "rust1", since = "1.0.0")] T),
-   |     ^^
-   = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0533]: expected value, found struct variant `Self::Struct`
- --> tests/compile_time/enums/data_variants.rs:6:10
-  |
-6 | #[derive(BeBytes, Debug, PartialEq)]
-  |          ^^^^^^^ not a value
-  |
-  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0308]: mismatched types
-  --> tests/compile_time/enums/data_variants.rs:6:10
-   |
-6  | #[derive(BeBytes, Debug, PartialEq)]
-   |          ^^^^^^^ expected `DataVariants`, found enum constructor
-...
-10 |     Tuple(u32),
-   |     ----- `Tuple` defines an enum variant constructor here, which should be called
-   |
-   = note:          expected enum `DataVariants`
-           found enum constructor `fn(u32) -> DataVariants {DataVariants::Tuple}`
-   = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0533]: expected unit struct, unit variant or constant, found tuple variant `Self::Tuple`
- --> tests/compile_time/enums/data_variants.rs:6:10
-  |
-6 | #[derive(BeBytes, Debug, PartialEq)]
-  |          ^^^^^^^ not a unit struct, unit variant or constant
-  |
-  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0533]: expected unit struct, unit variant or constant, found struct variant `Self::Struct`
- --> tests/compile_time/enums/data_variants.rs:6:10
-  |
-6 | #[derive(BeBytes, Debug, PartialEq)]
-  |          ^^^^^^^ not a unit struct, unit variant or constant
-  |
-  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)

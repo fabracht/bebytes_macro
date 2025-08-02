@@ -26,6 +26,27 @@ pub fn handle_enum(
         .enumerate()
         .map(|(index, variant)| {
             let ident = &variant.ident;
+            
+            // Check for data variants (not supported by BeBytes)
+            match &variant.fields {
+                syn::Fields::Named(_) => {
+                    let error = syn::Error::new(
+                        ident.span(),
+                        "BeBytes does not support enums with struct variants. Use unit variants only.",
+                    );
+                    errors.push(error.to_compile_error());
+                }
+                syn::Fields::Unnamed(_) => {
+                    let error = syn::Error::new(
+                        ident.span(),
+                        "BeBytes does not support enums with tuple variants. Use unit variants only.",
+                    );
+                    errors.push(error.to_compile_error());
+                }
+                syn::Fields::Unit => {
+                    // This is fine - unit variants are supported
+                }
+            }
             let mut assigned_value = u8::try_from(index).unwrap_or_else(|_| {
                 let error = syn::Error::new(
                     ident.span(),
