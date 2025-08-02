@@ -811,9 +811,28 @@ For detailed technical documentation about the macro implementation:
 - [Code Generation Examples](docs/code-generation.md) - Concrete examples of generated code for various field types
 - [Mutation Testing](docs/mutation-testing.md) - Information about the project's mutation testing strategy
 
-## Contribute
+## Contributing
 
-I'm doing this for fun, but all help is appreciated.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Quick Start for Contributors
+
+```bash
+# Clone the repo
+git clone https://github.com/fabracht/bebytes_macro.git
+cd bebytes_macro
+
+# Set up pre-commit hooks
+./setup-hooks.sh
+
+# Choose option 1 for fast development checks
+```
+
+The pre-commit hooks ensure your commits will pass CI by running:
+- Formatting checks (`cargo fmt`)
+- Linting (`cargo clippy`)
+- Build verification
+- Test suite
 
 ## License
 

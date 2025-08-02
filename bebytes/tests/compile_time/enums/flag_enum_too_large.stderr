@@ -1,0 +1,5 @@
+error: Enum discriminant value 256 exceeds u8 range (0-255). Consider using #[repr(u8)] to make this constraint explicit, or ensure all discriminants fit within u8 range.
+  --> tests/compile_time/enums/flag_enum_too_large.rs:12:13
+   |
+12 |     Flag3 = 256, // Error: Value too large for u8
+   |             ^^^

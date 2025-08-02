@@ -24,7 +24,16 @@ pub fn validate_byte_completeness(fields: &syn::FieldsNamed) -> Result<(), Token
                         // Try to parse as integer
                         match attr.parse_args::<syn::LitInt>() {
                             Ok(literal) => match literal.base10_parse::<usize>() {
-                                Ok(n) => total_bits += n,
+                                Ok(n) => {
+                                    if n == 0 {
+                                        return Err(syn::Error::new_spanned(
+                                            attr,
+                                            "bits attribute must specify at least 1 bit",
+                                        )
+                                        .to_compile_error());
+                                    }
+                                    total_bits += n;
+                                }
                                 Err(e) => return Err(e.to_compile_error()),
                             },
                             Err(e) => return Err(e.to_compile_error()),

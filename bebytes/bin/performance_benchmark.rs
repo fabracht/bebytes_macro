@@ -662,6 +662,7 @@ struct I8 {
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
+#[repr(u8)]
 pub enum DummyEnum {
     SetupResponse,
     ServerStart,

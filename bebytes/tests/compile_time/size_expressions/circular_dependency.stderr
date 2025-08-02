@@ -1,0 +1,5 @@
+error: Unbounded vectors can only be used as padding at the end of a struct
+  --> tests/compile_time/size_expressions/circular_dependency.rs:12:13
+   |
+12 |     field1: Vec<u8>,
+   |             ^^^

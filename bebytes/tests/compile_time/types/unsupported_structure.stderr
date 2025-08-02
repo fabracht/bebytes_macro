@@ -1,5 +1,5 @@
 error: Only named fields are supported
- --> tests/compile_time/unsupported_structure.rs:6:25
+ --> tests/compile_time/types/unsupported_structure.rs:6:25
   |
 6 | struct UnsupportedStruct(u8, u16, u32);
   |                         ^^^^^^^^^^^^^^

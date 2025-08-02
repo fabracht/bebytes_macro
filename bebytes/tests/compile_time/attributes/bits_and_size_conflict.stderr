@@ -1,5 +1,5 @@
 error: Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) and char are supported
-  --> tests/compile_time/unsupported_isize.rs:10:13
+  --> tests/compile_time/attributes/bits_and_size_conflict.rs:14:11
    |
-10 |     second: isize,
-   |             ^^^^^
+14 |     data: Vec<u8>,
+   |           ^^^

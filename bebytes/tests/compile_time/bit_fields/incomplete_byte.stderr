@@ -1,5 +1,5 @@
 error: bits attributes must complete a full byte. Total bits: 7, which is 1 bits short of a complete byte
-  --> tests/compile_time/incomplete_byte.rs:6:23
+  --> tests/compile_time/bit_fields/incomplete_byte.rs:6:23
    |
 6  |   struct IncompleteByte {
    |  _______________________^

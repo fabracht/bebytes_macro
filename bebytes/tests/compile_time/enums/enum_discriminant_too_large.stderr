@@ -1,0 +1,5 @@
+error: BeBytes requires enums to have #[repr(u8)] attribute to ensure consistent representation across platforms
+ --> tests/compile_time/enums/enum_discriminant_too_large.rs:4:6
+  |
+4 | enum InvalidEnum {
+  |      ^^^^^^^^^^^

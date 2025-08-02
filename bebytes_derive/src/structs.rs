@@ -90,6 +90,19 @@ fn determine_field_type(
                     return None;
                 }
             }
+
+            // Validate that the bit count doesn't exceed the type's capacity
+            if let Ok(max_bits) = utils::get_primitive_type_max_bits(context.field_type) {
+                if size > max_bits {
+                    let error = syn::Error::new(
+                        context.field.span(),
+                        format!("bits attribute specifies {size} bits, but type can only hold {max_bits} bits"),
+                    );
+                    errors.push(error.to_compile_error());
+                    return None;
+                }
+            }
+
             return Some(FieldType::BitsField(size));
         }
         // Empty #[bits()] is no longer supported

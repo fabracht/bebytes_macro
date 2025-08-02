@@ -103,6 +103,7 @@ fn test_char_field_direct_writing() {
 #[test]
 fn test_enum_direct_writing() {
     #[derive(BeBytes, Debug, PartialEq)]
+    #[repr(u8)]
     enum TestEnum {
         VariantA = 1,
         VariantB = 2,

@@ -1,0 +1,5 @@
+error: Field 'nonexistent' not found in struct
+  --> tests/compile_time/size_expressions/nonexistent_field.rs:12:22
+   |
+12 |     #[bebytes(size = "nonexistent")]
+   |                      ^^^^^^^^^^^^^

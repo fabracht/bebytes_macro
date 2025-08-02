@@ -1,0 +1,5 @@
+error: Unbounded vectors can only be used as padding at the end of a struct
+  --> tests/compile_time/vectors/vec_not_last_no_size.rs:11:11
+   |
+11 |     data: Vec<u8>,
+   |           ^^^

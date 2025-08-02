@@ -1,0 +1,5 @@
+error: bits attribute specifies 9 bits, but type can only hold 8 bits
+  --> tests/compile_time/bit_fields/exceeds_type_size.rs:11:5
+   |
+11 |     #[bits(9)]
+   |     ^

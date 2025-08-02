@@ -1,0 +1,45 @@
+# See https://pre-commit.com for more information
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+        
+      - id: cargo-clippy-pedantic
+        name: cargo clippy pedantic
+        entry: cargo clippy -- -W clippy::pedantic
+        language: system
+        types: [rust]
+        pass_filenames: false
+        
+      - id: cargo-build-std
+        name: cargo build (std)
+        entry: cargo build
+        language: system
+        types: [rust]
+        pass_filenames: false
+        
+      - id: cargo-build-no-std
+        name: cargo build (no_std)
+        entry: cargo build --no-default-features
+        language: system
+        types: [rust]
+        pass_filenames: false
+        
+      - id: cargo-test-std
+        name: cargo test (std)
+        entry: cargo test
+        language: system
+        types: [rust]
+        pass_filenames: false
+        
+      - id: cargo-test-no-std
+        name: cargo test (no_std)
+        entry: cargo test --no-default-features
+        language: system
+        types: [rust]
+        pass_filenames: false

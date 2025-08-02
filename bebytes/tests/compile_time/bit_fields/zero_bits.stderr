@@ -1,0 +1,5 @@
+error: bits attribute must specify at least 1 bit
+  --> tests/compile_time/bit_fields/zero_bits.rs:13:5
+   |
+13 |     #[bits(0)]
+   |     ^^^^^^^^^^
