@@ -537,7 +537,6 @@ struct I8 {
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-#[repr(u8)]
 pub enum DummyEnum {
     SetupResponse,
     ServerStart,
@@ -670,7 +669,6 @@ struct CompleteFunctionality {
 // ============ Enum Bit Packing Examples ============
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-#[repr(u8)]
 enum Status {
     Idle = 0,
     Running = 1,
@@ -679,7 +677,6 @@ enum Status {
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-#[repr(u8)]
 enum Priority {
     Low = 0,
     Medium = 1,
@@ -697,7 +694,6 @@ struct PacketHeader {
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-#[repr(u8)]
 enum LargeEnum {
     V0 = 0,
     V1 = 1,
@@ -733,7 +729,6 @@ struct ComplexPacket {
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 #[bebytes(flags)]
-#[repr(u8)]
 enum FilePermissions {
     None = 0,
     Read = 1,
@@ -744,7 +739,6 @@ enum FilePermissions {
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 #[bebytes(flags)]
-#[repr(u8)]
 enum NetworkFlags {
     Connected = 1,
     Authenticated = 2,
