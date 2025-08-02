@@ -388,7 +388,6 @@ fn test_extreme_bit_combinations() {
 #[test]
 fn test_enum_round_trips() {
     #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-    #[repr(u8)]
     enum TestEnum {
         Zero = 0,
         One = 1,

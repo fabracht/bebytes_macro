@@ -1,7 +1,8 @@
 use bebytes::BeBytes;
 use bytes::BytesMut;
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::hint::black_box;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 // ============ Memory Tracking Allocator ============

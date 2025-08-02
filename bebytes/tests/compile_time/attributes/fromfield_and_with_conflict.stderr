@@ -1,0 +1,5 @@
+error: Cannot use both #[FromField] and #[With(size())] on the same field
+  --> tests/compile_time/attributes/fromfield_and_with_conflict.rs:12:5
+   |
+12 |     #[FromField(length)]
+   |     ^^^^^^^^^^^^^^^^^^^^

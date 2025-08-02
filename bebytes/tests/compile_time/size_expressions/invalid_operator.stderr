@@ -1,0 +1,5 @@
+error: Invalid size expression: Unsupported binary operator
+  --> tests/compile_time/size_expressions/invalid_operator.rs:12:5
+   |
+12 |     #[bebytes(size = "length & 0xFF")]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

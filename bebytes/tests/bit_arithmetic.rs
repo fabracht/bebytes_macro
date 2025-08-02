@@ -336,7 +336,6 @@ fn test_array_field_bit_calculation() {
 fn test_enum_bit_field_sizes() {
     // Test that enums work with regular byte alignment
     #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-    #[repr(u8)]
     enum TestEnum {
         A = 0,
         B = 1,

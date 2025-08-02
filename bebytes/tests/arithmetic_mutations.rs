@@ -310,7 +310,6 @@ fn test_enum_discriminant_arithmetic() {
     // Test enum discriminant calculations
 
     #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-    #[repr(u8)]
     enum PowerOfTwo {
         One = 1,
         Two = 2,

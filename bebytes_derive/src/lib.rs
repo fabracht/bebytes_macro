@@ -595,7 +595,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 impl #my_trait_path for #name {
                     #[inline(always)]
                     fn field_size() -> usize {
-                        core::mem::size_of::<Self>()
+                        1
                     }
 
                     // Big-endian implementation

@@ -1,7 +1,7 @@
 use bebytes::BeBytes;
 use bytes::BytesMut;
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion, Throughput};
-use std::hint;
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
+use std::hint::black_box;
 
 // ============ Test Structures for Cache Analysis ============
 
@@ -206,7 +206,7 @@ fn bench_prefetching_effects(c: &mut Criterion) {
             for (i, item) in data.iter().enumerate() {
                 // Prefetch next item if available
                 if i + 1 < data.len() {
-                    hint::black_box(&data[i + 1]);
+                    black_box(&data[i + 1]);
                 }
 
                 let result = item.to_be_bytes();

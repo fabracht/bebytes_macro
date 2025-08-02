@@ -4,7 +4,6 @@
 use bebytes::BeBytes;
 
 #[derive(BeBytes, Debug, PartialEq)]
-#[repr(u8)]
 enum DuplicateDiscriminants {
     A = 0,
     B = 1,

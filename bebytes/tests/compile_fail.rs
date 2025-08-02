@@ -53,4 +53,7 @@ fn ui_tests() {
     t.pass("tests/compile_time/vectors/safe_nested_vector.rs");
     #[cfg(feature = "std")]
     t.pass("tests/compile_time/enums/zero_value_flag_enum.rs");
+    #[cfg(feature = "std")]
+    t.pass("tests/compile_time/custom_result_alias.rs");
+    t.pass("tests/compile_time/option.rs");
 }

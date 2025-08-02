@@ -1,0 +1,5 @@
+error: Invalid size expression: Division by zero is not allowed in size expressions
+  --> tests/compile_time/size_expressions/division_by_zero.rs:12:5
+   |
+12 |     #[bebytes(size = "count / 0")]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

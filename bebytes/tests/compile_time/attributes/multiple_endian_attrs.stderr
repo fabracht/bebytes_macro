@@ -1,0 +1,5 @@
+error: Cannot specify both big_endian and little_endian attributes on the same field
+  --> tests/compile_time/attributes/multiple_endian_attrs.rs:11:5
+   |
+11 |     #[bebytes(big_endian)]
+   |     ^^^^^^^^^^^^^^^^^^^^^^

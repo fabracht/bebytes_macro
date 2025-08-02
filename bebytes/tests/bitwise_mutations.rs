@@ -175,7 +175,6 @@ fn test_enum_bit_counting() {
     // Test enum discriminant bit counting with >>= vs <<=
 
     #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-    #[repr(u8)]
     enum BitCountEnum {
         Zero = 0,
         One = 1,

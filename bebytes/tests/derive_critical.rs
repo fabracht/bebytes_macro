@@ -183,7 +183,6 @@ fn test_field_type_determination() {
 fn test_enum_size_calculation() {
     // Test that enum size calculation works correctly
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    #[repr(u8)]
     enum TestEnum {
         A = 0,
         B = 127,

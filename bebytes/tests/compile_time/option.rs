@@ -1,7 +1,7 @@
-use bebytes::BeBytes;
 #[cfg(not(feature = "std"))]
 extern crate alloc;
-#[cfg(not(feature = "std"))]
+
+use bebytes::BeBytes;
 
 #[derive(BeBytes, Debug, PartialEq)]
 pub struct Optional {

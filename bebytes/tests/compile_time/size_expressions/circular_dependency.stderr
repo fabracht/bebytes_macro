@@ -1,5 +1,23 @@
-error: Unbounded vectors can only be used as padding at the end of a struct
-  --> tests/compile_time/size_expressions/circular_dependency.rs:12:13
-   |
-12 |     field1: Vec<u8>,
-   |             ^^^
+error[E0425]: cannot find value `field2` in this scope
+ --> tests/compile_time/size_expressions/circular_dependency.rs:8:10
+  |
+8 | #[derive(BeBytes, Debug, PartialEq)]
+  |          ^^^^^^^ not found in this scope
+  |
+  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0425]: cannot find value `field2` in this scope
+ --> tests/compile_time/size_expressions/circular_dependency.rs:8:10
+  |
+8 | #[derive(BeBytes, Debug, PartialEq)]
+  |          ^^^^^^^
+  |
+  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0605]: non-primitive cast: `Vec<u8>` as `usize`
+ --> tests/compile_time/size_expressions/circular_dependency.rs:8:10
+  |
+8 | #[derive(BeBytes, Debug, PartialEq)]
+  |          ^^^^^^^ an `as` expression can only be used to convert between primitive types or to coerce to a specific trait object
+  |
+  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
