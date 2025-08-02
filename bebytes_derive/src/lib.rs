@@ -541,7 +541,6 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             }
         },
         Data::Enum(data_enum) => {
-
             // Check if this is a flags enum
             let is_flags_enum = input.attrs.iter().any(|attr| {
                 attr.path().is_ident("bebytes") && {

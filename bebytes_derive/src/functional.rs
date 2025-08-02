@@ -978,9 +978,11 @@ pub mod functional_attrs {
 
         // Check for attribute conflicts before merging
         let mut conflict_errors = Vec::new();
-        
+
         // Check for FromField vs With(size) conflict
-        let has_from_field = attributes.iter().any(|attr| attr.path().is_ident("FromField"));
+        let has_from_field = attributes
+            .iter()
+            .any(|attr| attr.path().is_ident("FromField"));
         let has_with_size = attributes.iter().any(|attr| {
             attr.path().is_ident("With") && {
                 // Check if the With attribute contains size()
@@ -994,35 +996,41 @@ pub mod functional_attrs {
                 has_size
             }
         });
-        
+
         if has_from_field && has_with_size {
             conflict_errors.push(syn::Error::new_spanned(
-                attributes.iter().find(|attr| attr.path().is_ident("FromField")).unwrap(),
+                attributes
+                    .iter()
+                    .find(|attr| attr.path().is_ident("FromField"))
+                    .unwrap(),
                 "Cannot use both #[FromField] and #[With(size())] on the same field",
             ));
         }
-        
+
         // Check for multiple endian attributes
-        let endian_attrs: Vec<_> = attributes.iter().filter(|attr| {
-            attr.path().is_ident("bebytes") && {
-                let mut is_endian = false;
-                if let Ok(()) = attr.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("big_endian") || meta.path.is_ident("little_endian") {
-                        is_endian = true;
-                    }
-                    Ok(())
-                }) {}
-                is_endian
-            }
-        }).collect();
-        
+        let endian_attrs: Vec<_> = attributes
+            .iter()
+            .filter(|attr| {
+                attr.path().is_ident("bebytes") && {
+                    let mut is_endian = false;
+                    if let Ok(()) = attr.parse_nested_meta(|meta| {
+                        if meta.path.is_ident("big_endian") || meta.path.is_ident("little_endian") {
+                            is_endian = true;
+                        }
+                        Ok(())
+                    }) {}
+                    is_endian
+                }
+            })
+            .collect();
+
         if endian_attrs.len() > 1 {
             conflict_errors.push(syn::Error::new_spanned(
                 endian_attrs.first().unwrap(),
                 "Cannot specify both big_endian and little_endian attributes on the same field",
             ));
         }
-        
+
         // If there are conflict errors, return them
         if !conflict_errors.is_empty() {
             return Err(conflict_errors);
@@ -1201,21 +1209,23 @@ pub mod functional_attrs {
     ) -> Result<Option<AttributeData>, syn::Error> {
         let mut result = AttributeData::new();
         let mut found_something = false;
-        
+
         attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("size") {
                 let value = meta
                     .value()
                     .map_err(|_| syn::Error::new_spanned(&meta.path, "Expected size expression"))?;
-                
-                // Parse the string literal containing the size expression  
+
+                // Parse the string literal containing the size expression
                 let lit_str: syn::LitStr = value.parse()?;
                 let size_expr = lit_str.value();
-                
+
                 // Parse and validate the size expression
-                let parsed_expr = crate::size_expr::SizeExpression::parse(&size_expr)
-                    .map_err(|e| syn::Error::new_spanned(attr, format!("Invalid size expression: {}", e)))?;
-                
+                let parsed_expr =
+                    crate::size_expr::SizeExpression::parse(&size_expr).map_err(|e| {
+                        syn::Error::new_spanned(attr, format!("Invalid size expression: {e}"))
+                    })?;
+
                 result.size_expression = Some(parsed_expr);
                 found_something = true;
                 Ok(())
@@ -1225,7 +1235,7 @@ pub mod functional_attrs {
                 Ok(())
             }
         })?;
-        
+
         if found_something {
             Ok(Some(result))
         } else {
