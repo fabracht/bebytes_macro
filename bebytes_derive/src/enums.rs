@@ -48,11 +48,7 @@ pub fn handle_enum(
                     if value > 255 {
                         let error = syn::Error::new(
                             token.span(),
-                            format!(
-                                "Enum discriminant value {value} exceeds u8 range (0-255). \
-                                Consider using #[repr(u8)] to make this constraint explicit, \
-                                or ensure all discriminants fit within u8 range."
-                            ),
+                            format!("Enum discriminant value {value} exceeds u8 range (0-255)"),
                         );
                         errors.push(error.to_compile_error());
                         assigned_value = 0; // Use 0 as fallback to continue compilation

@@ -1,5 +1,11 @@
-error: BeBytes requires enums to have #[repr(u8)] attribute to ensure consistent representation across platforms
- --> tests/compile_time/enums/enum_discriminant_too_large.rs:4:6
+error: Enum discriminant value 256 exceeds u8 range (0-255)
+ --> tests/compile_time/enums/enum_discriminant_too_large.rs:6:9
   |
-4 | enum InvalidEnum {
-  |      ^^^^^^^^^^^
+6 |     B = 256, // This exceeds u8 range
+  |         ^^^
+
+error: Enum discriminant value 1000 exceeds u8 range (0-255)
+ --> tests/compile_time/enums/enum_discriminant_too_large.rs:7:9
+  |
+7 |     C = 1000, // This also exceeds u8 range
+  |         ^^^^
