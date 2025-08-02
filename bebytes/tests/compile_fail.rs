@@ -17,7 +17,7 @@ fn ui_tests() {
     t.compile_fail("tests/compile_time/bit_fields/multiple_bits_attributes.rs");
 
     // ===== ENUM TESTS =====
-    t.compile_fail("tests/compile_time/enums/enum_discriminant_too_large.rs"); 
+    t.compile_fail("tests/compile_time/enums/enum_discriminant_too_large.rs");
     t.compile_fail("tests/compile_time/enums/duplicate_discriminants.rs");
     t.compile_fail("tests/compile_time/enums/data_variants.rs");
     t.compile_fail("tests/compile_time/enums/flag_enum_too_large.rs");
