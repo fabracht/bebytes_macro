@@ -99,6 +99,15 @@ impl SizeExpression {
                 let left = Box::new(Self::from_syn_expr(&binary.left)?);
                 let right = Box::new(Self::from_syn_expr(&binary.right)?);
                 let op = BinaryOperator::from_syn_binop(&binary.op)?;
+                
+                // Check for division by zero
+                if let (BinaryOperator::Divide, SizeExpression::Literal(0)) = (&op, right.as_ref()) {
+                    return Err(Error::new_spanned(
+                        &binary.right,
+                        "Division by zero is not allowed in size expressions",
+                    ));
+                }
+                
                 Ok(SizeExpression::BinaryOp { left, op, right })
             }
             Expr::If(if_expr) => {
