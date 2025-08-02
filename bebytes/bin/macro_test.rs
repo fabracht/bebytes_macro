@@ -1147,8 +1147,6 @@ struct MixedStringStruct {
 fn demo_size_expressions() {
     use bebytes_derive::BeBytes;
 
-    print_section("Size Expressions");
-
     // Define structs with size expressions
     #[derive(BeBytes, Debug, PartialEq)]
     struct MathExpression {
@@ -1181,6 +1179,8 @@ fn demo_size_expressions() {
         #[With(size(payload_count * 8))]
         payload: Vec<u8>,
     }
+
+    print_section("Size Expressions");
 
     // Test mathematical expression: count * 4
     let math_msg = MathExpression {
