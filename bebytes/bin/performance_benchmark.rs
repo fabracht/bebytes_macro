@@ -676,22 +676,6 @@ pub struct NestedStruct {
     pub error_estimate: ErrorEstimate,
 }
 
-#[derive(BeBytes, Debug, PartialEq)]
-pub struct Optional {
-    pub optional_number: Option<i32>,
-}
-
-#[derive(BeBytes, Debug, PartialEq, Clone)]
-pub struct SmallStruct {
-    pub small: u8,
-}
-
-#[derive(BeBytes, Debug, PartialEq)]
-pub struct SmallStructFather {
-    small_struct: SmallStruct,
-    num1: u32,
-}
-
 #[derive(BeBytes, Debug, PartialEq, Clone)]
 pub struct ArrayedStruct {
     pub mode: Modes,
@@ -711,12 +695,6 @@ struct WithTailingVec {
     #[FromField(pre_tail)]
     tail: Vec<u8>,
     post_tail: u8,
-}
-
-#[derive(Debug, PartialEq, Clone, BeBytes)]
-struct _InnocentStruct {
-    innocent: u8,
-    real_tail: Vec<u8>,
 }
 
 #[derive(Debug, PartialEq, Clone, BeBytes)]
@@ -763,61 +741,14 @@ struct CompleteFunctionality {
 
 // ============ Enum Bit Packing Examples ============
 
-#[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-enum _Status {
-    Idle = 0,
-    Running = 1,
-    Paused = 2,
-    Stopped = 3,
-}
-
-#[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-enum _Priority {
-    Low = 0,
-    Medium = 1,
-    High = 2,
-}
-
 #[derive(BeBytes, Debug, PartialEq)]
 struct PacketHeader {
     #[bits(4)]
     version: u8,
-    #[bits(2)] // Status as u8: 0=Idle, 1=Running, 2=Paused, 3=Stopped
+    #[bits(2)]
     status: u8,
-    #[bits(2)] // Priority as u8: 0=Low, 1=Medium, 2=High
+    #[bits(2)]
     priority: u8,
-}
-
-#[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-enum _LargeEnum {
-    V0 = 0,
-    V1 = 1,
-    V2 = 2,
-    V3 = 3,
-    V4 = 4,
-    V5 = 5,
-    V6 = 6,
-    V7 = 7,
-    V8 = 8,
-    V9 = 9,
-    V10 = 10,
-    V11 = 11,
-    V12 = 12,
-    V13 = 13,
-    V14 = 14,
-    V15 = 15,
-    V16 = 16,
-}
-
-#[derive(BeBytes, Debug, PartialEq)]
-struct _ComplexPacket {
-    #[bits(3)]
-    flags: u8,
-    #[bits(5)] // LargeEnum as u8: 0-16 (needs 5 bits)
-    large_enum: u8,
-    payload_size: u16,
-    #[FromField(payload_size)]
-    payload: Vec<u8>,
 }
 
 // ============ Flag Enum Examples ============
