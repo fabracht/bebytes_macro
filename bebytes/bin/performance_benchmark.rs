@@ -714,7 +714,7 @@ struct WithTailingVec {
 }
 
 #[derive(Debug, PartialEq, Clone, BeBytes)]
-struct InnocentStruct {
+struct _InnocentStruct {
     innocent: u8,
     real_tail: Vec<u8>,
 }
@@ -764,7 +764,7 @@ struct CompleteFunctionality {
 // ============ Enum Bit Packing Examples ============
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-enum Status {
+enum _Status {
     Idle = 0,
     Running = 1,
     Paused = 2,
@@ -772,7 +772,7 @@ enum Status {
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-enum Priority {
+enum _Priority {
     Low = 0,
     Medium = 1,
     High = 2,
@@ -789,7 +789,7 @@ struct PacketHeader {
 }
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
-enum LargeEnum {
+enum _LargeEnum {
     V0 = 0,
     V1 = 1,
     V2 = 2,
@@ -810,7 +810,7 @@ enum LargeEnum {
 }
 
 #[derive(BeBytes, Debug, PartialEq)]
-struct ComplexPacket {
+struct _ComplexPacket {
     #[bits(3)]
     flags: u8,
     #[bits(5)] // LargeEnum as u8: 0-16 (needs 5 bits)
