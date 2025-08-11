@@ -588,8 +588,7 @@ For vectors of custom types, the following rules apply:
 BeBytes now natively integrates the `bytes` crate for buffer management and zero-copy operations:
 
 ```rust
-use bebytes::BeBytes;
-use bytes::{Bytes, BytesMut};
+use bebytes::{BeBytes, Bytes, BytesMut};
 
 #[derive(BeBytes)]
 struct NetworkPacket {
@@ -611,10 +610,9 @@ let vec_bytes = packet.to_be_bytes();
 // NEW: Zero-copy Bytes buffer
 let bytes_buffer: Bytes = packet.to_be_bytes_buf();
 
-// Zero-copy sharing between tasks
-let shared_buffer = bytes_buffer.clone(); // Just increments reference count
+// Can be used with async code
 tokio::spawn(async move {
-    send_to_network(shared_buffer).await;
+    send_to_network(bytes_buffer).await;
 });
 
 // NEW: Direct buffer writing
@@ -627,12 +625,12 @@ assert_eq!(vec_bytes, bytes_buffer.as_ref());
 assert_eq!(vec_bytes, final_bytes.as_ref());
 ```
 
-### bytes Integration Benefits
+### Buffer Methods Benefits
 
-1. **Zero-copy sharing**: `Bytes` can be shared between tasks without copying data
-2. **Memory efficiency**: Reference-counted buffers with automatic cleanup
-3. **Ecosystem compatibility**: Works with tokio, hyper, tonic, and async networking
-4. **Standard patterns**: Uses established buffer management techniques
+1. **Efficient operations**: Direct buffer writing without intermediate allocations
+2. **Memory efficiency**: Pre-allocated buffers reduce allocations
+3. **Clean API**: Consistent buffer-oriented interface
+4. **Compatibility**: Works with existing code unchanged
 
 ### Migration Guide
 
@@ -653,8 +651,7 @@ send_data(data).await; // Same signature, better performance
 ### Direct Buffer Writing
 
 ```rust
-use bebytes::BeBytes;
-use bytes::BytesMut;
+use bebytes::{BeBytes, BytesMut};
 
 #[derive(BeBytes)]
 struct Packet {
@@ -676,7 +673,7 @@ The `encode_be_to` and `encode_le_to` methods write directly to any `BufMut` imp
 
 - **Inline annotations**: All generated methods use `#[inline]` for better optimization
 - **Pre-allocated capacity**: The `to_bytes` methods pre-allocate exact capacity
-- **Direct buffer writing**: Native bytes crate integration
+- **Direct buffer writing**: Efficient buffer operations
 - **Zero-copy parsing**: Deserialization works directly from byte slices
 
 ### Raw Pointer Methods (New in 2.5.0)
@@ -740,7 +737,7 @@ BeBytes supports no_std environments:
 bebytes = { version = "2.6.0", default-features = false }
 ```
 
-By default, the `std` feature is enabled. Disable it for no_std support. The bytes crate also supports no_std with `alloc`.
+By default, the `std` feature is enabled. Disable it for no_std support with `alloc`.
 
 ## Example: DNS Name Parsing
 

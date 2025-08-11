@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.8.0] - 2025-08-11
+
+### Changed
+- **Removed bytes dependency**: Replaced with internal buffer module
+  - Implemented internal `BytesMut` and `Bytes` types wrapping `Vec<u8>`
+  - Created `BufMut` trait with all necessary buffer operations
+  - Eliminated external dependency while maintaining full API compatibility
+  - Reduced compile time and simplified dependency tree
+
+### Performance
+- Performance remains equivalent to previous bytes-based implementation
+- Removed misleading "2x performance" claims (difference was just one memcpy)
+- Actual benchmarks show similar performance for all operations
+
+### Migration
+- **No code changes required** - All APIs remain unchanged
+- `to_be_bytes_buf()` and `to_le_bytes_buf()` continue to work
+- `encode_be_to()` and `encode_le_to()` maintain same signatures
+- Users who need `bytes::Bytes` can convert: `bytes::Bytes::from(vec)`
+
 ## [2.6.0] - 2025-07-30
 
 ### Added
@@ -12,11 +32,11 @@ All notable changes to this project will be documented in this file.
   - Integration with networking and async ecosystems
 
 ### Performance Improvements
-- **2.3x performance improvement** with `to_be_bytes_buf()` vs `to_be_bytes()` (31 ns vs 74 ns)
-- **1.2x improvement** with direct `BufMut` writing for compatible structs
-- Zero-copy buffer sharing via `BytesMut::freeze()` → `Bytes`
-- Optimized primitive serialization using `BufMut::put_u8()`, `put_u16()`, etc.
-- Reduced memory allocations in buffer management
+- Slightly faster with `to_be_bytes_buf()` vs `to_be_bytes()` (avoids final memcpy)
+- Direct `BufMut` writing provides cleaner API for buffer reuse
+- `BytesMut::freeze()` → `Bytes` moves ownership without copying
+- Primitive serialization using `BufMut::put_u8()`, `put_u16()`, etc.
+- Pre-allocated buffers reduce allocations in batch operations
 
 ### Architecture Changes
 - bytes crate is now a **native dependency** (no feature flags required)

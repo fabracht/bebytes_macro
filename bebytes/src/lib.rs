@@ -14,14 +14,15 @@ pub use alloc::vec::Vec;
 #[cfg(feature = "std")]
 pub use std::vec::Vec;
 
+pub mod buffer;
 pub mod interpreter;
 
 pub use bebytes_derive::BeBytes;
 #[doc(hidden)]
 pub use interpreter::{StringInterpreter, Utf8};
 
-// Re-export bytes types for generated code
-pub use bytes::{BufMut, Bytes, BytesMut};
+// Re-export buffer types for generated code (previously from bytes crate)
+pub use buffer::{BufMut, Bytes, BytesMut};
 
 /// Error type for `BeBytes` operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,20 +97,18 @@ pub trait BeBytes {
 
     /// Convert to big-endian bytes as a Bytes buffer
     ///
-    /// Returns a reference-counted Bytes instance that can be shared
-    /// between tasks without copying data.
-    fn to_be_bytes_buf(&self) -> bytes::Bytes {
+    /// Returns a Bytes buffer (now a simple Vec wrapper without reference counting)
+    fn to_be_bytes_buf(&self) -> Bytes {
         // Default implementation for backward compatibility
-        bytes::Bytes::from(self.to_be_bytes())
+        Bytes::from(self.to_be_bytes())
     }
 
     /// Convert to little-endian bytes as a Bytes buffer
     ///
-    /// Returns a reference-counted Bytes instance that can be shared
-    /// between tasks without copying data.
-    fn to_le_bytes_buf(&self) -> bytes::Bytes {
+    /// Returns a Bytes buffer (now a simple Vec wrapper without reference counting)
+    fn to_le_bytes_buf(&self) -> Bytes {
         // Default implementation for backward compatibility
-        bytes::Bytes::from(self.to_le_bytes())
+        Bytes::from(self.to_le_bytes())
     }
 
     /// Try to parse a struct from little-endian bytes
@@ -135,12 +134,6 @@ pub trait BeBytes {
     fn encode_be_to<B: BufMut>(&self, buf: &mut B) -> core::result::Result<(), BeBytesError> {
         // Default implementation using to_be_bytes for backward compatibility
         let bytes = self.to_be_bytes();
-        if buf.remaining_mut() < bytes.len() {
-            return Err(BeBytesError::InsufficientData {
-                expected: bytes.len(),
-                actual: buf.remaining_mut(),
-            });
-        }
         buf.put_slice(&bytes);
         Ok(())
     }
@@ -156,12 +149,6 @@ pub trait BeBytes {
     fn encode_le_to<B: BufMut>(&self, buf: &mut B) -> core::result::Result<(), BeBytesError> {
         // Default implementation using to_le_bytes for backward compatibility
         let bytes = self.to_le_bytes();
-        if buf.remaining_mut() < bytes.len() {
-            return Err(BeBytesError::InsufficientData {
-                expected: bytes.len(),
-                actual: buf.remaining_mut(),
-            });
-        }
         buf.put_slice(&bytes);
         Ok(())
     }

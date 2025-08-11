@@ -205,22 +205,23 @@ Users can implement custom interpreters for:
 - All existing code continues to work
 - New features are additive only
 
-## bytes Crate Integration (2.6.0+)
+## Internal Buffer Management (2.8.0+)
 
 ### Design Philosophy
 
-BeBytes 2.6.0+ integrates the `bytes` crate to provide professional buffer management capabilities while maintaining full backward compatibility.
+BeBytes 2.8.0+ uses an internal buffer module that provides all necessary buffer management without external dependencies. This simplifies the dependency tree while maintaining full API compatibility.
 
 ### Architecture Changes
 
-#### Buffer Management
-- **Internal Operations**: `BytesMut::with_capacity()` replaces `Vec::with_capacity()`
-- **Generated Code**: Uses `BytesMut` for all internal buffer operations
-- **Compatibility**: All existing `Vec<u8>` methods unchanged
+#### Buffer Module (`bebytes::buffer`)
+- **BytesMut**: Growable buffer wrapping `Vec<u8>`
+- **Bytes**: Immutable buffer wrapping `Vec<u8>`
+- **BufMut trait**: Interface for efficient byte writing
+- **Zero external dependencies**: Reduces compile time and complexity
 
-#### New API Methods
+#### API Methods (Unchanged)
 ```rust
-// Zero-copy Bytes buffer methods
+// Buffer methods
 fn to_be_bytes_buf(&self) -> Bytes;
 fn to_le_bytes_buf(&self) -> Bytes;
 
@@ -231,36 +232,38 @@ fn encode_le_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>;
 
 ### Implementation Details
 
-#### Code Generation Changes
-1. **Buffer Creation**: `BytesMut::with_capacity(capacity)` instead of `Vec::with_capacity(capacity)`
-2. **Primitive Writing**: Uses `BufMut::put_u8()`, `put_u16()`, etc. for optimized serialization
-3. **Compatibility Alias**: `let bytes = &mut buf;` maintains compatibility with existing field writing code
+#### Internal Buffer Types
+1. **BytesMut**: Thin wrapper around `Vec<u8>` with buffer-oriented methods
+2. **Bytes**: Immutable wrapper around `Vec<u8>` for consistency
+3. **BufMut trait**: Provides `put_u8()`, `put_u16()`, etc. for efficient writes
+4. **Full compatibility**: All existing code continues to work unchanged
+
+#### Code Generation
+1. **Buffer Creation**: `BytesMut::with_capacity(capacity)` allocates appropriately sized buffer
+2. **Primitive Writing**: Uses `BufMut::put_u8()`, `put_u16()`, etc. for writing
+3. **Direct methods**: `reserve()`, `extend_from_slice()` available on `BytesMut`
 4. **Conversion**: `buf.to_vec()` for Vec methods, `buf.freeze()` for Bytes methods
 
-#### Endianness Handling
-- bytes crate is endianness-agnostic
-- BeBytes handles endianness via `to_be_bytes()` / `to_le_bytes()` conversion
-- Uses `put_slice()` for consistent byte order control
-
 #### Memory Management
-- **BytesMut**: Growable, mutable buffer for construction
-- **Bytes**: Immutable, reference-counted buffer for sharing
-- **Zero-copy**: `BytesMut::freeze()` converts to `Bytes` without copying
-- **Sharing**: `Bytes::clone()` increments reference count
+- **BytesMut**: Growable buffer for construction
+- **Bytes**: Immutable buffer for return values
+- **Efficient**: `freeze()` moves ownership without copying
+- **Simple**: No reference counting complexity
 
-### Ecosystem Integration
+### Migration from bytes crate (2.6.0 → 2.8.0)
 
-#### Async Compatibility
-- Works with tokio's `AsyncRead` and `AsyncWrite` traits
-- Compatible with hyper's HTTP handling
-- Integrates with tonic's gRPC implementation
+#### What Changed
+- Internal implementation now uses `bebytes::buffer` module
+- No external `bytes` dependency
+- Simpler implementation without unnecessary features
 
-#### Standard Patterns
-- Follows established Rust networking library patterns
-- Uses same buffer management as major crates
-- Reference-counted sharing reduces allocation overhead
+#### What Stayed the Same
+- All public APIs unchanged
+- Same performance characteristics
+- Full backward compatibility
+- Users can still convert to/from `bytes::Bytes` if needed
 
 ### Feature Flags
-- **No Feature Flags**: bytes is a native dependency
-- **std/no_std**: Handled via bytes crate's feature system
+- **No external dependencies**: Buffer management is built-in
+- **std/no_std**: Supported via conditional compilation
 - **Backward Compatibility**: All existing code works unchanged

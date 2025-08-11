@@ -16,7 +16,7 @@ struct ArrayStruct {
 }
 
 fn benchmark_raw_pointer_performance() {
-    use bytes::BytesMut;
+    use bebytes::BytesMut;
 
     let simple = SimpleStruct {
         a: 42,
