@@ -631,38 +631,6 @@ struct U32 {
     fourth: u8,
 }
 
-#[allow(dead_code)]
-#[derive(BeBytes, Debug, PartialEq)]
-struct U64 {
-    #[bits(1)]
-    first: u8,
-    #[bits(62)]
-    second: u64,
-    #[bits(1)]
-    fourth: u8,
-}
-
-#[allow(dead_code)]
-#[derive(BeBytes, Debug, PartialEq)]
-struct U128 {
-    #[bits(1)]
-    first: u8,
-    #[bits(126)]
-    second: u128,
-    #[bits(1)]
-    fourth: u8,
-}
-
-#[allow(dead_code)]
-#[derive(BeBytes, Debug, PartialEq)]
-struct I8 {
-    #[bits(1)]
-    first: u8,
-    #[bits(6)]
-    second: i8,
-    #[bits(1)]
-    fourth: u8,
-}
 
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 pub enum DummyEnum {
