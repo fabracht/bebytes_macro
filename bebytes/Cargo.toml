@@ -7,7 +7,7 @@ license = "MIT"
 repository = "https://github.com/fabracht/bebytes_macro"
 description = "A Rust library for serialization and deserialization of network structs."
 readme = "README.md"
-keywords = ["serialization", "deserialization", "network", "bytes", "no-std"]
+keywords = ["serialization", "deserialization", "network", "wasm", "no-std"]
 
 
 [[bin]]
