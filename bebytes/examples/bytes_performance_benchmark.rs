@@ -1,5 +1,4 @@
-use bebytes::BeBytes;
-use bytes::BytesMut;
+use bebytes::{BeBytes, BytesMut};
 use std::time::Instant;
 
 #[derive(BeBytes, Clone)]

@@ -1,5 +1,4 @@
-use bebytes::BeBytes;
-use bytes::BytesMut;
+use bebytes::{BeBytes, BytesMut};
 
 #[test]
 fn test_simple_struct_direct_writing() {

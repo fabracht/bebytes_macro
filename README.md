@@ -54,7 +54,7 @@ The BeBytes derive macro will generate the following methods for your struct:
 - `try_from_le_bytes(&[u8]) -> Result<(Self, usize), BeBytesError>`: Parse from little-endian bytes.
 - `to_le_bytes(&self) -> Vec<u8>`: Convert to little-endian bytes.
 
-**bytes crate integration:**
+**Buffer methods:**
 - `to_be_bytes_buf(&self) -> Bytes`: Convert to big-endian `Bytes` buffer.
 - `to_le_bytes_buf(&self) -> Bytes`: Convert to little-endian `Bytes` buffer.
 - `encode_be_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to buffer (big-endian).
@@ -126,8 +126,7 @@ In this example, we define a `NetworkMessage` struct that combines bit fields wi
 BeBytes 2.6.0+ integrates the `bytes` crate for improved buffer management and zero-copy operations:
 
 ```rust
-use bebytes::BeBytes;
-use bytes::{Bytes, BytesMut, BufMut};
+use bebytes::{BeBytes, Bytes, BytesMut, BufMut};
 
 #[derive(BeBytes, Debug)]
 struct TcpPacket {
@@ -164,7 +163,7 @@ fn main() {
     });
 
     // Direct buffer writing
-    let mut buf = BytesMut::with_capacity(packet.field_size());
+    let mut buf = bebytes::BytesMut::with_capacity(packet.field_size());
     packet.encode_be_to(&mut buf).unwrap();
     let final_bytes = buf.freeze(); // Convert to immutable Bytes
     
