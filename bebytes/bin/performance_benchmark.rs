@@ -631,6 +631,7 @@ struct U32 {
     fourth: u8,
 }
 
+#[allow(dead_code)]
 #[derive(BeBytes, Debug, PartialEq)]
 struct U64 {
     #[bits(1)]
@@ -641,6 +642,7 @@ struct U64 {
     fourth: u8,
 }
 
+#[allow(dead_code)]
 #[derive(BeBytes, Debug, PartialEq)]
 struct U128 {
     #[bits(1)]
@@ -651,6 +653,7 @@ struct U128 {
     fourth: u8,
 }
 
+#[allow(dead_code)]
 #[derive(BeBytes, Debug, PartialEq)]
 struct I8 {
     #[bits(1)]
