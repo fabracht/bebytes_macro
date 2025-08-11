@@ -631,7 +631,6 @@ struct U32 {
     fourth: u8,
 }
 
-
 #[derive(BeBytes, Debug, PartialEq, Copy, Clone)]
 pub enum DummyEnum {
     SetupResponse,
