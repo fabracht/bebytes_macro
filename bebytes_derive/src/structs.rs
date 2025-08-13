@@ -33,6 +33,8 @@ enum FieldType {
     SizeExpression(crate::size_expr::SizeExpression), // expression-based sizing
     OptionType,
     CustomType,
+    UntilMarker(u8),  // Read Vec<T> until marker byte
+    AfterMarker(u8),  // Read remaining bytes after marker
 }
 
 struct FieldContext<'a> {
@@ -66,6 +68,25 @@ pub struct StructContext<'a> {
     pub has_bit_fields: &'a mut bool, // Track if any fields have bit attributes
 }
 
+fn handle_marker_attribute(
+    context: &FieldContext,
+    _marker: u8,
+    marker_type: &str,
+    errors: &mut Vec<proc_macro2::TokenStream>,
+    field_type: FieldType,
+) -> Option<FieldType> {
+    if let syn::Type::Path(tp) = context.field_type {
+        if !tp.path.segments.is_empty() && tp.path.segments[0].ident == "Vec" {
+            return Some(field_type);
+        }
+    }
+    errors.push(syn::Error::new(
+        context.field_type.span(),
+        format!("{marker_type} can only be used with Vec types")
+    ).to_compile_error());
+    None
+}
+
 fn determine_field_type(
     context: &FieldContext,
     attrs: &[syn::Attribute],
@@ -73,8 +94,29 @@ fn determine_field_type(
     has_bit_fields: &mut bool,
 ) -> Option<FieldType> {
     let mut bits_attribute_present = false;
-    let (size, vec_size_ident, size_expression) =
+    let (size, vec_size_ident, size_expression, until_marker, after_marker) =
         attrs::parse_attributes_with_expressions(attrs, &mut bits_attribute_present, errors);
+
+    // Check for marker attributes
+    if let Some(marker) = until_marker {
+        return handle_marker_attribute(
+            context,
+            marker,
+            "UntilMarker",
+            errors,
+            FieldType::UntilMarker(marker),
+        );
+    }
+
+    if let Some(marker) = after_marker {
+        return handle_marker_attribute(
+            context,
+            marker,
+            "AfterMarker",
+            errors,
+            FieldType::AfterMarker(marker),
+        );
+    }
 
     if bits_attribute_present {
         *has_bit_fields = true; // Mark that this struct has bit fields
@@ -314,6 +356,14 @@ fn process_field_type(
             // For custom types, we can't know the size at compile time
             // This is OK because bit fields can't come after custom types anyway
             Ok(process_custom_type_functional(context, processing_ctx))
+        }
+        FieldType::UntilMarker(marker) => {
+            // UntilMarker fields have dynamic size
+            Ok(process_until_marker_functional(context, marker, processing_ctx))
+        }
+        FieldType::AfterMarker(marker) => {
+            // AfterMarker fields consume remaining bytes
+            Ok(process_after_marker_functional(context, marker, processing_ctx))
         }
     }
 }
@@ -1308,3 +1358,113 @@ fn generate_size_expression_string(
 
     (bit_sum, parsing, writing)
 }
+
+fn process_until_marker_functional(
+    context: &FieldContext,
+    marker: u8,
+    _processing_ctx: &crate::functional::ProcessingContext,
+) -> crate::functional::FieldProcessResult {
+    let field_name = &context.field_name;
+    
+    // For UntilMarker, Vec<u8> is the only supported type for now
+    // Since UntilMarker reads bytes until the marker
+    
+    let accessor = quote! { let #field_name = &self.#field_name; };
+    
+    // Bit sum is dynamic for marker fields
+    let bit_sum = quote! {};
+
+    let parsing = quote! {
+        byte_index = _bit_sum / 8;
+        let mut #field_name = Vec::new();
+        
+        // Read bytes until we find the marker
+        while byte_index < bytes.len() && bytes[byte_index] != #marker {
+            #field_name.push(bytes[byte_index]);
+            byte_index += 1;
+            _bit_sum += 8;
+        }
+        
+        // Skip the marker byte if present
+        if byte_index < bytes.len() && bytes[byte_index] == #marker {
+            byte_index += 1;
+            _bit_sum += 8;
+        }
+    };
+
+    let writing = quote! {
+        // Write each byte in the vector
+        bytes.extend_from_slice(&#field_name);
+        _bit_sum += #field_name.len() * 8;
+        // Write the marker byte
+        ::bebytes::BufMut::put_u8(bytes, #marker);
+        _bit_sum += 8;
+    };
+
+    let direct_writing = convert_to_direct_writing(&writing);
+
+    crate::functional::FieldProcessResult::new(
+        quote! {},
+        parsing,
+        writing,
+        direct_writing,
+        accessor,
+        bit_sum,
+    )
+}
+
+fn process_after_marker_functional(
+    context: &FieldContext,
+    marker: u8,
+    _processing_ctx: &crate::functional::ProcessingContext,
+) -> crate::functional::FieldProcessResult {
+    let field_name = &context.field_name;
+    
+    let accessor = quote! { let #field_name = &self.#field_name; };
+    
+    // Bit sum is dynamic for marker fields
+    let bit_sum = quote! {};
+
+    let parsing = quote! {
+        byte_index = _bit_sum / 8;
+        
+        // Find the marker byte
+        let marker_pos = bytes[byte_index..].iter().position(|&b| b == #marker);
+        
+        let #field_name = if let Some(pos) = marker_pos {
+            // Skip past the marker
+            byte_index += pos + 1;
+            _bit_sum += (pos + 1) * 8;
+            
+            // Read all remaining bytes
+            let remaining = bytes[byte_index..].to_vec();
+            _bit_sum += remaining.len() * 8;
+            remaining
+        } else {
+            // No marker found, field is empty
+            Vec::new()
+        };
+    };
+
+    let writing = quote! {
+        // Write the marker byte
+        ::bebytes::BufMut::put_u8(bytes, #marker);
+        _bit_sum += 8;
+        
+        // Write all bytes in the vector
+        bytes.extend_from_slice(&#field_name);
+        _bit_sum += #field_name.len() * 8;
+    };
+
+    let direct_writing = convert_to_direct_writing(&writing);
+
+    crate::functional::FieldProcessResult::new(
+        quote! {},
+        parsing,
+        writing,
+        direct_writing,
+        accessor,
+        bit_sum,
+    )
+}
+

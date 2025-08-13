@@ -246,7 +246,7 @@ fn generate_bit_field_optimized_methods(
 }
 
 #[allow(clippy::too_many_lines)]
-#[proc_macro_derive(BeBytes, attributes(bits, With, FromField, bebytes))]
+#[proc_macro_derive(BeBytes, attributes(bits, With, FromField, bebytes, UntilMarker, AfterMarker))]
 pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident.clone();

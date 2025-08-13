@@ -12,17 +12,25 @@ pub fn parse_attributes_with_expressions(
     Option<usize>,
     Option<Vec<proc_macro2::Ident>>,
     Option<crate::size_expr::SizeExpression>,
+    Option<u8>,  // until_marker
+    Option<u8>,  // after_marker
 ) {
     match crate::functional::functional_attrs::parse_attributes_functional(attributes) {
         Ok(attr_data) => {
             *bits_attribute_present = attr_data.is_bits_attribute;
-            (attr_data.size, attr_data.field, attr_data.size_expression)
+            (
+                attr_data.size,
+                attr_data.field,
+                attr_data.size_expression,
+                attr_data.until_marker,
+                attr_data.after_marker,
+            )
         }
         Err(errs) => {
             for e in errs {
                 errors.push(e.to_compile_error());
             }
-            (None, None, None)
+            (None, None, None, None, None)
         }
     }
 }
