@@ -108,21 +108,17 @@ pub fn is_vec_of_vec_u8(tp: &syn::TypePath) -> bool {
         if segment.ident == "Vec" {
             // Check if inner type is also Vec<u8>
             if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
-                    if let syn::Type::Path(inner_tp) = inner_type {
-                        if let Some(inner_segment) = inner_tp.path.segments.first() {
-                            if inner_segment.ident == "Vec" {
-                                // Check if innermost type is u8
-                                if let syn::PathArguments::AngleBracketed(inner_args) =
-                                    &inner_segment.arguments
+                if let Some(syn::GenericArgument::Type(syn::Type::Path(inner_tp))) = args.args.first() {
+                    if let Some(inner_segment) = inner_tp.path.segments.first() {
+                        if inner_segment.ident == "Vec" {
+                            // Check if innermost type is u8
+                            if let syn::PathArguments::AngleBracketed(inner_args) =
+                                &inner_segment.arguments
+                            {
+                                if let Some(syn::GenericArgument::Type(syn::Type::Path(innermost_tp))) =
+                                    inner_args.args.first()
                                 {
-                                    if let Some(syn::GenericArgument::Type(innermost_type)) =
-                                        inner_args.args.first()
-                                    {
-                                        if let syn::Type::Path(innermost_tp) = innermost_type {
-                                            return innermost_tp.path.is_ident("u8");
-                                        }
-                                    }
+                                    return innermost_tp.path.is_ident("u8");
                                 }
                             }
                         }

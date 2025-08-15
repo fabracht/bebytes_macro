@@ -1229,8 +1229,8 @@ pub mod functional_attrs {
     ) -> Result<u8, syn::Error> {
         match &attr.meta {
             syn::Meta::List(list) => {
-                let lit: syn::LitInt = syn::parse2(list.tokens.clone())?;
-                let value = lit.base10_parse::<u8>()?;
+                let literal: syn::LitInt = syn::parse2(list.tokens.clone())?;
+                let value = literal.base10_parse::<u8>()?;
                 Ok(value)
             }
             _ => Err(syn::Error::new_spanned(
@@ -1247,8 +1247,8 @@ pub mod functional_attrs {
     ) -> Result<u8, syn::Error> {
         match &attr.meta {
             syn::Meta::List(list) => {
-                let lit: syn::LitInt = syn::parse2(list.tokens.clone())?;
-                let value = lit.base10_parse::<u8>()?;
+                let literal: syn::LitInt = syn::parse2(list.tokens.clone())?;
+                let value = literal.base10_parse::<u8>()?;
                 Ok(value)
             }
             _ => Err(syn::Error::new_spanned(
