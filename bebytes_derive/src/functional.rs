@@ -128,6 +128,8 @@ pub struct AttributeData {
     pub field: Option<Vec<Ident>>,
     pub size_expression: Option<crate::size_expr::SizeExpression>,
     pub is_bits_attribute: bool,
+    pub until_marker: Option<u8>,
+    pub after_marker: Option<u8>,
 }
 
 impl AttributeData {
@@ -155,6 +157,16 @@ impl AttributeData {
         self
     }
 
+    pub fn with_until_marker(mut self, marker: u8) -> Self {
+        self.until_marker = Some(marker);
+        self
+    }
+
+    pub fn with_after_marker(mut self, marker: u8) -> Self {
+        self.after_marker = Some(marker);
+        self
+    }
+
     /// Merge multiple `AttributeData` instances, prioritizing non-`None` values
     pub fn merge(attrs: Vec<Self>) -> Self {
         attrs.into_iter().fold(Self::default(), |mut acc, attr| {
@@ -162,6 +174,8 @@ impl AttributeData {
             acc.field = attr.field.or(acc.field);
             acc.size_expression = attr.size_expression.or(acc.size_expression);
             acc.is_bits_attribute |= attr.is_bits_attribute;
+            acc.until_marker = attr.until_marker.or(acc.until_marker);
+            acc.after_marker = attr.after_marker.or(acc.after_marker);
             acc
         })
     }
@@ -967,6 +981,12 @@ pub mod functional_attrs {
                     parse_size_attribute_with_expressions(attr)
                 } else if attr.path().is_ident("bebytes") {
                     parse_bebytes_attribute_functional(attr)
+                } else if attr.path().is_ident("UntilMarker") {
+                    parse_until_marker_attribute_functional(attr)
+                        .map(|marker| Some(AttributeData::new().with_until_marker(marker)))
+                } else if attr.path().is_ident("AfterMarker") {
+                    parse_after_marker_attribute_functional(attr)
+                        .map(|marker| Some(AttributeData::new().with_after_marker(marker)))
                 } else {
                     Ok(None)
                 }
@@ -1199,6 +1219,42 @@ pub mod functional_attrs {
             Err(syn::Error::new_spanned(attr, "Missing field name or path"))
         } else {
             Ok(field_path)
+        }
+    }
+
+    /// Parse `UntilMarker` attribute functionally
+    /// Handles #[UntilMarker(0xFF)] or #[UntilMarker(255)]
+    pub fn parse_until_marker_attribute_functional(
+        attr: &syn::Attribute,
+    ) -> Result<u8, syn::Error> {
+        match &attr.meta {
+            syn::Meta::List(list) => {
+                let literal: syn::LitInt = syn::parse2(list.tokens.clone())?;
+                let value = literal.base10_parse::<u8>()?;
+                Ok(value)
+            }
+            _ => Err(syn::Error::new_spanned(
+                attr,
+                "Expected #[UntilMarker(byte_value)]",
+            )),
+        }
+    }
+
+    /// Parse `AfterMarker` attribute functionally
+    /// Handles #[AfterMarker(0xFF)] or #[AfterMarker(255)]
+    pub fn parse_after_marker_attribute_functional(
+        attr: &syn::Attribute,
+    ) -> Result<u8, syn::Error> {
+        match &attr.meta {
+            syn::Meta::List(list) => {
+                let literal: syn::LitInt = syn::parse2(list.tokens.clone())?;
+                let value = literal.base10_parse::<u8>()?;
+                Ok(value)
+            }
+            _ => Err(syn::Error::new_spanned(
+                attr,
+                "Expected #[AfterMarker(byte_value)]",
+            )),
         }
     }
 

@@ -1,3 +1,84 @@
+//! # BeBytes - High-Performance Binary Serialization
+//!
+//! BeBytes is a Rust library that provides procedural macros for generating ultra-fast
+//! serialization and deserialization methods for network structs. It supports both
+//! big-endian and little-endian byte orders and includes advanced features like bit fields,
+//! marker-delimited fields, and WebAssembly compatibility.
+//!
+//! ## Key Features
+//!
+//! - **High Performance**: Zero-copy operations and minimal allocations
+//! - **Bit Fields**: Pack multiple fields into bytes with `#[bits(N)]` attribute
+//! - **Marker Attributes**: Handle variable-length sections with `#[UntilMarker]` and `#[AfterMarker]`
+//! - **Size Control**: Dynamic field sizing with `#[FromField]` and `#[With(size())]`
+//! - **WebAssembly Support**: Full no_std compatibility for WASM targets
+//! - **Comprehensive Types**: Support for primitives, strings, arrays, vectors, enums, and nested structs
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! use bebytes::BeBytes;
+//!
+//! #[derive(BeBytes, Debug, PartialEq)]
+//! struct NetworkMessage {
+//!     #[bits(4)]
+//!     version: u8,
+//!     #[bits(4)]
+//!     msg_type: u8,
+//!     sender_id: u32,
+//!     content_len: u8,
+//!     #[FromField(content_len)]
+//!     content: Vec<u8>,
+//! }
+//!
+//! let message = NetworkMessage {
+//!     version: 1,
+//!     msg_type: 2,
+//!     sender_id: 0x12345678,
+//!     content_len: 5,
+//!     content: b"hello".to_vec(),
+//! };
+//!
+//! // Serialize
+//! let bytes = message.to_be_bytes();
+//!
+//! // Deserialize
+//! let (parsed, bytes_consumed) = NetworkMessage::try_from_be_bytes(&bytes).unwrap();
+//! assert_eq!(parsed, message);
+//! ```
+//!
+//! ## Marker-Delimited Fields
+//!
+//! Handle protocols with variable-length sections separated by marker bytes:
+//!
+//! ```rust
+//! use bebytes::BeBytes;
+//!
+//! #[derive(BeBytes, Debug, PartialEq)]
+//! struct Protocol {
+//!     header: u32,
+//!     #[UntilMarker(0xFF)]
+//!     data: Vec<u8>,  // Reads until 0xFF marker
+//!     footer: u16,
+//! }
+//!
+//! // For multiple delimited sections:
+//! #[derive(BeBytes, Debug, PartialEq)]
+//! struct MultiSection {
+//!     section_count: u8,
+//!     #[FromField(section_count)]
+//!     #[UntilMarker(0xFF)]
+//!     sections: Vec<Vec<u8>>,  // Multiple sections, each ending with 0xFF
+//! }
+//! ```
+//!
+//! ## Error Handling
+//!
+//! All parsing operations return `Result<(T, usize), BeBytesError>` where:
+//! - `T` is the parsed struct
+//! - `usize` is the number of bytes consumed
+//! - `BeBytesError` provides detailed error information
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
