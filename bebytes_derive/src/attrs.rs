@@ -12,8 +12,8 @@ pub fn parse_attributes_with_expressions(
     Option<usize>,
     Option<Vec<proc_macro2::Ident>>,
     Option<crate::size_expr::SizeExpression>,
-    Option<u8>,  // until_marker
-    Option<u8>,  // after_marker
+    Option<u8>, // until_marker
+    Option<u8>, // after_marker
 ) {
     match crate::functional::functional_attrs::parse_attributes_functional(attributes) {
         Ok(attr_data) => {

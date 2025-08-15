@@ -113,8 +113,12 @@ pub fn is_vec_of_vec_u8(tp: &syn::TypePath) -> bool {
                         if let Some(inner_segment) = inner_tp.path.segments.first() {
                             if inner_segment.ident == "Vec" {
                                 // Check if innermost type is u8
-                                if let syn::PathArguments::AngleBracketed(inner_args) = &inner_segment.arguments {
-                                    if let Some(syn::GenericArgument::Type(innermost_type)) = inner_args.args.first() {
+                                if let syn::PathArguments::AngleBracketed(inner_args) =
+                                    &inner_segment.arguments
+                                {
+                                    if let Some(syn::GenericArgument::Type(innermost_type)) =
+                                        inner_args.args.first()
+                                    {
                                         if let syn::Type::Path(innermost_tp) = innermost_type {
                                             return innermost_tp.path.is_ident("u8");
                                         }
