@@ -77,6 +77,10 @@ harness = false
 name = "cache_performance"
 harness = false
 
+[[example]]
+name = "wasm_test"
+required-features = ["std"]
+
 [[bench]]
 name = "network_protocols"
 harness = false
