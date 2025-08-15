@@ -20,7 +20,7 @@ BeBytes offers excellent performance across all platforms:
 3. **Embedded Systems**: no_std support for resource-constrained environments
 4. **Cross-platform**: Works on all Rust-supported platforms
 
-The macro supports primitive types, characters, strings (with size attributes), enums, arrays, vectors, and nested structs, making it ideal for working with network protocols, binary formats, and high-performance message serialization.
+The macro supports primitive types, characters, strings (with size attributes), enums, arrays, vectors, marker-delimited fields, and nested structs, making it ideal for working with network protocols, binary formats, and high-performance message serialization.
 
 **Note: BeBytes Derive is currently in development and has not been thoroughly tested in production environments. Use it with caution and ensure proper testing and validation in your specific use case.**
 
@@ -731,6 +731,75 @@ pub struct ErrorEstimate {
 
 Trying to place a vector anywhere else in the sequence produces a compile time error.
 
+## Marker-Delimited Fields
+
+BeBytes supports marker-based field delimiting for protocols that use sentinel bytes to separate variable-length sections.
+
+### UntilMarker Attribute
+
+The `#[UntilMarker(byte)]` attribute reads bytes into a `Vec<u8>` until a specific marker byte is encountered:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct Message {
+    header: u32,
+    #[UntilMarker(0xFF)]
+    content: Vec<u8>,  // Reads until 0xFF is found
+    footer: u16,
+}
+
+// Serialized as: [header][content bytes][0xFF][footer]
+```
+
+### AfterMarker Attribute
+
+The `#[AfterMarker(byte)]` attribute skips bytes until finding a marker, then reads all remaining bytes:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct Packet {
+    version: u8,
+    #[AfterMarker(0xAA)]
+    payload: Vec<u8>,  // Skips to 0xAA, then reads everything after
+}
+
+// Input: [version][skipped bytes][0xAA][payload bytes]
+```
+
+### Vec<Vec<u8>> with Markers
+
+For protocols with multiple delimited sections, use `Vec<Vec<u8>>` with `#[UntilMarker]`:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct MultiSection {
+    section_count: u8,
+    #[FromField(section_count)]
+    #[UntilMarker(0xFF)]
+    sections: Vec<Vec<u8>>,  // section_count sections, each terminated by 0xFF
+}
+
+let msg = MultiSection {
+    section_count: 3,
+    sections: vec![
+        vec![0x01, 0x02],
+        vec![0x03, 0x04, 0x05],
+        vec![0x06],
+    ],
+};
+
+// Serialized as: [3][0x01,0x02,0xFF][0x03,0x04,0x05,0xFF][0x06,0xFF]
+```
+
+**Important**: Vec<Vec<u8>> with markers requires size control via `#[With(size(N))]` or `#[FromField(field_name)]`.
+
+### Use Cases
+
+- **Protocol Headers**: Variable-length headers terminated by specific bytes
+- **TLV Structures**: Type-Length-Value encodings with delimiters
+- **Text Protocols**: Null-terminated or newline-separated fields
+- **CoAP Options**: Multiple options separated by 0xFF markers
+
 ## Nested Fields
 
 You can nest structures with the BeBytes trait, but there are some important rules to follow:
@@ -920,6 +989,7 @@ const encoded = new Uint8Array(memory.buffer, resultPtr, messageSize);
 
 For detailed technical documentation about the macro implementation:
 
+- [Marker Attributes](MARKER_ATTRIBUTES.md) - Complete guide to UntilMarker, AfterMarker, and Vec<Vec<u8>> features
 - [Data Flow Documentation](docs/data-flow.md) - Comprehensive diagrams showing how data flows through the BeBytes derive macro
 - [Code Generation Examples](docs/code-generation.md) - Concrete examples of generated code for various field types
 - [Mutation Testing](docs/mutation-testing.md) - Information about the project's mutation testing strategy

@@ -1,3 +1,5 @@
+//! `BeBytes` derive macro for binary serialization with bit fields and marker attributes.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::pedantic)]
 

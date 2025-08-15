@@ -101,6 +101,35 @@ pub fn is_supported_primitive_type(tp: &syn::TypePath) -> bool {
         .any(|&primitive| tp.path.is_ident(primitive))
 }
 
+/// Check if a type is Vec<Vec<u8>>
+pub fn is_vec_of_vec_u8(tp: &syn::TypePath) -> bool {
+    // Check if outer type is Vec
+    if let Some(segment) = tp.path.segments.first() {
+        if segment.ident == "Vec" {
+            // Check if inner type is also Vec<u8>
+            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
+                    if let syn::Type::Path(inner_tp) = inner_type {
+                        if let Some(inner_segment) = inner_tp.path.segments.first() {
+                            if inner_segment.ident == "Vec" {
+                                // Check if innermost type is u8
+                                if let syn::PathArguments::AngleBracketed(inner_args) = &inner_segment.arguments {
+                                    if let Some(syn::GenericArgument::Type(innermost_type)) = inner_args.args.first() {
+                                        if let syn::Type::Path(innermost_tp) = innermost_type {
+                                            return innermost_tp.path.is_ident("u8");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 pub(crate) fn is_copy(field_type: &syn::Type) -> bool {
     match field_type {
         syn::Type::Never(_) | syn::Type::Infer(_) => true, // ! and _ are Copy

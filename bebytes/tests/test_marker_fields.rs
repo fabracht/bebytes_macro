@@ -20,11 +20,11 @@ fn test_until_marker_field() {
     };
 
     let bytes = msg.to_be_bytes();
-    
+
     // Should be: header(1) + token_length(1) + options(3) + marker(1) + marker(1) + payload(3) = 10 bytes
     assert_eq!(bytes.len(), 10);
     assert_eq!(bytes[0], 0x45); // header
-    assert_eq!(bytes[1], 4);    // token_length
+    assert_eq!(bytes[1], 4); // token_length
     assert_eq!(bytes[2], 0x11); // first option
     assert_eq!(bytes[3], 0x22); // second option
     assert_eq!(bytes[4], 0x33); // third option
@@ -53,11 +53,11 @@ fn test_empty_marker_fields() {
     };
 
     let bytes = msg.to_be_bytes();
-    
+
     // Should be: header(1) + token_length(1) + marker(1) + marker(1) = 4 bytes
     assert_eq!(bytes.len(), 4);
     assert_eq!(bytes[0], 0x40); // header
-    assert_eq!(bytes[1], 0);    // token_length
+    assert_eq!(bytes[1], 0); // token_length
     assert_eq!(bytes[2], 0xFF); // marker for options
     assert_eq!(bytes[3], 0xFF); // marker for payload
 
@@ -74,7 +74,7 @@ fn test_empty_marker_fields() {
 fn test_after_marker_without_marker() {
     // Test case where AfterMarker doesn't find the marker
     let bytes = vec![0x40, 0x00]; // Just header and token_length, no markers
-    
+
     let result = CoapMessage::try_from_be_bytes(&bytes);
     // This should still parse but the payload will be empty
     match result {

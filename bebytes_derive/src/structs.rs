@@ -35,6 +35,7 @@ enum FieldType {
     CustomType,
     UntilMarker(u8),  // Read Vec<T> until marker byte
     AfterMarker(u8),  // Read remaining bytes after marker
+    VecOfVecsWithMarker(Option<usize>, Option<Vec<syn::Ident>>, u8), // size, field_path, marker
 }
 
 struct FieldContext<'a> {
@@ -87,6 +88,78 @@ fn handle_marker_attribute(
     None
 }
 
+// Helper function to handle bits field processing
+fn handle_bits_field(
+    context: &FieldContext,
+    size: Option<usize>,
+    errors: &mut Vec<proc_macro2::TokenStream>,
+    has_bit_fields: &mut bool,
+) -> Option<FieldType> {
+    *has_bit_fields = true;
+    if let Some(size) = size {
+        // Validate supported type for bits
+        if let syn::Type::Path(tp) = context.field_type {
+            if !utils::is_supported_primitive_type(tp) {
+                errors.push(syn::Error::new(
+                    context.field_type.span(),
+                    "Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) and char are supported",
+                ).to_compile_error());
+                return None;
+            }
+        }
+        // Validate bit count doesn't exceed capacity
+        if let Ok(max_bits) = utils::get_primitive_type_max_bits(context.field_type) {
+            if size > max_bits {
+                errors.push(syn::Error::new(
+                    context.field.span(),
+                    format!("bits attribute specifies {size} bits, but type can only hold {max_bits} bits"),
+                ).to_compile_error());
+                return None;
+            }
+        }
+        return Some(FieldType::BitsField(size));
+    }
+    // Empty #[bits()] is no longer supported
+    errors.push(syn::Error::new(
+        context.field.span(),
+        "Size required for bits attribute. Use #[bits(N)] where N is the number of bits needed for your field",
+    ).to_compile_error());
+    None
+}
+
+// Helper function to handle Vec<Vec<u8>> with markers
+fn handle_vec_of_vecs_marker(
+    context: &FieldContext,
+    marker: u8,
+    is_until: bool,
+    size: Option<usize>,
+    vec_size_ident: Option<Vec<syn::Ident>>,
+    errors: &mut Vec<proc_macro2::TokenStream>,
+) -> Option<FieldType> {
+    if let syn::Type::Path(tp) = context.field_type {
+        if utils::is_vec_of_vec_u8(tp) {
+            if is_until {
+                // Vec<Vec<u8>> with UntilMarker requires size control
+                if size.is_some() || vec_size_ident.is_some() {
+                    return Some(FieldType::VecOfVecsWithMarker(size, vec_size_ident, marker));
+                }
+                errors.push(syn::Error::new(
+                    context.field_type.span(),
+                    "Vec<Vec<u8>> with UntilMarker requires size control via #[With(size(N))] or #[FromField(field_name)]"
+                ).to_compile_error());
+                return None;
+            }
+            // AfterMarker is not supported for Vec<Vec<u8>>
+            errors.push(syn::Error::new(
+                context.field_type.span(),
+                "AfterMarker is not supported with Vec<Vec<u8>>. Use UntilMarker instead"
+            ).to_compile_error());
+            return None;
+        }
+    }
+    None
+}
+
 fn determine_field_type(
     context: &FieldContext,
     attrs: &[syn::Attribute],
@@ -99,6 +172,18 @@ fn determine_field_type(
 
     // Check for marker attributes
     if let Some(marker) = until_marker {
+        // Check if this is Vec<Vec<u8>> with size control
+        if let Some(field_type) = handle_vec_of_vecs_marker(
+            context,
+            marker,
+            true,  // is_until
+            size,
+            vec_size_ident.clone(),
+            errors,
+        ) {
+            return Some(field_type);
+        }
+        
         return handle_marker_attribute(
             context,
             marker,
@@ -109,6 +194,18 @@ fn determine_field_type(
     }
 
     if let Some(marker) = after_marker {
+        // Check if this is Vec<Vec<u8>> - AfterMarker is not supported
+        if let Some(field_type) = handle_vec_of_vecs_marker(
+            context,
+            marker,
+            false,  // is_until = false (after_marker)
+            size,
+            vec_size_ident.clone(),
+            errors,
+        ) {
+            return Some(field_type);
+        }
+        
         return handle_marker_attribute(
             context,
             marker,
@@ -119,41 +216,7 @@ fn determine_field_type(
     }
 
     if bits_attribute_present {
-        *has_bit_fields = true; // Mark that this struct has bit fields
-        if let Some(size) = size {
-            // Explicit size: #[bits(N)]
-            if let syn::Type::Path(tp) = context.field_type {
-                if !utils::is_supported_primitive_type(tp) {
-                    let error = syn::Error::new(
-                        context.field_type.span(),
-                        "Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) and char are supported",
-                    );
-                    errors.push(error.to_compile_error());
-                    return None;
-                }
-            }
-
-            // Validate that the bit count doesn't exceed the type's capacity
-            if let Ok(max_bits) = utils::get_primitive_type_max_bits(context.field_type) {
-                if size > max_bits {
-                    let error = syn::Error::new(
-                        context.field.span(),
-                        format!("bits attribute specifies {size} bits, but type can only hold {max_bits} bits"),
-                    );
-                    errors.push(error.to_compile_error());
-                    return None;
-                }
-            }
-
-            return Some(FieldType::BitsField(size));
-        }
-        // Empty #[bits()] is no longer supported
-        let error = syn::Error::new(
-            context.field.span(),
-            "Size required for bits attribute. Use #[bits(N)] where N is the number of bits needed for your field",
-        );
-        errors.push(error.to_compile_error());
-        return None;
+        return handle_bits_field(context, size, errors, has_bit_fields);
     }
 
     // Check for size expression
@@ -364,6 +427,10 @@ fn process_field_type(
         FieldType::AfterMarker(marker) => {
             // AfterMarker fields consume remaining bytes
             Ok(process_after_marker_functional(context, marker, processing_ctx))
+        }
+        FieldType::VecOfVecsWithMarker(size, field_path, marker) => {
+            // Vec<Vec<u8>> with marker delimiting and size control
+            Ok(process_vec_of_vecs_with_marker_functional(context, size, field_path, marker, processing_ctx))
         }
     }
 }
@@ -1458,6 +1525,84 @@ fn process_after_marker_functional(
 
     let direct_writing = convert_to_direct_writing(&writing);
 
+    crate::functional::FieldProcessResult::new(
+        quote! {},
+        parsing,
+        writing,
+        direct_writing,
+        accessor,
+        bit_sum,
+    )
+}
+
+fn process_vec_of_vecs_with_marker_functional(
+    context: &FieldContext,
+    size: Option<usize>,
+    field_path: Option<Vec<syn::Ident>>,
+    marker: u8,
+    _processing_ctx: &crate::functional::ProcessingContext,
+) -> crate::functional::FieldProcessResult {
+    let field_name = &context.field_name;
+    
+    let accessor = quote! { let #field_name = &self.#field_name; };
+    
+    // Bit sum is dynamic for marker fields
+    let bit_sum = quote! {};
+    
+    // Generate size access code
+    let size_expr = if let Some(size) = size {
+        quote! { #size }
+    } else if let Some(field_path) = field_path {
+        let field_access = field_path.iter().fold(quote! {}, |acc, ident| {
+            if acc.is_empty() {
+                quote! { #ident }
+            } else {
+                quote! { #acc.#ident }
+            }
+        });
+        quote! { #field_access as usize }
+    } else {
+        // This should never happen due to validation in determine_field_type
+        quote! { 0 }
+    };
+    
+    let parsing = quote! {
+        byte_index = _bit_sum / 8;
+        let mut #field_name = Vec::new();
+        
+        // Read exactly the specified number of segments
+        for _ in 0..#size_expr {
+            let mut current_section = Vec::new();
+            
+            // Read until marker for this segment
+            while byte_index < bytes.len() && bytes[byte_index] != #marker {
+                current_section.push(bytes[byte_index]);
+                byte_index += 1;
+                _bit_sum += 8;
+            }
+            
+            // Skip the marker if present
+            if byte_index < bytes.len() && bytes[byte_index] == #marker {
+                byte_index += 1;
+                _bit_sum += 8;
+            }
+            
+            #field_name.push(current_section);
+        }
+    };
+    
+    let writing = quote! {
+        // Write each segment with marker
+        for section in #field_name {
+            bytes.extend_from_slice(section);
+            _bit_sum += section.len() * 8;
+            ::bebytes::BufMut::put_u8(bytes, #marker);
+            _bit_sum += 8;
+        }
+    };
+    
+    let direct_writing = convert_to_direct_writing(&writing);
+    
     crate::functional::FieldProcessResult::new(
         quote! {},
         parsing,

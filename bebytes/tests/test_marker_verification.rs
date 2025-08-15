@@ -21,7 +21,7 @@ fn test_null_marker() {
     let bytes = msg.to_be_bytes();
     assert_eq!(bytes[0], 0x42); // header
     assert_eq!(bytes[1], 0x01); // first element
-    assert_eq!(bytes[2], 0x02); 
+    assert_eq!(bytes[2], 0x02);
     assert_eq!(bytes[3], 0x03);
     assert_eq!(bytes[4], 0x00); // null marker for null_terminated
     assert_eq!(bytes[5], 0x00); // null marker for remainder
@@ -57,7 +57,7 @@ fn test_multiple_until_markers() {
     // final: 0x99
     // Total: 2 + 1 + 3 + 1 + 1 = 8 bytes
     assert_eq!(bytes.len(), 8);
-    
+
     let (parsed, consumed) = MultipleMarkers::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(consumed, bytes.len());
     assert_eq!(parsed.first, vec![0x10, 0x20]);
@@ -77,7 +77,7 @@ struct MarkerInData {
 fn test_marker_byte_in_data() {
     // The marker byte 0xAB should terminate the vector
     let bytes = vec![0x11, 0x22, 0xAB, 0x33];
-    
+
     let (parsed, consumed) = MarkerInData::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(consumed, 4);
     assert_eq!(parsed.data, vec![0x11, 0x22]); // Stops at 0xAB
@@ -99,12 +99,12 @@ struct EmptyMarkerFields {
 fn test_immediate_marker() {
     // Test when marker appears immediately
     let bytes = vec![
-        0x01,  // prefix
-        0xDD,  // immediate marker for empty_until
-        0x02,  // middle
-        0xEE,  // marker for empty_after (no data after)
+        0x01, // prefix
+        0xDD, // immediate marker for empty_until
+        0x02, // middle
+        0xEE, // marker for empty_after (no data after)
     ];
-    
+
     let (parsed, consumed) = EmptyMarkerFields::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(consumed, 4);
     assert_eq!(parsed.prefix, 0x01);
@@ -166,13 +166,13 @@ fn test_marker_round_trip_consistency() {
 
     // Serialize
     let bytes = original.to_be_bytes();
-    
+
     // Deserialize
     let (parsed, _) = ComplexMarker::try_from_be_bytes(&bytes).unwrap();
-    
+
     // Should match exactly
     assert_eq!(parsed, original);
-    
+
     // Re-serialize should produce identical bytes
     let bytes2 = parsed.to_be_bytes();
     assert_eq!(bytes, bytes2);
@@ -187,10 +187,10 @@ fn test_no_marker_in_stream() {
         data: Vec<u8>,
         after: u8,
     }
-    
+
     // Data without the marker 0xCC
     let bytes = vec![0x11, 0x22, 0x33, 0x44, 0x55];
-    
+
     let result = RequiresMarker::try_from_be_bytes(&bytes);
     // This should parse but consume all bytes looking for marker
     match result {
