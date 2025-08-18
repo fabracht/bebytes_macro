@@ -96,6 +96,7 @@ pub use alloc::vec::Vec;
 pub use std::vec::Vec;
 
 pub mod buffer;
+pub mod builder;
 pub mod interpreter;
 
 pub use bebytes_derive::BeBytes;
@@ -106,7 +107,7 @@ pub use interpreter::{StringInterpreter, Utf8};
 pub use buffer::{BufMut, Bytes, BytesMut};
 
 /// Error type for `BeBytes` operations
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BeBytesError {
     /// Buffer is empty when data was expected
     EmptyBuffer,
@@ -119,6 +120,16 @@ pub enum BeBytesError {
         value: u128,
         max: u128,
         field: &'static str,
+    },
+    /// Invalid UTF-8 sequence in string field
+    InvalidUtf8 { field: &'static str },
+    /// Marker byte not found when expected
+    MarkerNotFound { marker: u8, field: &'static str },
+    /// Field value out of range
+    ValueOutOfRange {
+        field: &'static str,
+        value: String,
+        max: String,
     },
 }
 
@@ -134,6 +145,15 @@ impl core::fmt::Display for BeBytesError {
             }
             Self::InvalidBitField { value, max, field } => {
                 write!(f, "Value {value} exceeds maximum {max} for field {field}")
+            }
+            Self::InvalidUtf8 { field } => {
+                write!(f, "Invalid UTF-8 sequence in field '{field}'")
+            }
+            Self::MarkerNotFound { marker, field } => {
+                write!(f, "Marker byte 0x{marker:02X} not found in field '{field}'")
+            }
+            Self::ValueOutOfRange { field, value, max } => {
+                write!(f, "Value {value} exceeds maximum {max} for field '{field}'")
             }
         }
     }
