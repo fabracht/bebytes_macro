@@ -30,7 +30,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "2.8.0"
+bebytes = "2.9.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -122,12 +122,12 @@ fn main() {
 
 In this example, we define a `NetworkMessage` struct that combines bit fields with string fields. The `#[bits]` attribute is used to specify bit-level fields that are packed together. The struct uses standard Rust `String` types with attributes to control their serialization: `#[With(size(16))]` for fixed-size strings and `#[FromField(content_len)]` for variable-length strings where the size comes from another field. The BeBytes derive macro generates the serialization and deserialization methods for the struct, handling both the bit packing and string encoding automatically.
 
-## bytes Crate Integration
+## Buffer Management
 
-BeBytes 2.6.0+ integrates the `bytes` crate for improved buffer management and zero-copy operations:
+BeBytes provides efficient internal buffer management for zero-copy operations:
 
 ```rust
-use bebytes::{BeBytes, Bytes, BytesMut, BufMut};
+use bebytes::{BeBytes, Bytes, BytesMut};
 
 #[derive(BeBytes, Debug)]
 struct TcpPacket {
@@ -155,18 +155,11 @@ fn main() {
     // Bytes buffer
     let bytes_buffer: Bytes = packet.to_be_bytes_buf();
     println!("Bytes buffer: {} bytes", bytes_buffer.len());
-    
-    // Zero-copy sharing
-    let shared_buffer = bytes_buffer.clone(); // Increments reference count
-    tokio::spawn(async move {
-        // Use shared_buffer in async context...
-        send_to_network(shared_buffer).await;
-    });
 
     // Direct buffer writing
     let mut buf = bebytes::BytesMut::with_capacity(packet.field_size());
     packet.encode_be_to(&mut buf).unwrap();
-    let final_bytes = buf.freeze(); // Convert to immutable Bytes
+    let final_bytes = buf.freeze(); // Convert to immutable buffer
     
     println!("✅ All methods produce identical results!");
     assert_eq!(vec_bytes, bytes_buffer.as_ref());
@@ -181,13 +174,13 @@ async fn send_to_network(data: Bytes) {
 }
 ```
 
-### bytes Integration Benefits
+### Buffer Management Benefits
 
-1. **Performance**: 2.3x improvement with `to_be_bytes_buf()` vs `to_be_bytes()`
-2. **Zero-copy sharing**: `Bytes` can be shared between tasks without copying data
-3. **Memory efficiency**: Reference-counted buffers with automatic cleanup
-4. **Ecosystem compatibility**: Works with tokio, hyper, tonic, and async networking
-5. **Standard patterns**: Uses established buffer management techniques
+1. **Performance**: Optimized buffer operations without external dependencies
+2. **Zero allocations**: Direct buffer writing methods
+3. **Memory efficiency**: Pre-allocated buffers reduce allocations
+4. **Clean API**: Consistent buffer-oriented interface
+5. **No external dependencies**: Self-contained implementation
 
 ### Migration Guide
 
@@ -198,7 +191,7 @@ Existing code continues to work unchanged. To leverage bytes benefits:
 let data = packet.to_be_bytes();
 send_data(data).await;
 
-// After (2.3x faster, zero-copy sharing)
+// After (optimized buffer operations)
 let data = packet.to_be_bytes_buf();
 send_data(data).await; // Same signature, better performance
 ```

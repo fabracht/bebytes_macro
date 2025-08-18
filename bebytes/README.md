@@ -14,7 +14,7 @@ To use BeBytes, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "2.6.0"
+bebytes = "2.9.0"
 ```
 
 Then, import the BeBytes trait from the bebytes crate and derive it for your struct:
@@ -64,10 +64,10 @@ The BeBytes derive macro generates the following methods for your struct:
 - `try_from_le_bytes(&[u8]) -> Result<(Self, usize), BeBytesError>`: A method to convert a little-endian byte slice into an instance of your struct. It returns a Result containing the deserialized struct and the number of consumed bytes.
 - `to_le_bytes(&self) -> Vec<u8>`: A method to convert the struct into a little-endian byte representation. It returns a `Vec<u8>` containing the serialized bytes.
 
-**bytes Crate Integration (New in 2.6.0):**
+**Buffer Methods:**
 
-- `to_be_bytes_buf(&self) -> Bytes`: Convert to big-endian Bytes buffer.
-- `to_le_bytes_buf(&self) -> Bytes`: Convert to little-endian Bytes buffer.
+- `to_be_bytes_buf(&self) -> Bytes`: Convert to big-endian buffer.
+- `to_le_bytes_buf(&self) -> Bytes`: Convert to little-endian buffer.
 - `encode_be_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to buffer (big-endian).
 - `encode_le_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to buffer (little-endian).
 
@@ -583,9 +583,9 @@ For vectors of custom types, the following rules apply:
 - When used elsewhere, you must specify size information with `#[FromField]` or `#[With]`
 - Each item in the vector is serialized/deserialized using its own BeBytes implementation
 
-## bytes Crate Integration (New in 2.6.0)
+## Buffer Management
 
-BeBytes now natively integrates the `bytes` crate for buffer management and zero-copy operations:
+BeBytes provides efficient internal buffer management for optimized operations:
 
 ```rust
 use bebytes::{BeBytes, Bytes, BytesMut};
@@ -607,18 +607,13 @@ let packet = NetworkPacket {
 // Traditional Vec<u8> approach (still available)
 let vec_bytes = packet.to_be_bytes();
 
-// NEW: Zero-copy Bytes buffer
+// Buffer operations
 let bytes_buffer: Bytes = packet.to_be_bytes_buf();
 
-// Can be used with async code
-tokio::spawn(async move {
-    send_to_network(bytes_buffer).await;
-});
-
-// NEW: Direct buffer writing
+// Direct buffer writing
 let mut buf = BytesMut::with_capacity(packet.field_size());
 packet.encode_be_to(&mut buf).unwrap();
-let final_bytes = buf.freeze(); // Convert to immutable Bytes
+let final_bytes = buf.freeze(); // Convert to immutable buffer
 
 // All methods produce identical results
 assert_eq!(vec_bytes, bytes_buffer.as_ref());
@@ -641,9 +636,9 @@ Existing code continues to work unchanged. To leverage bytes benefits:
 let data = packet.to_be_bytes();
 send_data(data).await;
 
-// After (zero-copy sharing)
+// After (optimized buffer operations)
 let data = packet.to_be_bytes_buf();
-send_data(data).await; // Same signature, better performance
+send_data(data).await; // Same signature, optimized performance
 ```
 
 ## Performance Optimizations
@@ -734,7 +729,7 @@ BeBytes supports no_std environments:
 
 ```toml
 [dependencies]
-bebytes = { version = "2.6.0", default-features = false }
+bebytes = { version = "2.9.0", default-features = false }
 ```
 
 By default, the `std` feature is enabled. Disable it for no_std support with `alloc`.
@@ -783,7 +778,7 @@ fn main() {
 
 ## Performance Optimizations
 
-BeBytes 2.6.0 introduces professional buffer management through the `bytes` crate integration, providing:
+BeBytes includes efficient buffer management, providing:
 
 ### Zero-Copy Operations
 
@@ -827,7 +822,7 @@ msg3.encode_be_to(&mut buf)?;
 let bytes = buf.freeze();
 ```
 
-The bytes integration provides up to 2.88x performance improvement in production workloads.
+The buffer management provides significant performance improvements in production workloads.
 
 ## Contribute
 
