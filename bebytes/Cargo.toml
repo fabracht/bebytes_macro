@@ -65,25 +65,9 @@ path = "tests/compile_fail.rs"
 name = "property_based"
 path = "tests/property_based.rs"
 
-[[bench]]
-name = "serialization"
-harness = false
-
-[[bench]]
-name = "memory_allocation"
-harness = false
-
-[[bench]]
-name = "cache_performance"
-harness = false
-
 [[example]]
 name = "wasm_test"
 required-features = ["std"]
-
-[[bench]]
-name = "network_protocols"
-harness = false
 
 [features]
 default = ["std"]

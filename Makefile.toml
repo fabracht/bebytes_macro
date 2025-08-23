@@ -13,7 +13,6 @@ echo "  cargo make ci-flow           # CI workflow (build + test with verbose ou
 echo "  cargo make format            # Format code with rustfmt"
 echo "  cargo make clippy            # Run clippy linter"
 echo "  cargo make test              # Run all tests"
-echo "  cargo make bench             # Run benchmarks"
 echo "  cargo make docs              # Generate documentation"
 echo ""
 echo "🔧 BUILD COMMANDS:"
@@ -25,7 +24,6 @@ echo ""
 echo "🧪 TESTING COMMANDS:"
 echo "  cargo make test              # Run all tests"
 echo "  cargo make test-flow         # Test with pre/post hooks"
-echo "  cargo make bench             # Run benchmarks"
 echo "  cargo make coverage          # Generate test coverage"
 echo ""
 echo "📚 DOCUMENTATION:"
@@ -67,13 +65,12 @@ dependencies = [
 
 # Full CI-like workflow
 [tasks.full-check]
-description = "Full validation: format, clippy, build, test, bench-compile"
+description = "Full validation: format, clippy, build, test"
 dependencies = [
   "format",
   "clippy",
   "build",
-  "test",
-  "bench-compile"
+  "test"
 ]
 
 # Project-specific quick test
