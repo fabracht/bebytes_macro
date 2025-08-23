@@ -39,7 +39,7 @@ impl BuilderState for Complete {}
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use bebytes::builder::BytesBuilder;
 ///
 /// let data = BytesBuilder::new()
@@ -47,8 +47,8 @@ impl BuilderState for Complete {}
 ///     .u32_be(0x12345678)    // Fixed size
 ///     .with_size(10)         // Size hint for next field
 ///     .bytes(vec![1,2,3])    // Variable size with hint
-///     .remaining_bytes(vec![4,5,6]) // Variable size (last field)
-///     .build();
+///     .append_bytes(vec![4,5,6]) // Append more variable data
+///     .build_variable();
 /// ```
 pub struct BytesBuilder<State: BuilderState> {
     buffer: Vec<u8>,
