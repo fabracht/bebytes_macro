@@ -96,7 +96,6 @@ pub use alloc::vec::Vec;
 pub use std::vec::Vec;
 
 pub mod buffer;
-pub mod builder;
 pub mod interpreter;
 
 pub use bebytes_derive::BeBytes;

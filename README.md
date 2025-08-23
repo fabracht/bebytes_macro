@@ -22,8 +22,6 @@ BeBytes offers excellent performance across all platforms:
 
 The macro supports primitive types, characters, strings (with size attributes), enums, arrays, vectors, marker-delimited fields, and nested structs, making it ideal for working with network protocols, binary formats, and high-performance message serialization.
 
-**Note: BeBytes Derive is currently in development and has not been thoroughly tested in production environments. Use it with caution and ensure proper testing and validation in your specific use case.**
-
 ## Usage
 
 To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
