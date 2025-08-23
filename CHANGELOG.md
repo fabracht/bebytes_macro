@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
   - Requires size control via `#[With(size(N))]` or `#[FromField(field_name)]`
   - Each inner Vec is terminated by the specified marker byte
   - Missing markers result in empty segments
+- **Enhanced Error Types**: More specific error variants
+  - `InvalidUtf8` for string encoding errors
+  - `MarkerNotFound` for missing delimiter bytes
+  - `ValueOutOfRange` for field validation
 - Documentation improvements for marker attributes (MARKER_ATTRIBUTES.md)
 
 ### Fixed

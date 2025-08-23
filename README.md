@@ -873,7 +873,7 @@ For WebAssembly projects, disable the default features to use no_std:
 
 ```toml
 [dependencies]
-bebytes = { version = "2.8.0", default-features = false }
+bebytes = { version = "2.9.0", default-features = false }
 
 # For WASM builds, you'll also need an allocator
 [target.'cfg(target_arch = "wasm32")'.dependencies]
