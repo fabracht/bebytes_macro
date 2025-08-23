@@ -583,6 +583,58 @@ For vectors of custom types, the following rules apply:
 - When used elsewhere, you must specify size information with `#[FromField]` or `#[With]`
 - Each item in the vector is serialized/deserialized using its own BeBytes implementation
 
+## Marker Attributes
+
+BeBytes supports delimiter-based field parsing for protocols that use sentinel bytes:
+
+### UntilMarker Attribute
+
+Reads bytes until a specific marker is encountered:
+
+```rust
+#[derive(BeBytes)]
+struct LineProtocol {
+    header: u8,
+    #[UntilMarker('\n')]  // Character literal for newline
+    line: Vec<u8>,
+    #[UntilMarker(0xFF)]  // Byte value
+    content: Vec<u8>,
+    footer: u16,
+}
+
+// Null-terminated strings
+#[derive(BeBytes)]
+struct CString {
+    #[UntilMarker('\0')]  // Null terminator
+    name: Vec<u8>,
+    value: u32,
+}
+```
+
+### AfterMarker Attribute
+
+Skips bytes until finding a marker, then reads remaining data:
+
+```rust
+#[derive(BeBytes)]
+struct TabDelimited {
+    version: u8,
+    #[AfterMarker('\t')]  // Skip until tab character
+    content: Vec<u8>,
+}
+```
+
+### Supported Markers
+
+- **Character literals**: ASCII characters only (`'\n'`, `'\0'`, `'\t'`, `'\r'`, etc.)
+- **Byte values**: Any u8 value (0x00 through 0xFF)
+
+### Behavior
+
+- `UntilMarker`: Marker byte is consumed but not included in the field
+- `AfterMarker`: Skips to marker, marker consumed, remaining bytes become field value
+- Missing markers: UntilMarker reads all remaining bytes, AfterMarker results in empty field
+
 ## Buffer Management
 
 BeBytes provides efficient internal buffer management for optimized operations:

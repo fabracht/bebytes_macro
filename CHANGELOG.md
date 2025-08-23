@@ -6,11 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **Marker Attributes**: Support for delimiter-based field parsing
-  - `#[UntilMarker(byte)]` - Reads bytes until a specific marker byte is encountered
-  - `#[AfterMarker(byte)]` - Skips bytes until finding a marker, then reads remaining data
+  - `#[UntilMarker(byte_or_char)]` - Reads bytes until a specific marker is encountered
+  - `#[AfterMarker(byte_or_char)]` - Skips bytes until finding a marker, then reads remaining data
+  - Character literal support for ASCII characters (`'\n'`, `'\0'`, `'\t'`, `'\r'`, etc.)
+  - Byte value support (0xFF, 0x00, etc.) for non-ASCII markers
   - Comprehensive support for protocols with sentinel-delimited sections
 - **Vec<Vec<u8>> Support**: Multiple delimited sections handling
-  - Works with `#[UntilMarker(byte)]` for nested byte sequences
+  - Works with `#[UntilMarker(byte_or_char)]` for nested byte sequences
   - Requires size control via `#[With(size(N))]` or `#[FromField(field_name)]`
   - Each inner Vec is terminated by the specified marker byte
   - Missing markers result in empty segments

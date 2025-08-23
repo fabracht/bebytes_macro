@@ -5,21 +5,27 @@ This document describes the marker-based field delimiting features in BeBytes, w
 ## Overview
 
 BeBytes provides two marker attributes for handling delimited data:
-- `#[UntilMarker(byte)]` - Reads bytes until a marker is encountered
-- `#[AfterMarker(byte)]` - Skips bytes until finding a marker, then reads remaining data
+- `#[UntilMarker(byte_or_char)]` - Reads bytes until a marker is encountered
+- `#[AfterMarker(byte_or_char)]` - Skips bytes until finding a marker, then reads remaining data
+
+Markers can be specified as:
+- Byte values: `0xFF`, `255`, `0x00`
+- ASCII character literals: `'\n'`, `'\0'`, `'\t'`, `'\r'`
 
 ## UntilMarker Attribute
 
 ### Basic Usage
 
-The `#[UntilMarker(byte)]` attribute reads bytes into a `Vec<u8>` until the specified marker byte is found:
+The `#[UntilMarker(byte_or_char)]` attribute reads bytes into a `Vec<u8>` until the specified marker is found:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 struct Message {
     header: u32,
-    #[UntilMarker(0xFF)]
-    content: Vec<u8>,  // Reads until 0xFF
+    #[UntilMarker(0xFF)]  // Using byte value
+    content: Vec<u8>,
+    #[UntilMarker('\n')]  // Using character literal
+    line: Vec<u8>,
     footer: u16,
 }
 ```
@@ -37,9 +43,9 @@ struct Message {
 #[derive(BeBytes, Debug, PartialEq)]
 struct NetworkPacket {
     packet_type: u8,
-    #[UntilMarker(0x00)]  // Null-terminated
+    #[UntilMarker('\0')]  // Null-terminated using character literal
     sender_name: Vec<u8>,
-    #[UntilMarker(0x00)]  // Null-terminated
+    #[UntilMarker('\0')]  // Null-terminated using character literal
     receiver_name: Vec<u8>,
     message_length: u16,
     #[FromField(message_length)]
@@ -62,15 +68,23 @@ let bytes = packet.to_be_bytes();
 
 ### Basic Usage
 
-The `#[AfterMarker(byte)]` attribute skips bytes until finding the marker, then reads all remaining bytes:
+The `#[AfterMarker(byte_or_char)]` attribute skips bytes until finding the marker, then reads all remaining bytes:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 struct DataPacket {
     version: u8,
     flags: u8,
-    #[AfterMarker(0xDE)]  // Skip until 0xDE, read everything after
+    #[AfterMarker(0xDE)]  // Using byte value
     payload: Vec<u8>,
+}
+
+// Or using character literal
+#[derive(BeBytes, Debug, PartialEq)]
+struct TabDelimited {
+    header: u8,
+    #[AfterMarker('\t')]  // Skip until tab character
+    content: Vec<u8>,
 }
 ```
 
@@ -185,14 +199,22 @@ let msg = MultiSection {
 
 ### 1. Null-Terminated Strings
 ```rust
-#[UntilMarker(0x00)]
+#[UntilMarker('\0')]  // Using character literal
 name: Vec<u8>,  // C-style null-terminated string
+
+// Or using byte value
+#[UntilMarker(0x00)]
+name2: Vec<u8>,
 ```
 
 ### 2. Line-Based Protocols
 ```rust
-#[UntilMarker(0x0A)]  // '\n'
+#[UntilMarker('\n')]  // Using character literal for newline
 line: Vec<u8>,
+
+// Or using byte value
+#[UntilMarker(0x0A)]
+line2: Vec<u8>,
 ```
 
 ### 3. TLV with Delimiters
@@ -214,6 +236,7 @@ parts: Vec<Vec<u8>>,  // Multiple parts with 0x7E delimiter
 2. **No escape sequences**: No built-in support for escaping marker bytes in data
 3. **AfterMarker with Vec<Vec<u8>>**: Not supported due to ambiguous semantics
 4. **Single byte markers**: Only single-byte markers are supported
+5. **ASCII characters only**: Character literals must be ASCII (value <= 127)
 
 ## Best Practices
 

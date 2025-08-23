@@ -728,33 +728,47 @@ BeBytes supports marker-based field delimiting for protocols that use sentinel b
 
 ### UntilMarker Attribute
 
-The `#[UntilMarker(byte)]` attribute reads bytes into a `Vec<u8>` until a specific marker byte is encountered:
+The `#[UntilMarker(byte_or_char)]` attribute reads bytes into a `Vec<u8>` until a specific marker is encountered. Markers can be specified as byte values (e.g., `0xFF`) or ASCII character literals (e.g., `'\n'`):
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 struct Message {
     header: u32,
-    #[UntilMarker(0xFF)]
-    content: Vec<u8>,  // Reads until 0xFF is found
+    #[UntilMarker(0xFF)]  // Using byte value
+    content: Vec<u8>,
+    #[UntilMarker('\n')]  // Using character literal for newline
+    line: Vec<u8>,
     footer: u16,
 }
 
-// Serialized as: [header][content bytes][0xFF][footer]
+// Example: Null-terminated strings
+#[derive(BeBytes, Debug, PartialEq)]
+struct CString {
+    #[UntilMarker('\0')]  // Null terminator as character
+    name: Vec<u8>,
+    value: u32,
+}
 ```
 
 ### AfterMarker Attribute
 
-The `#[AfterMarker(byte)]` attribute skips bytes until finding a marker, then reads all remaining bytes:
+The `#[AfterMarker(byte_or_char)]` attribute skips bytes until finding a marker, then reads all remaining bytes. Supports both byte values and ASCII characters:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 struct Packet {
     version: u8,
-    #[AfterMarker(0xAA)]
-    payload: Vec<u8>,  // Skips to 0xAA, then reads everything after
+    #[AfterMarker(0xAA)]  // Using byte value
+    payload: Vec<u8>,
 }
 
-// Input: [version][skipped bytes][0xAA][payload bytes]
+// Using character literal
+#[derive(BeBytes, Debug, PartialEq)]
+struct TabDelimited {
+    header: u8,
+    #[AfterMarker('\t')]  // Skip until tab character
+    content: Vec<u8>,
+}
 ```
 
 ### Vec<Vec<u8>> with Markers
@@ -766,8 +780,8 @@ For protocols with multiple delimited sections, use `Vec<Vec<u8>>` with `#[Until
 struct MultiSection {
     section_count: u8,
     #[FromField(section_count)]
-    #[UntilMarker(0xFF)]
-    sections: Vec<Vec<u8>>,  // section_count sections, each terminated by 0xFF
+    #[UntilMarker(0xFF)]  // Can also use characters like '\n' for line-based protocols
+    sections: Vec<Vec<u8>>,  // section_count sections, each terminated by marker
 }
 
 let msg = MultiSection {
@@ -788,7 +802,7 @@ let msg = MultiSection {
 
 - **Protocol Headers**: Variable-length headers terminated by specific bytes
 - **TLV Structures**: Type-Length-Value encodings with delimiters
-- **Text Protocols**: Null-terminated or newline-separated fields
+- **Text Protocols**: Null-terminated (`'\0'`) or newline-separated (`'\n'`) fields
 - **CoAP Options**: Multiple options separated by 0xFF markers
 
 ## Nested Fields

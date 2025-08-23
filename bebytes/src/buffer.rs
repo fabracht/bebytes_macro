@@ -1,8 +1,8 @@
-//! Internal buffer management for BeBytes
+//! Internal buffer management for `BeBytes`
 //!
 //! This module provides efficient buffer types for serialization without external dependencies.
 //! The types are designed to be API-compatible with the previous bytes crate implementation
-//! while being simpler and more focused on BeBytes' actual needs.
+//! while being simpler and more focused on `BeBytes`' actual needs.
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
