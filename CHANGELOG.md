@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.10.0] - 2025-08-24
+
+### Added
+- **Character literal support for marker attributes**: ASCII characters can now be used in `#[UntilMarker]` and `#[AfterMarker]`
+  - Support for common escape sequences: `'\n'`, `'\0'`, `'\t'`, `'\r'`
+  - Compile-time validation ensures only ASCII characters (value <= 127) are used
+- **MarkerNotFound error**: Proper error reporting when delimiter bytes are missing
+  - Returns specific error with marker value and field name
+  - Only errors for non-terminal fields (last field can consume remaining bytes)
+  - Vec<Vec<u8>> always errors on missing markers for proper segment delimiting
+
+### Fixed
+- Pipeline failure in no_std builds due to missing String import in error types
+- Improved error messages for missing marker delimiters
+
 ## [2.9.0] - 2025-08-17
 
 ### Added
