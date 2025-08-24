@@ -23,7 +23,7 @@ tests/
 ├── derive_critical.rs         # Critical derive functionality
 ├── evil_tests.rs              # Evil test scenarios
 ├── functional_coverage.rs     # Functional test coverage
-├── marker_char_support.rs     # Marker character literal tests (NEW in 2.9.0)
+├── marker_char_support.rs     # Marker character literal tests (NEW in 2.10.0)
 ├── test_marker_fields.rs      # Marker field tests
 ├── test_marker_verification.rs # Marker verification tests
 ├── test_debug_markers.rs      # Debug marker tests
@@ -44,6 +44,7 @@ tests/
 ## Test Categories
 
 ### Core Functionality (`core.rs`)
+
 - Primitive type serialization (u8-u128, i8-i128)
 - Array handling
 - Basic struct serialization
@@ -51,6 +52,7 @@ tests/
 - Endianness consistency
 
 ### Bit Fields (`bitfields.rs`)
+
 - Single-byte bit fields
 - Boundary-crossing bit fields
 - Multi-byte bit fields
@@ -58,6 +60,7 @@ tests/
 - Overflow protection
 
 ### Enums (`enums.rs`)
+
 - Basic enum serialization
 - Bit fields with explicit sizes using `#[bits(N)]`
 - Flag enums with `#[bebytes(flags)]`
@@ -65,6 +68,7 @@ tests/
 - Non-contiguous discriminants
 
 ### Vector Handling (`vectors.rs`)
+
 - Fixed-size vectors with `#[With(size(N))]`
 - Dynamic vectors with `#[FromField(field)]`
 - Nested field access (e.g., `#[FromField(header.count)]`)
@@ -72,7 +76,8 @@ tests/
 - Custom type vectors
 
 ### Size Expressions (`size_expressions.rs`) - NEW in 2.3.0
-- Mathematical operations (+, -, *, /, %)
+
+- Mathematical operations (+, -, \*, /, %)
 - Field references and complex expressions
 - String fields with dynamic sizing
 - Nested expressions with parentheses
@@ -80,6 +85,7 @@ tests/
 - Error conditions and validation
 
 ### Protocol Examples (`protocol_examples.rs`) - NEW in 2.3.0
+
 - IPv4/IPv6 packet structures
 - DNS message parsing with variable sections
 - MQTT packet with remaining length
@@ -88,16 +94,19 @@ tests/
 - Complex field dependencies
 
 ### Error Handling (`errors.rs`)
+
 - Error display formatting
 - All error variants (EmptyBuffer, InsufficientData, etc.)
 - Custom Result type alias compatibility
 - Error propagation in nested structures
 
 ### No-std Support (`no_std.rs`)
+
 - Tests that run without standard library
 - Verifies all features work in embedded contexts
 
 ### Integration Tests (`integration.rs`)
+
 - Complete packet protocols
 - TLV (Type-Length-Value) structures
 - Complex nested structures
@@ -105,31 +114,36 @@ tests/
 - Performance scenarios with large batches
 
 ### Compile-Time Tests (`compile_fail.rs`)
+
 - Verifies invalid code is rejected at compile time
 - Uses trybuild framework
 - Tests for unsupported types, incomplete bytes, etc.
 
 ### Property-Based Tests (`property_tests.rs`)
+
 - Randomized testing with quickcheck
 - Round-trip serialization/deserialization
 - Edge case generation
 - Invariant checking
 
 ### Macro Expansion Tests (`macro_expansion.rs`)
+
 - Verifies the derive macro generates expected methods
 - Tests trait implementation completeness
 - Constructor generation
 
 ### Bit Arithmetic Tests (`bit_arithmetic.rs`)
+
 - Bit manipulation correctness
 - Byte alignment calculations
 - Division ceiling behavior
 - Large bit field handling
 
 ### Mutation Testing Files
+
 These files target specific mutation patterns to improve test quality:
 
-- **`arithmetic_mutations.rs`**: Tests arithmetic operators (/, *, +, -, %)
+- **`arithmetic_mutations.rs`**: Tests arithmetic operators (/, \*, +, -, %)
 - **`attribute_edge_cases.rs`**: Tests attribute parsing edge cases
 - **`bitwise_mutations.rs`**: Tests bitwise operators (&, |, ^, <<, >>)
 - **`comparison_mutations.rs`**: Tests comparison operators (==, !=, <, >)
@@ -138,7 +152,8 @@ These files target specific mutation patterns to improve test quality:
 - **`derive_critical.rs`**: Tests critical derive functionality
 - **`functional_coverage.rs`**: Tests functional code coverage
 
-### Marker Attributes (`marker_char_support.rs`, `test_marker_*.rs`) - NEW in 2.9.0
+### Marker Attributes (`marker_char_support.rs`, `test_marker_*.rs`) - NEW in 2.10.0
+
 - Character literal support ('\n', '\0', '\t', '\r')
 - Byte value markers (0xFF, 0x00)
 - UntilMarker and AfterMarker attributes
@@ -147,6 +162,7 @@ These files target specific mutation patterns to improve test quality:
 - Mixed byte and character markers
 
 ### Other Test Files
+
 - **`check_optimization.rs`**: Verifies optimization behavior
 - **`evil_tests.rs`**: Evil test scenarios to stress the system
 

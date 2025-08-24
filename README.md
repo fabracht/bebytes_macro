@@ -28,7 +28,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "2.9.0"
+bebytes = "2.10.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -45,15 +45,18 @@ struct MyStruct {
 The BeBytes derive macro will generate the following methods for your struct:
 
 **Core methods:**
+
 - `field_size() -> usize`: Calculate the size (in bytes) of the struct.
 
 **Standard serialization (Vec<u8>):**
+
 - `try_from_be_bytes(&[u8]) -> Result<(Self, usize), BeBytesError>`: Parse from big-endian bytes.
 - `to_be_bytes(&self) -> Vec<u8>`: Convert to big-endian bytes.
 - `try_from_le_bytes(&[u8]) -> Result<(Self, usize), BeBytesError>`: Parse from little-endian bytes.
 - `to_le_bytes(&self) -> Vec<u8>`: Convert to little-endian bytes.
 
 **Buffer methods:**
+
 - `to_be_bytes_buf(&self) -> Bytes`: Convert to big-endian `Bytes` buffer.
 - `to_le_bytes_buf(&self) -> Bytes`: Convert to little-endian `Bytes` buffer.
 - `encode_be_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to buffer (big-endian).
@@ -96,23 +99,23 @@ fn main() {
     // Big endian serialization
     let be_bytes = message.to_be_bytes();
     println!("Big endian bytes: {:?}", be_bytes);
-    
-    // Little endian serialization  
+
+    // Little endian serialization
     let le_bytes = message.to_le_bytes();
     println!("Little endian bytes: {:?}", le_bytes);
-    
+
     // Deserialize from big endian
     let (be_deserialized, be_bytes_read) = NetworkMessage::try_from_be_bytes(&be_bytes).unwrap();
     println!("Deserialized from BE: {:?}, bytes read: {}", be_deserialized, be_bytes_read);
-    
+
     // Deserialize from little endian
     let (le_deserialized, le_bytes_read) = NetworkMessage::try_from_le_bytes(&le_bytes).unwrap();
     println!("Deserialized from LE: {:?}, bytes read: {}", le_deserialized, le_bytes_read);
-    
+
     // Access string fields
     assert_eq!(be_deserialized.sender_name, "alice           ");
     assert_eq!(be_deserialized.content, "Hello, Bob!");
-    
+
     assert_eq!(le_deserialized.sender_name, "alice           ");
     assert_eq!(le_deserialized.content, "Hello, Bob!");
 }
@@ -158,7 +161,7 @@ fn main() {
     let mut buf = bebytes::BytesMut::with_capacity(packet.field_size());
     packet.encode_be_to(&mut buf).unwrap();
     let final_bytes = buf.freeze(); // Convert to immutable buffer
-    
+
     println!("✅ All methods produce identical results!");
     assert_eq!(vec_bytes, bytes_buffer.as_ref());
     assert_eq!(vec_bytes, final_bytes.as_ref());
@@ -319,7 +322,7 @@ struct Message {
     desc_len: u16,
     #[FromField(name_len)]
     name: String,      // Size comes from name_len field
-    #[FromField(desc_len)]  
+    #[FromField(desc_len)]
     description: String,  // Size comes from desc_len field
 }
 
@@ -406,13 +409,13 @@ struct ComplexMessage {
     width: u8,
     height: u8,
     padding: u8,
-    
+
     #[With(size(width + height))]           // Addition
     simple_data: Vec<u8>,
-    
-    #[With(size(width * height))]           // Multiplication  
+
+    #[With(size(width * height))]           // Multiplication
     image_data: Vec<u8>,
-    
+
     #[With(size((width * height) + padding))] // Complex expression
     padded_data: Vec<u8>,
 }
@@ -443,10 +446,10 @@ struct DnsMessage {
     flags: u16,
     question_count: u16,
     answer_count: u16,
-    
+
     #[With(size(question_count * 5))]  // ~5 bytes per question
     questions: Vec<u8>,
-    
+
     #[With(size(answer_count * 12))]   // ~12 bytes per answer
     answers: Vec<u8>,
 }
@@ -456,7 +459,7 @@ struct DnsMessage {
 struct MqttPacket {
     fixed_header: u8,
     remaining_length: u8,
-    
+
     #[With(size(remaining_length))]    // Payload size from header
     payload: Vec<u8>,
 }
@@ -471,10 +474,10 @@ Size expressions work with both `Vec<u8>` and `String` fields:
 struct StringMessage {
     name_length: u8,
     content_length: u16,
-    
+
     #[With(size(name_length))]
     name: String,
-    
+
     #[With(size(content_length))]
     content: String,
 }
@@ -547,6 +550,7 @@ struct PacketHeader {
 ```
 
 In this example:
+
 - The `Status` enum has 4 variants, which requires 2 bits to represent (2^2 = 4)
 - You must specify `#[bits(2)]` explicitly for the status field
 - The total struct uses 8 bits (4 + 2 + 2), fitting perfectly in 1 byte
@@ -554,6 +558,7 @@ In this example:
 #### Bit Calculation for Enums
 
 To determine the number of bits needed for an enum:
+
 - 2 variants need 1 bit (2^1 = 2)
 - 3-4 variants need 2 bits (2^2 = 4)
 - 5-8 variants need 3 bits (2^3 = 8)
@@ -812,10 +817,12 @@ You can nest structures with the BeBytes trait, but there are some important rul
 ### Rules for Safe Nesting
 
 1. **Unbounded Vectors in Nested Structs**
+
    - Unbounded vectors (a `Vec<T>` without explicit size constraints) should only be used in the last field of a struct
    - When a struct containing unbounded vectors is nested inside another struct, it should only be used as the last field
 
 2. **Safe Vector Usage in Nested Structs**
+
    - Vectors with explicit size constraints are safe to use anywhere in nested structs
    - Use either `#[With(size(N))]` or `#[FromField(field_name)]` to specify vector sizes
 
@@ -832,10 +839,10 @@ You can nest structures with the BeBytes trait, but there are some important rul
     #[derive(Debug, PartialEq, Clone, BeBytes)]
     struct InnocentStruct {
         innocent: u8,
-        mid_tail: WithTailingVec, // Nested struct with unbounded vector 
+        mid_tail: WithTailingVec, // Nested struct with unbounded vector
         real_tail: Vec<u8>,
     }
-    
+
     // This will not deserialize correctly
     fn problematic_example() {
         let innocent_struct = InnocentStruct {
@@ -887,7 +894,7 @@ For WebAssembly projects, disable the default features to use no_std:
 
 ```toml
 [dependencies]
-bebytes = { version = "2.9.0", default-features = false }
+bebytes = { version = "2.10.0", default-features = false }
 
 # For WASM builds, you'll also need an allocator
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -934,7 +941,7 @@ pub extern "C" fn encode_message(
             payload_len,
             payload,
         };
-        
+
         let bytes = msg.to_be_bytes();
         let mut boxed = bytes.into_boxed_slice();
         let ptr = boxed.as_mut_ptr();
@@ -1017,6 +1024,7 @@ cd bebytes_macro
 ```
 
 The pre-commit hooks ensure your commits will pass CI by running:
+
 - Formatting checks (`cargo fmt`)
 - Linting (`cargo clippy`)
 - Build verification
