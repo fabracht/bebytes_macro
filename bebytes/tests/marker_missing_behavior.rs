@@ -12,12 +12,12 @@ fn test_until_marker_not_found() {
 
     // Case 1: Marker exists - normal behavior
     let bytes_with_marker = vec![
-        0x01,       // header
+        0x01, // header
         0xAA, 0xBB, // data
-        0xFF,       // marker
+        0xFF, // marker
         0x12, 0x34, // footer
     ];
-    
+
     let (parsed, consumed) = Protocol::try_from_be_bytes(&bytes_with_marker).unwrap();
     assert_eq!(parsed.header, 0x01);
     assert_eq!(parsed.data, vec![0xAA, 0xBB]);
@@ -26,15 +26,17 @@ fn test_until_marker_not_found() {
 
     // Case 2: No marker found - should get MarkerNotFound error
     let bytes_no_marker = vec![
-        0x01,       // header
+        0x01, // header
         0xAA, 0xBB, // will be consumed as data
         0x12, 0x34, // will also be consumed as data (no footer!)
     ];
-    
+
     match Protocol::try_from_be_bytes(&bytes_no_marker) {
         Ok((parsed, consumed)) => {
-            panic!("Should fail but got: data={:?}, footer={:04X}, consumed={}", 
-                   parsed.data, parsed.footer, consumed);
+            panic!(
+                "Should fail but got: data={:?}, footer={:04X}, consumed={}",
+                parsed.data, parsed.footer, consumed
+            );
         }
         Err(bebytes::BeBytesError::MarkerNotFound { marker, field }) => {
             assert_eq!(marker, 0xFF);
@@ -57,12 +59,12 @@ fn test_after_marker_not_found() {
 
     // Case 1: Marker exists - normal behavior
     let bytes_with_marker = vec![
-        0x12, 0x34, 0x56, 0x78,  // header
-        0xAA, 0xBB,              // skip these
-        0xFF,                    // marker
-        0xCC, 0xDD, 0xEE,        // payload
+        0x12, 0x34, 0x56, 0x78, // header
+        0xAA, 0xBB, // skip these
+        0xFF, // marker
+        0xCC, 0xDD, 0xEE, // payload
     ];
-    
+
     let (parsed, consumed) = Message::try_from_be_bytes(&bytes_with_marker).unwrap();
     assert_eq!(parsed.header, 0x12345678);
     assert_eq!(parsed.payload, vec![0xCC, 0xDD, 0xEE]);
@@ -70,10 +72,10 @@ fn test_after_marker_not_found() {
 
     // Case 2: No marker found - field becomes empty
     let bytes_no_marker = vec![
-        0x12, 0x34, 0x56, 0x78,  // header
-        0xAA, 0xBB, 0xCC,        // no marker, so these aren't consumed
+        0x12, 0x34, 0x56, 0x78, // header
+        0xAA, 0xBB, 0xCC, // no marker, so these aren't consumed
     ];
-    
+
     let (parsed, consumed) = Message::try_from_be_bytes(&bytes_no_marker).unwrap();
     assert_eq!(parsed.header, 0x12345678);
     assert_eq!(parsed.payload, vec![]); // Empty because no marker found
@@ -93,17 +95,20 @@ fn test_multiple_markers_missing_some() {
 
     // Case: Some sections have markers, some don't
     let bytes = vec![
-        0x03,             // count = 3
+        0x03, // count = 3
         0xAA, 0xBB, 0xFF, // section 1 with marker
-        0xCC, 0xFF,       // section 2 with marker
-        0xDD, 0xEE,       // section 3 without marker - should error
-        // No bytes left for footer!
+        0xCC, 0xFF, // section 2 with marker
+        0xDD,
+        0xEE, // section 3 without marker - should error
+              // No bytes left for footer!
     ];
-    
+
     match MultiSection::try_from_be_bytes(&bytes) {
         Ok((parsed, consumed)) => {
-            panic!("Should fail but got: sections={:?}, footer={}, consumed={}", 
-                   parsed.sections, parsed.footer, consumed);
+            panic!(
+                "Should fail but got: sections={:?}, footer={}, consumed={}",
+                parsed.sections, parsed.footer, consumed
+            );
         }
         Err(bebytes::BeBytesError::MarkerNotFound { marker, field }) => {
             assert_eq!(marker, 0xFF);
@@ -131,7 +136,7 @@ fn test_edge_case_immediate_marker() {
         0xFF, // immediate marker
         0x99, // tail
     ];
-    
+
     let (parsed, consumed) = Edge::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(parsed.id, 0x42);
     assert_eq!(parsed.data, vec![]); // Empty data
@@ -151,20 +156,23 @@ fn test_marker_at_end_causes_insufficient_data() {
 
     // Marker at the very end, no bytes for footer
     let bytes = vec![
-        0x01,       // header
+        0x01, // header
         0xAA, 0xBB, // data
-        0xFF,       // marker at end
+        0xFF, // marker at end
     ];
-    
+
     match Protocol::try_from_be_bytes(&bytes) {
         Ok((parsed, _)) => {
             panic!("Should fail but got: {:?}", parsed);
         }
         Err(e) => {
-            assert!(matches!(e, bebytes::BeBytesError::InsufficientData { 
-                expected: 2, 
-                actual: 0 
-            }));
+            assert!(matches!(
+                e,
+                bebytes::BeBytesError::InsufficientData {
+                    expected: 2,
+                    actual: 0
+                }
+            ));
         }
     }
 }
@@ -180,10 +188,10 @@ fn test_until_marker_last_field_no_error() {
 
     // No marker, but it's the last field so it should consume all remaining bytes
     let bytes = vec![
-        0x12, 0x34, 0x56, 0x78,  // header
-        0xAA, 0xBB, 0xCC, 0xDD,  // data (no marker)
+        0x12, 0x34, 0x56, 0x78, // header
+        0xAA, 0xBB, 0xCC, 0xDD, // data (no marker)
     ];
-    
+
     let (parsed, consumed) = LastFieldProtocol::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(parsed.header, 0x12345678);
     assert_eq!(parsed.data, vec![0xAA, 0xBB, 0xCC, 0xDD]);
@@ -196,7 +204,7 @@ fn test_display_for_marker_not_found() {
         marker: 0xFF,
         field: "test_field",
     };
-    
+
     let display = format!("{}", err);
     assert_eq!(display, "Marker byte 0xFF not found in field 'test_field'");
 }

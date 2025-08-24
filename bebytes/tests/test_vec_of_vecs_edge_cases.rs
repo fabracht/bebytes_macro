@@ -42,14 +42,15 @@ fn test_insufficient_data() {
 
     let result = InsufficientDataTest::try_from_be_bytes(&bytes);
 
-    // Should succeed but third segment will be empty
-    let (parsed, consumed) = result.unwrap();
-    assert_eq!(consumed, bytes.len());
-    assert_eq!(parsed.count, 3);
-    assert_eq!(parsed.segments.len(), 3);
-    assert_eq!(parsed.segments[0], vec![0x01, 0x02]);
-    assert_eq!(parsed.segments[1], vec![0x03, 0x04]);
-    assert_eq!(parsed.segments[2], vec![]); // Empty third segment
+    // Should fail with MarkerNotFound for third segment (no marker at end)
+    match result {
+        Err(bebytes::BeBytesError::MarkerNotFound { marker, field }) => {
+            assert_eq!(marker, 0xAA);
+            assert_eq!(field, "segments");
+        }
+        Ok(_) => panic!("Expected MarkerNotFound error"),
+        Err(e) => panic!("Wrong error type: {:?}", e),
+    }
 }
 
 // Test missing markers - segments without terminal markers
@@ -71,13 +72,15 @@ fn test_missing_markers() {
 
     let result = MissingMarkersTest::try_from_be_bytes(&bytes);
 
-    // Should succeed - first segment gets all data, second is empty
-    let (parsed, consumed) = result.unwrap();
-    assert_eq!(consumed, bytes.len());
-    assert_eq!(parsed.count, 2);
-    assert_eq!(parsed.segments.len(), 2);
-    assert_eq!(parsed.segments[0], vec![0x11, 0x22, 0x33, 0x44]); // All data in first segment
-    assert_eq!(parsed.segments[1], vec![]); // Empty second segment
+    // Should fail with MarkerNotFound for first segment (no markers found)
+    match result {
+        Err(bebytes::BeBytesError::MarkerNotFound { marker, field }) => {
+            assert_eq!(marker, 0xBB);
+            assert_eq!(field, "segments");
+        }
+        Ok(_) => panic!("Expected MarkerNotFound error"),
+        Err(e) => panic!("Wrong error type: {:?}", e),
+    }
 }
 
 // Test zero-sized segments count
