@@ -34,12 +34,9 @@ pub struct Utf8;
 
 impl StringInterpreter for Utf8 {
     fn from_bytes(bytes: &[u8]) -> Result<String, BeBytesError> {
-        core::str::from_utf8(bytes).map(str::to_owned).map_err(|_| {
-            BeBytesError::InvalidDiscriminant {
-                value: 0,
-                type_name: "String (invalid UTF-8)",
-            }
-        })
+        core::str::from_utf8(bytes)
+            .map(str::to_owned)
+            .map_err(|_| BeBytesError::InvalidUtf8 { field: "string" })
     }
 
     fn to_bytes(s: &str) -> &[u8] {

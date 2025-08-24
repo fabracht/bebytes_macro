@@ -10,7 +10,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes_derive = "2.6.0"
+bebytes_derive = "2.9.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -40,10 +40,10 @@ The BeBytes derive macro will generate the following methods for your struct:
 - `try_from_le_bytes(&[u8]) -> Result<(Self, usize), BeBytesError>`: Convert a little-endian byte slice into the struct.
 - `to_le_bytes(&self) -> Vec<u8>`: Convert the struct into a little-endian byte representation.
 
-**bytes crate integration:**
+**Buffer methods:**
 
-- `to_be_bytes_buf(&self) -> Bytes`: Convert to big-endian `Bytes` buffer.
-- `to_le_bytes_buf(&self) -> Bytes`: Convert to little-endian `Bytes` buffer.
+- `to_be_bytes_buf(&self) -> Bytes`: Convert to big-endian buffer.
+- `to_le_bytes_buf(&self) -> Bytes`: Convert to little-endian buffer.
 - `encode_be_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to a buffer (big-endian).
 - `encode_le_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to a buffer (little-endian).
 

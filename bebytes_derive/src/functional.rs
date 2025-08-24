@@ -1223,37 +1223,73 @@ pub mod functional_attrs {
     }
 
     /// Parse `UntilMarker` attribute functionally
-    /// Handles #[UntilMarker(0xFF)] or #[UntilMarker(255)]
+    /// Handles `#[UntilMarker(0xFF)]`, `#[UntilMarker(255)]`, or `#[UntilMarker('\n')]`
     pub fn parse_until_marker_attribute_functional(
         attr: &syn::Attribute,
     ) -> Result<u8, syn::Error> {
         match &attr.meta {
             syn::Meta::List(list) => {
-                let literal: syn::LitInt = syn::parse2(list.tokens.clone())?;
-                let value = literal.base10_parse::<u8>()?;
-                Ok(value)
+                // Try parsing as integer first
+                if let Ok(literal) = syn::parse2::<syn::LitInt>(list.tokens.clone()) {
+                    return literal.base10_parse::<u8>();
+                }
+
+                // Try parsing as character
+                if let Ok(literal) = syn::parse2::<syn::LitChar>(list.tokens.clone()) {
+                    let ch = literal.value();
+                    if ch.is_ascii() {
+                        return Ok(ch as u8);
+                    }
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "Character markers must be ASCII (value <= 127)",
+                    ));
+                }
+
+                Err(syn::Error::new_spanned(
+                    attr,
+                    "Expected #[UntilMarker(byte_value)] or #[UntilMarker('ascii_char')]",
+                ))
             }
             _ => Err(syn::Error::new_spanned(
                 attr,
-                "Expected #[UntilMarker(byte_value)]",
+                "Expected #[UntilMarker(byte_value)] or #[UntilMarker('ascii_char')]",
             )),
         }
     }
 
     /// Parse `AfterMarker` attribute functionally
-    /// Handles #[AfterMarker(0xFF)] or #[AfterMarker(255)]
+    /// Handles `#[AfterMarker(0xFF)]`, `#[AfterMarker(255)]`, or `#[AfterMarker('\n')]`
     pub fn parse_after_marker_attribute_functional(
         attr: &syn::Attribute,
     ) -> Result<u8, syn::Error> {
         match &attr.meta {
             syn::Meta::List(list) => {
-                let literal: syn::LitInt = syn::parse2(list.tokens.clone())?;
-                let value = literal.base10_parse::<u8>()?;
-                Ok(value)
+                // Try parsing as integer first
+                if let Ok(literal) = syn::parse2::<syn::LitInt>(list.tokens.clone()) {
+                    return literal.base10_parse::<u8>();
+                }
+
+                // Try parsing as character
+                if let Ok(literal) = syn::parse2::<syn::LitChar>(list.tokens.clone()) {
+                    let ch = literal.value();
+                    if ch.is_ascii() {
+                        return Ok(ch as u8);
+                    }
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "Character markers must be ASCII (value <= 127)",
+                    ));
+                }
+
+                Err(syn::Error::new_spanned(
+                    attr,
+                    "Expected #[AfterMarker(byte_value)] or #[AfterMarker('ascii_char')]",
+                ))
             }
             _ => Err(syn::Error::new_spanned(
                 attr,
-                "Expected #[AfterMarker(byte_value)]",
+                "Expected #[AfterMarker(byte_value)] or #[AfterMarker('ascii_char')]",
             )),
         }
     }

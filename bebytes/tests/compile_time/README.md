@@ -33,6 +33,11 @@ Tests for enum-specific constraints and errors.
 - `flag_enum_too_large.rs` - Flag enum values must fit in u8
 - `zero_value_flag_enum.rs` - Flag enums can have zero value (passes)
 
+### 📁 `markers/`
+Tests for marker attribute validation.
+
+- `non_ascii_char.rs` - Character markers must be ASCII (value <= 127)
+
 ### 📁 `size_expressions/`
 Tests for size expression parsing and validation.
 

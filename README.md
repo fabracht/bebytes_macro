@@ -22,15 +22,13 @@ BeBytes offers excellent performance across all platforms:
 
 The macro supports primitive types, characters, strings (with size attributes), enums, arrays, vectors, marker-delimited fields, and nested structs, making it ideal for working with network protocols, binary formats, and high-performance message serialization.
 
-**Note: BeBytes Derive is currently in development and has not been thoroughly tested in production environments. Use it with caution and ensure proper testing and validation in your specific use case.**
-
 ## Usage
 
 To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "2.8.0"
+bebytes = "2.9.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -122,12 +120,12 @@ fn main() {
 
 In this example, we define a `NetworkMessage` struct that combines bit fields with string fields. The `#[bits]` attribute is used to specify bit-level fields that are packed together. The struct uses standard Rust `String` types with attributes to control their serialization: `#[With(size(16))]` for fixed-size strings and `#[FromField(content_len)]` for variable-length strings where the size comes from another field. The BeBytes derive macro generates the serialization and deserialization methods for the struct, handling both the bit packing and string encoding automatically.
 
-## bytes Crate Integration
+## Buffer Management
 
-BeBytes 2.6.0+ integrates the `bytes` crate for improved buffer management and zero-copy operations:
+BeBytes provides efficient internal buffer management for zero-copy operations:
 
 ```rust
-use bebytes::{BeBytes, Bytes, BytesMut, BufMut};
+use bebytes::{BeBytes, Bytes, BytesMut};
 
 #[derive(BeBytes, Debug)]
 struct TcpPacket {
@@ -155,18 +153,11 @@ fn main() {
     // Bytes buffer
     let bytes_buffer: Bytes = packet.to_be_bytes_buf();
     println!("Bytes buffer: {} bytes", bytes_buffer.len());
-    
-    // Zero-copy sharing
-    let shared_buffer = bytes_buffer.clone(); // Increments reference count
-    tokio::spawn(async move {
-        // Use shared_buffer in async context...
-        send_to_network(shared_buffer).await;
-    });
 
     // Direct buffer writing
     let mut buf = bebytes::BytesMut::with_capacity(packet.field_size());
     packet.encode_be_to(&mut buf).unwrap();
-    let final_bytes = buf.freeze(); // Convert to immutable Bytes
+    let final_bytes = buf.freeze(); // Convert to immutable buffer
     
     println!("✅ All methods produce identical results!");
     assert_eq!(vec_bytes, bytes_buffer.as_ref());
@@ -181,13 +172,13 @@ async fn send_to_network(data: Bytes) {
 }
 ```
 
-### bytes Integration Benefits
+### Buffer Management Benefits
 
-1. **Performance**: 2.3x improvement with `to_be_bytes_buf()` vs `to_be_bytes()`
-2. **Zero-copy sharing**: `Bytes` can be shared between tasks without copying data
-3. **Memory efficiency**: Reference-counted buffers with automatic cleanup
-4. **Ecosystem compatibility**: Works with tokio, hyper, tonic, and async networking
-5. **Standard patterns**: Uses established buffer management techniques
+1. **Performance**: Optimized buffer operations without external dependencies
+2. **Zero allocations**: Direct buffer writing methods
+3. **Memory efficiency**: Pre-allocated buffers reduce allocations
+4. **Clean API**: Consistent buffer-oriented interface
+5. **No external dependencies**: Self-contained implementation
 
 ### Migration Guide
 
@@ -198,7 +189,7 @@ Existing code continues to work unchanged. To leverage bytes benefits:
 let data = packet.to_be_bytes();
 send_data(data).await;
 
-// After (2.3x faster, zero-copy sharing)
+// After (optimized buffer operations)
 let data = packet.to_be_bytes_buf();
 send_data(data).await; // Same signature, better performance
 ```
@@ -737,33 +728,47 @@ BeBytes supports marker-based field delimiting for protocols that use sentinel b
 
 ### UntilMarker Attribute
 
-The `#[UntilMarker(byte)]` attribute reads bytes into a `Vec<u8>` until a specific marker byte is encountered:
+The `#[UntilMarker(byte_or_char)]` attribute reads bytes into a `Vec<u8>` until a specific marker is encountered. Markers can be specified as byte values (e.g., `0xFF`) or ASCII character literals (e.g., `'\n'`):
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 struct Message {
     header: u32,
-    #[UntilMarker(0xFF)]
-    content: Vec<u8>,  // Reads until 0xFF is found
+    #[UntilMarker(0xFF)]  // Using byte value
+    content: Vec<u8>,
+    #[UntilMarker('\n')]  // Using character literal for newline
+    line: Vec<u8>,
     footer: u16,
 }
 
-// Serialized as: [header][content bytes][0xFF][footer]
+// Example: Null-terminated strings
+#[derive(BeBytes, Debug, PartialEq)]
+struct CString {
+    #[UntilMarker('\0')]  // Null terminator as character
+    name: Vec<u8>,
+    value: u32,
+}
 ```
 
 ### AfterMarker Attribute
 
-The `#[AfterMarker(byte)]` attribute skips bytes until finding a marker, then reads all remaining bytes:
+The `#[AfterMarker(byte_or_char)]` attribute skips bytes until finding a marker, then reads all remaining bytes. Supports both byte values and ASCII characters:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 struct Packet {
     version: u8,
-    #[AfterMarker(0xAA)]
-    payload: Vec<u8>,  // Skips to 0xAA, then reads everything after
+    #[AfterMarker(0xAA)]  // Using byte value
+    payload: Vec<u8>,
 }
 
-// Input: [version][skipped bytes][0xAA][payload bytes]
+// Using character literal
+#[derive(BeBytes, Debug, PartialEq)]
+struct TabDelimited {
+    header: u8,
+    #[AfterMarker('\t')]  // Skip until tab character
+    content: Vec<u8>,
+}
 ```
 
 ### Vec<Vec<u8>> with Markers
@@ -775,8 +780,8 @@ For protocols with multiple delimited sections, use `Vec<Vec<u8>>` with `#[Until
 struct MultiSection {
     section_count: u8,
     #[FromField(section_count)]
-    #[UntilMarker(0xFF)]
-    sections: Vec<Vec<u8>>,  // section_count sections, each terminated by 0xFF
+    #[UntilMarker(0xFF)]  // Can also use characters like '\n' for line-based protocols
+    sections: Vec<Vec<u8>>,  // section_count sections, each terminated by marker
 }
 
 let msg = MultiSection {
@@ -797,7 +802,7 @@ let msg = MultiSection {
 
 - **Protocol Headers**: Variable-length headers terminated by specific bytes
 - **TLV Structures**: Type-Length-Value encodings with delimiters
-- **Text Protocols**: Null-terminated or newline-separated fields
+- **Text Protocols**: Null-terminated (`'\0'`) or newline-separated (`'\n'`) fields
 - **CoAP Options**: Multiple options separated by 0xFF markers
 
 ## Nested Fields
@@ -882,7 +887,7 @@ For WebAssembly projects, disable the default features to use no_std:
 
 ```toml
 [dependencies]
-bebytes = { version = "2.8.0", default-features = false }
+bebytes = { version = "2.9.0", default-features = false }
 
 # For WASM builds, you'll also need an allocator
 [target.'cfg(target_arch = "wasm32")'.dependencies]

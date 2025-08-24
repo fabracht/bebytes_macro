@@ -1,6 +1,6 @@
-//! # BeBytes - High-Performance Binary Serialization
+//! # `BeBytes` - High-Performance Binary Serialization
 //!
-//! BeBytes is a Rust library that provides procedural macros for generating ultra-fast
+//! `BeBytes` is a Rust library that provides procedural macros for generating ultra-fast
 //! serialization and deserialization methods for network structs. It supports both
 //! big-endian and little-endian byte orders and includes advanced features like bit fields,
 //! marker-delimited fields, and WebAssembly compatibility.
@@ -11,7 +11,7 @@
 //! - **Bit Fields**: Pack multiple fields into bytes with `#[bits(N)]` attribute
 //! - **Marker Attributes**: Handle variable-length sections with `#[UntilMarker]` and `#[AfterMarker]`
 //! - **Size Control**: Dynamic field sizing with `#[FromField]` and `#[With(size())]`
-//! - **WebAssembly Support**: Full no_std compatibility for WASM targets
+//! - **WebAssembly Support**: Full `no_std` compatibility for WASM targets
 //! - **Comprehensive Types**: Support for primitives, strings, arrays, vectors, enums, and nested structs
 //!
 //! ## Quick Start
@@ -106,7 +106,7 @@ pub use interpreter::{StringInterpreter, Utf8};
 pub use buffer::{BufMut, Bytes, BytesMut};
 
 /// Error type for `BeBytes` operations
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BeBytesError {
     /// Buffer is empty when data was expected
     EmptyBuffer,
@@ -120,6 +120,10 @@ pub enum BeBytesError {
         max: u128,
         field: &'static str,
     },
+    /// Invalid UTF-8 sequence in string field
+    InvalidUtf8 { field: &'static str },
+    /// Marker byte not found when expected
+    MarkerNotFound { marker: u8, field: &'static str },
 }
 
 impl core::fmt::Display for BeBytesError {
@@ -134,6 +138,12 @@ impl core::fmt::Display for BeBytesError {
             }
             Self::InvalidBitField { value, max, field } => {
                 write!(f, "Value {value} exceeds maximum {max} for field {field}")
+            }
+            Self::InvalidUtf8 { field } => {
+                write!(f, "Invalid UTF-8 sequence in field '{field}'")
+            }
+            Self::MarkerNotFound { marker, field } => {
+                write!(f, "Marker byte 0x{marker:02X} not found in field '{field}'")
             }
         }
     }

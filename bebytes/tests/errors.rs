@@ -52,12 +52,8 @@ mod error_display {
         assert_eq!(debug_str, "EmptyBuffer");
 
         // Test Clone
-        let cloned = err;
+        let cloned = err.clone();
         assert_eq!(cloned, err);
-
-        // Test Copy (implicit)
-        let copied: BeBytesError = err;
-        assert_eq!(copied, err);
 
         // Test PartialEq
         assert_eq!(err, BeBytesError::EmptyBuffer);

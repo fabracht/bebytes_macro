@@ -114,6 +114,30 @@ struct Packet {
 }
 ```
 
+### Marker Attributes: `#[UntilMarker]` and `#[AfterMarker]`
+Handle delimiter-based field parsing:
+
+```rust
+#[derive(BeBytes)]
+struct MarkerExample {
+    header: u8,
+    #[UntilMarker('\n')]     // Character literal for newline
+    line: Vec<u8>,           // Reads until newline
+    #[UntilMarker(0xFF)]     // Byte value
+    content: Vec<u8>,        // Reads until 0xFF
+    #[AfterMarker('\t')]     // Skip until tab, then read rest
+    data: Vec<u8>,
+}
+```
+
+Supported markers:
+- **Character literals**: ASCII only (`'\n'`, `'\0'`, `'\t'`, `'\r'`, etc.)
+- **Byte values**: Any u8 value (0x00-0xFF)
+
+Behavior:
+- `UntilMarker`: Reads bytes until marker found (marker consumed but not included)
+- `AfterMarker`: Skips bytes until marker, then reads remaining (marker not included)
+
 ## Supported Types
 
 ### Primitive Types

@@ -23,6 +23,13 @@ tests/
 ├── derive_critical.rs         # Critical derive functionality
 ├── evil_tests.rs              # Evil test scenarios
 ├── functional_coverage.rs     # Functional test coverage
+├── marker_char_support.rs     # Marker character literal tests (NEW in 2.9.0)
+├── test_marker_fields.rs      # Marker field tests
+├── test_marker_verification.rs # Marker verification tests
+├── test_debug_markers.rs      # Debug marker tests
+├── test_vec_of_vecs_marker.rs # Vec<Vec<u8>> with markers
+├── test_vec_of_vecs_edge_cases.rs # Vec<Vec<u8>> edge cases
+├── test_final_verification.rs # Final verification tests
 ├── arithmetic_mutations.rs    # Mutation testing: arithmetic
 ├── attribute_edge_cases.rs    # Attribute parsing edge cases
 ├── bitwise_mutations.rs       # Mutation testing: bitwise ops
@@ -130,6 +137,14 @@ These files target specific mutation patterns to improve test quality:
 - **`return_value_mutations.rs`**: Tests that functions return meaningful values
 - **`derive_critical.rs`**: Tests critical derive functionality
 - **`functional_coverage.rs`**: Tests functional code coverage
+
+### Marker Attributes (`marker_char_support.rs`, `test_marker_*.rs`) - NEW in 2.9.0
+- Character literal support ('\n', '\0', '\t', '\r')
+- Byte value markers (0xFF, 0x00)
+- UntilMarker and AfterMarker attributes
+- Vec<Vec<u8>> with marker delimiters
+- Edge cases with missing markers
+- Mixed byte and character markers
 
 ### Other Test Files
 - **`check_optimization.rs`**: Verifies optimization behavior

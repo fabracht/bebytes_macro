@@ -41,6 +41,9 @@ fn ui_tests() {
     t.compile_fail("tests/compile_time/vectors/multiple_vecs_no_size.rs");
     t.compile_fail("tests/compile_time/vectors/vec_not_last_no_size.rs");
 
+    // ===== MARKER TESTS =====
+    t.compile_fail("tests/compile_time/markers/non_ascii_char.rs");
+
     // ===== PASSING TESTS =====
     // These tests should compile successfully
     t.pass("tests/compile_time/unnamed_fields.rs");

@@ -124,10 +124,10 @@ fn test_string_invalid_utf8() {
     assert!(result.is_err());
 
     match result {
-        Err(bebytes::BeBytesError::InvalidDiscriminant { type_name, .. }) => {
-            assert_eq!(type_name, "String (invalid UTF-8)");
+        Err(bebytes::BeBytesError::InvalidUtf8 { field }) => {
+            assert_eq!(field, "string");
         }
-        _ => panic!("Expected InvalidDiscriminant error for UTF-8"),
+        _ => panic!("Expected InvalidUtf8 error"),
     }
 }
 

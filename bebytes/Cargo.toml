@@ -1,6 +1,6 @@
 [package]
 name = "bebytes"
-version = "2.9.0"
+version = "2.10.0"
 edition = "2021"
 rust-version = "1.75.0"
 license = "MIT"
@@ -21,7 +21,7 @@ path = "./bin/performance_benchmark.rs"
 required-features = ["std"]
 
 [dependencies]
-bebytes_derive = { version = "2.9.0" }
+bebytes_derive = { version = "2.10.0" }
 
 [dev-dependencies]
 trybuild = { version = "1.0.102", features = ["diff"] }
@@ -65,25 +65,9 @@ path = "tests/compile_fail.rs"
 name = "property_based"
 path = "tests/property_based.rs"
 
-[[bench]]
-name = "serialization"
-harness = false
-
-[[bench]]
-name = "memory_allocation"
-harness = false
-
-[[bench]]
-name = "cache_performance"
-harness = false
-
 [[example]]
 name = "wasm_test"
 required-features = ["std"]
-
-[[bench]]
-name = "network_protocols"
-harness = false
 
 [features]
 default = ["std"]

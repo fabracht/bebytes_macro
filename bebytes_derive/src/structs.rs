@@ -1452,6 +1452,7 @@ fn process_until_marker_functional(
     _processing_ctx: &crate::functional::ProcessingContext,
 ) -> crate::functional::FieldProcessResult {
     let field_name = &context.field_name;
+    let is_last_field = context.is_last_field;
 
     // For UntilMarker, Vec<u8> is the only supported type for now
     // Since UntilMarker reads bytes until the marker
@@ -1461,21 +1462,52 @@ fn process_until_marker_functional(
     // Bit sum is dynamic for marker fields
     let bit_sum = quote! {};
 
-    let parsing = quote! {
-        byte_index = _bit_sum / 8;
-        let mut #field_name = Vec::new();
+    let parsing = if is_last_field {
+        // Last field: consume all remaining bytes if marker not found
+        quote! {
+            byte_index = _bit_sum / 8;
+            let mut #field_name = Vec::new();
 
-        // Read bytes until we find the marker
-        while byte_index < bytes.len() && bytes[byte_index] != #marker {
-            #field_name.push(bytes[byte_index]);
-            byte_index += 1;
-            _bit_sum += 8;
+            // Read bytes until we find the marker
+            while byte_index < bytes.len() && bytes[byte_index] != #marker {
+                #field_name.push(bytes[byte_index]);
+                byte_index += 1;
+                _bit_sum += 8;
+            }
+
+            // Skip the marker byte if present
+            if byte_index < bytes.len() && bytes[byte_index] == #marker {
+                byte_index += 1;
+                _bit_sum += 8;
+            }
         }
+    } else {
+        // Not last field: error if marker not found
+        quote! {
+            byte_index = _bit_sum / 8;
+            let mut #field_name = Vec::new();
+            let mut marker_found = false;
 
-        // Skip the marker byte if present
-        if byte_index < bytes.len() && bytes[byte_index] == #marker {
-            byte_index += 1;
-            _bit_sum += 8;
+            // Read bytes until we find the marker
+            while byte_index < bytes.len() {
+                if bytes[byte_index] == #marker {
+                    marker_found = true;
+                    byte_index += 1;
+                    _bit_sum += 8;
+                    break;
+                }
+                #field_name.push(bytes[byte_index]);
+                byte_index += 1;
+                _bit_sum += 8;
+            }
+
+            // Error if marker not found and this isn't the last field
+            if !marker_found {
+                return Err(::bebytes::BeBytesError::MarkerNotFound {
+                    marker: #marker,
+                    field: stringify!(#field_name),
+                });
+            }
         }
     };
 
@@ -1591,20 +1623,29 @@ fn process_vec_of_vecs_with_marker_functional(
         let mut #field_name = Vec::new();
 
         // Read exactly the specified number of segments
-        for _ in 0..#size_expr {
+        for segment_idx in 0..#size_expr {
             let mut current_section = Vec::new();
+            let mut marker_found = false;
 
             // Read until marker for this segment
-            while byte_index < bytes.len() && bytes[byte_index] != #marker {
+            while byte_index < bytes.len() {
+                if bytes[byte_index] == #marker {
+                    marker_found = true;
+                    byte_index += 1;
+                    _bit_sum += 8;
+                    break;
+                }
                 current_section.push(bytes[byte_index]);
                 byte_index += 1;
                 _bit_sum += 8;
             }
 
-            // Skip the marker if present
-            if byte_index < bytes.len() && bytes[byte_index] == #marker {
-                byte_index += 1;
-                _bit_sum += 8;
+            // Error if marker not found for any segment
+            if !marker_found {
+                return Err(::bebytes::BeBytesError::MarkerNotFound {
+                    marker: #marker,
+                    field: stringify!(#field_name),
+                });
             }
 
             #field_name.push(current_section);

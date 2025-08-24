@@ -1,0 +1,11 @@
+error: Character markers must be ASCII (value <= 127)
+ --> tests/compile_time/markers/non_ascii_char.rs:6:5
+  |
+6 |     #[UntilMarker('€')]  // Euro symbol is not ASCII
+  |     ^^^^^^^^^^^^^^^^^^^
+
+error: Unbounded vectors can only be used as padding at the end of a struct
+ --> tests/compile_time/markers/non_ascii_char.rs:7:11
+  |
+7 |     data: Vec<u8>,
+  |           ^^^
