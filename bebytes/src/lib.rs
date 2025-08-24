@@ -122,6 +122,8 @@ pub enum BeBytesError {
     },
     /// Invalid UTF-8 sequence in string field
     InvalidUtf8 { field: &'static str },
+    /// Marker byte not found when expected
+    MarkerNotFound { marker: u8, field: &'static str },
 }
 
 impl core::fmt::Display for BeBytesError {
@@ -139,6 +141,9 @@ impl core::fmt::Display for BeBytesError {
             }
             Self::InvalidUtf8 { field } => {
                 write!(f, "Invalid UTF-8 sequence in field '{field}'")
+            }
+            Self::MarkerNotFound { marker, field } => {
+                write!(f, "Marker byte 0x{marker:02X} not found in field '{field}'")
             }
         }
     }
