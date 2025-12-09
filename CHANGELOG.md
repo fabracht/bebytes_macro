@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.0] - 2025-12-09
+
+### Added
+
+- **f32/f64 floating-point support**: Full serialization support for IEEE 754 floats
+  - Round-trip serialization with `to_be_bytes()`/`to_le_bytes()`
+  - Proper handling of special values: NaN, infinity, negative infinity
+  - Endianness support for both big-endian and little-endian
+- **bool primitive support**: Single-byte boolean serialization with strict validation
+  - Serializes as `0x00` (false) or `0x01` (true)
+  - Parsing rejects any byte value other than 0 or 1 with `InvalidDiscriminant` error
+- Comprehensive test coverage for new primitive types
+
+### Changed
+
+- Removed unused `SUPPORTED_PRIMITIVES` constant and `is_supported_primitive_type` function
+- Refactored `create_primitive_writing` for better maintainability
+
+### Notes
+
+- f32, f64, and bool cannot be used with `#[bits(N)]` attribute (compile-time error)
+- bool uses strict validation unlike C-style "non-zero is true" semantics
+
 ## [2.10.0] - 2025-08-24
 
 ### Added
