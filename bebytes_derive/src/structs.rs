@@ -100,17 +100,7 @@ fn handle_bits_field(
 ) -> Option<FieldType> {
     *has_bit_fields = true;
     if let Some(size) = size {
-        // Validate supported type for bits
-        if let syn::Type::Path(tp) = context.field_type {
-            if !utils::is_supported_primitive_type(tp) {
-                errors.push(syn::Error::new(
-                    context.field_type.span(),
-                    "Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) and char are supported",
-                ).to_compile_error());
-                return None;
-            }
-        }
-        // Validate bit count doesn't exceed capacity
+        // Validate bit count doesn't exceed capacity (also validates type is bitfield-compatible)
         if let Ok(max_bits) = utils::get_primitive_type_max_bits(context.field_type) {
             if size > max_bits {
                 errors.push(syn::Error::new(
@@ -119,6 +109,12 @@ fn handle_bits_field(
                 ).to_compile_error());
                 return None;
             }
+        } else {
+            errors.push(syn::Error::new(
+                context.field_type.span(),
+                "Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) and char are supported. Note: f32, f64, and bool cannot be used with bit fields",
+            ).to_compile_error());
+            return None;
         }
         return Some(FieldType::BitsField(size));
     }

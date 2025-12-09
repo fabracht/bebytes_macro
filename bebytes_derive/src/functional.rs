@@ -260,14 +260,29 @@ pub mod pure_helpers {
     ) -> Result<TokenStream, syn::Error> {
         let type_size = crate::utils::get_primitive_type_size(field_type)?;
 
-        // Special handling for char type
         if let syn::Type::Path(tp) = field_type {
             if tp.path.is_ident("char") {
                 return Ok(create_char_parsing(field_name, endianness));
             }
+            if tp.path.is_ident("bool") {
+                return Ok(create_bool_parsing(field_name));
+            }
         }
 
         create_numeric_parsing(field_name, field_type, type_size, endianness)
+    }
+
+    fn create_bool_parsing(field_name: &Ident) -> TokenStream {
+        quote! {
+            let #field_name = match bytes[byte_index] {
+                0 => false,
+                1 => true,
+                v => return Err(::bebytes::BeBytesError::InvalidDiscriminant {
+                    value: v,
+                    type_name: "bool",
+                }),
+            };
+        }
     }
 
     /// Create char type parsing code
@@ -355,7 +370,39 @@ pub mod pure_helpers {
         }
     }
 
-    /// Create primitive type writing code
+    fn create_primitive_writing_by_size(
+        field_name: &Ident,
+        type_size: usize,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
+        match endianness {
+            crate::consts::Endianness::Big => match type_size {
+                1 => quote! { ::bebytes::BufMut::put_u8(bytes, #field_name as u8); _bit_sum += 8; },
+                2 => quote! { ::bebytes::BufMut::put_u16(bytes, #field_name as u16); _bit_sum += 16; },
+                4 => quote! { ::bebytes::BufMut::put_u32(bytes, #field_name as u32); _bit_sum += 32; },
+                8 => quote! { ::bebytes::BufMut::put_u64(bytes, #field_name as u64); _bit_sum += 64; },
+                16 => quote! { ::bebytes::BufMut::put_u128(bytes, #field_name as u128); _bit_sum += 128; },
+                _ => quote! {
+                    let field_slice = &#field_name.to_be_bytes();
+                    bytes.extend_from_slice(field_slice);
+                    _bit_sum += field_slice.len() * 8;
+                },
+            },
+            crate::consts::Endianness::Little => match type_size {
+                1 => quote! { ::bebytes::BufMut::put_u8(bytes, #field_name as u8); _bit_sum += 8; },
+                2 => quote! { ::bebytes::BufMut::put_u16_le(bytes, #field_name as u16); _bit_sum += 16; },
+                4 => quote! { ::bebytes::BufMut::put_u32_le(bytes, #field_name as u32); _bit_sum += 32; },
+                8 => quote! { ::bebytes::BufMut::put_u64_le(bytes, #field_name as u64); _bit_sum += 64; },
+                16 => quote! { ::bebytes::BufMut::put_u128_le(bytes, #field_name as u128); _bit_sum += 128; },
+                _ => quote! {
+                    let field_slice = &#field_name.to_le_bytes();
+                    bytes.extend_from_slice(field_slice);
+                    _bit_sum += field_slice.len() * 8;
+                },
+            },
+        }
+    }
+
     pub fn create_primitive_writing(
         field_name: &Ident,
         field_type: &syn::Type,
@@ -363,80 +410,48 @@ pub mod pure_helpers {
     ) -> Result<TokenStream, syn::Error> {
         let type_size = crate::utils::get_primitive_type_size(field_type)?;
 
-        // Special handling for char type
         if let syn::Type::Path(tp) = field_type {
             if tp.path.is_ident("char") {
                 return match endianness {
                     crate::consts::Endianness::Big => Ok(quote! {
-                        let char_bytes = (#field_name as u32).to_be_bytes();
-                        bytes.extend_from_slice(&char_bytes);
+                        bytes.extend_from_slice(&(#field_name as u32).to_be_bytes());
                         _bit_sum += 32;
                     }),
                     crate::consts::Endianness::Little => Ok(quote! {
-                        let char_bytes = (#field_name as u32).to_le_bytes();
-                        bytes.extend_from_slice(&char_bytes);
+                        bytes.extend_from_slice(&(#field_name as u32).to_le_bytes());
                         _bit_sum += 32;
                     }),
                 };
             }
+            if tp.path.is_ident("bool") {
+                return Ok(quote! {
+                    ::bebytes::BufMut::put_u8(bytes, if #field_name { 1 } else { 0 });
+                    _bit_sum += 8;
+                });
+            }
+            if tp.path.is_ident("f32") {
+                return match endianness {
+                    crate::consts::Endianness::Big => {
+                        Ok(quote! { bytes.extend_from_slice(&#field_name.to_be_bytes()); _bit_sum += 32; })
+                    }
+                    crate::consts::Endianness::Little => {
+                        Ok(quote! { bytes.extend_from_slice(&#field_name.to_le_bytes()); _bit_sum += 32; })
+                    }
+                };
+            }
+            if tp.path.is_ident("f64") {
+                return match endianness {
+                    crate::consts::Endianness::Big => {
+                        Ok(quote! { bytes.extend_from_slice(&#field_name.to_be_bytes()); _bit_sum += 64; })
+                    }
+                    crate::consts::Endianness::Little => {
+                        Ok(quote! { bytes.extend_from_slice(&#field_name.to_le_bytes()); _bit_sum += 64; })
+                    }
+                };
+            }
         }
 
-        match endianness {
-            crate::consts::Endianness::Big => match type_size {
-                1 => Ok(quote! {
-                    ::bebytes::BufMut::put_u8(bytes, #field_name as u8);
-                    _bit_sum += 8;
-                }),
-                2 => Ok(quote! {
-                    ::bebytes::BufMut::put_u16(bytes, #field_name as u16);
-                    _bit_sum += 16;
-                }),
-                4 => Ok(quote! {
-                    ::bebytes::BufMut::put_u32(bytes, #field_name as u32);
-                    _bit_sum += 32;
-                }),
-                8 => Ok(quote! {
-                    ::bebytes::BufMut::put_u64(bytes, #field_name as u64);
-                    _bit_sum += 64;
-                }),
-                16 => Ok(quote! {
-                    ::bebytes::BufMut::put_u128(bytes, #field_name as u128);
-                    _bit_sum += 128;
-                }),
-                _ => Ok(quote! {
-                    let field_slice = &#field_name.to_be_bytes();
-                    bytes.extend_from_slice(field_slice);
-                    _bit_sum += field_slice.len() * 8;
-                }),
-            },
-            crate::consts::Endianness::Little => match type_size {
-                1 => Ok(quote! {
-                    ::bebytes::BufMut::put_u8(bytes, #field_name as u8);
-                    _bit_sum += 8;
-                }),
-                2 => Ok(quote! {
-                    ::bebytes::BufMut::put_u16_le(bytes, #field_name as u16);
-                    _bit_sum += 16;
-                }),
-                4 => Ok(quote! {
-                    ::bebytes::BufMut::put_u32_le(bytes, #field_name as u32);
-                    _bit_sum += 32;
-                }),
-                8 => Ok(quote! {
-                    ::bebytes::BufMut::put_u64_le(bytes, #field_name as u64);
-                    _bit_sum += 64;
-                }),
-                16 => Ok(quote! {
-                    ::bebytes::BufMut::put_u128_le(bytes, #field_name as u128);
-                    _bit_sum += 128;
-                }),
-                _ => Ok(quote! {
-                    let field_slice = &#field_name.to_le_bytes();
-                    bytes.extend_from_slice(field_slice);
-                    _bit_sum += field_slice.len() * 8;
-                }),
-            },
-        }
+        Ok(create_primitive_writing_by_size(field_name, type_size, endianness))
     }
 
     pub fn create_primitive_direct_writing(
@@ -455,6 +470,29 @@ pub mod pure_helpers {
                     crate::consts::Endianness::Little => Ok(quote! {
                         buf.put_slice(&(#field_name as u32).to_le_bytes());
                     }),
+                };
+            }
+            if tp.path.is_ident("bool") {
+                return Ok(quote! { buf.put_u8(if #field_name { 1 } else { 0 }); });
+            }
+            if tp.path.is_ident("f32") {
+                return match endianness {
+                    crate::consts::Endianness::Big => {
+                        Ok(quote! { buf.put_slice(&#field_name.to_be_bytes()); })
+                    }
+                    crate::consts::Endianness::Little => {
+                        Ok(quote! { buf.put_slice(&#field_name.to_le_bytes()); })
+                    }
+                };
+            }
+            if tp.path.is_ident("f64") {
+                return match endianness {
+                    crate::consts::Endianness::Big => {
+                        Ok(quote! { buf.put_slice(&#field_name.to_be_bytes()); })
+                    }
+                    crate::consts::Endianness::Little => {
+                        Ok(quote! { buf.put_slice(&#field_name.to_le_bytes()); })
+                    }
                 };
             }
         }
