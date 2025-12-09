@@ -1,10 +1,10 @@
 error[E0081]: discriminant value `1` assigned more than once
   --> tests/compile_time/enums/duplicate_discriminants.rs:7:1
    |
-7  | enum DuplicateDiscriminants {
+ 7 | enum DuplicateDiscriminants {
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-8  |     A = 0,
-9  |     B = 1,
+ 8 |     A = 0,
+ 9 |     B = 1,
    |         - `1` assigned here
 10 |     C = 1, // Error: Duplicate discriminant value
    |         - `1` assigned here

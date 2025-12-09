@@ -10,8 +10,13 @@ error: BeBytes does not support enums with struct variants. Use unit variants on
 11 |     Struct { field: u16 },
    |     ^^^^^^
 
-error[E0732]: `#[repr(inttype)]` must be specified
- --> tests/compile_time/enums/data_variants.rs:7:1
-  |
-7 | enum DataVariants {
-  | ^^^^^^^^^^^^^^^^^
+error[E0732]: `#[repr(inttype)]` must be specified for enums with explicit discriminants and non-unit variants
+  --> tests/compile_time/enums/data_variants.rs:7:1
+   |
+ 7 | enum DataVariants {
+   | ^^^^^^^^^^^^^^^^^
+ 8 |     Unit = 0,
+   |            - explicit discriminant specified here
+ 9 |     // Error: Data variants not supported
+10 |     Tuple(u32),
+   |     ----- non-unit discriminant declared here
