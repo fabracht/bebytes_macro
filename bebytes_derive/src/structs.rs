@@ -730,7 +730,6 @@ fn generate_value_preparation(
     }
 }
 
-// Functional version of handle_primitive_type
 fn process_primitive_type_functional(
     context: &FieldContext,
     processing_ctx: &crate::functional::ProcessingContext,
@@ -759,7 +758,12 @@ fn process_primitive_type_functional(
         processing_ctx.endianness,
     )?;
 
-    let direct_writing = convert_to_direct_writing(&writing);
+    let direct_writing = crate::functional::pure_helpers::create_primitive_direct_writing(
+        field_name,
+        field_type,
+        processing_ctx.endianness,
+    )?;
+
     Ok(crate::functional::FieldProcessResult::new(
         quote! {},
         parsing,
@@ -795,13 +799,15 @@ fn process_array_functional(
                 };
 
                 let writing = quote! {
-                    // Optimized: Reserve capacity to avoid multiple reallocations
                     bytes.reserve(#length);
                     bytes.extend_from_slice(&#field_name);
                     _bit_sum += #length * 8;
                 };
 
-                let direct_writing = convert_to_direct_writing(&writing);
+                let direct_writing = quote! {
+                    buf.put_slice(&#field_name);
+                };
+
                 return Ok(crate::functional::FieldProcessResult::new(
                     quote! {},
                     parsing,

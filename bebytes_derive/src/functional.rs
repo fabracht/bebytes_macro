@@ -439,6 +439,46 @@ pub mod pure_helpers {
         }
     }
 
+    pub fn create_primitive_direct_writing(
+        field_name: &Ident,
+        field_type: &syn::Type,
+        endianness: crate::consts::Endianness,
+    ) -> Result<TokenStream, syn::Error> {
+        let type_size = crate::utils::get_primitive_type_size(field_type)?;
+
+        if let syn::Type::Path(tp) = field_type {
+            if tp.path.is_ident("char") {
+                return match endianness {
+                    crate::consts::Endianness::Big => Ok(quote! {
+                        buf.put_slice(&(#field_name as u32).to_be_bytes());
+                    }),
+                    crate::consts::Endianness::Little => Ok(quote! {
+                        buf.put_slice(&(#field_name as u32).to_le_bytes());
+                    }),
+                };
+            }
+        }
+
+        match endianness {
+            crate::consts::Endianness::Big => match type_size {
+                1 => Ok(quote! { buf.put_u8(#field_name as u8); }),
+                2 => Ok(quote! { buf.put_u16(#field_name as u16); }),
+                4 => Ok(quote! { buf.put_u32(#field_name as u32); }),
+                8 => Ok(quote! { buf.put_u64(#field_name as u64); }),
+                16 => Ok(quote! { buf.put_u128(#field_name as u128); }),
+                _ => Ok(quote! { buf.put_slice(&#field_name.to_be_bytes()); }),
+            },
+            crate::consts::Endianness::Little => match type_size {
+                1 => Ok(quote! { buf.put_u8(#field_name as u8); }),
+                2 => Ok(quote! { buf.put_u16_le(#field_name as u16); }),
+                4 => Ok(quote! { buf.put_u32_le(#field_name as u32); }),
+                8 => Ok(quote! { buf.put_u64_le(#field_name as u64); }),
+                16 => Ok(quote! { buf.put_u128_le(#field_name as u128); }),
+                _ => Ok(quote! { buf.put_slice(&#field_name.to_le_bytes()); }),
+            },
+        }
+    }
+
     /// Create limit check for bit fields
     pub fn create_bit_field_limit_check(
         field_name: &Ident,
