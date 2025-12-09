@@ -189,6 +189,8 @@ Key features:
 - Automatic implementation of bitwise operators
 - `contains()` method to check if a flag is set
 - `from_bits()` method to validate flag combinations
+- `decompose()` method to get individual flag variants from a combined value
+- `iter_flags()` method to iterate over set flags in a combined value
 
 ## Supported Types
 
@@ -206,7 +208,7 @@ BeBytes supports:
 
 ## String Support
 
-BeBytes provides comprehensive support for Rust's standard `String` type with flexible size control:
+BeBytes supports Rust's standard `String` type with flexible size control:
 
 ### 1. Fixed-Size Strings
 
@@ -275,9 +277,26 @@ struct UnicodeData {
 
 Characters are stored as 4-byte Unicode scalar values with validation to ensure they represent valid Unicode code points.
 
+## Per-Field Endianness
+
+By default, all fields use the endianness of the method called (`to_be_bytes` or `to_le_bytes`). You can override this for individual fields:
+
+```rust
+#[derive(BeBytes)]
+struct MixedEndianPacket {
+    big_field: u32,                    // Uses method's endianness
+    #[bebytes(little_endian)]
+    little_field: u16,                 // Always little-endian
+    #[bebytes(big_endian)]
+    explicit_big: u32,                 // Always big-endian
+}
+```
+
+This is useful for protocols that mix endianness.
+
 ## Size Expressions (New in 2.3.0)
 
-BeBytes now supports dynamic field sizing using mathematical expressions. This powerful feature enables protocol implementations where field sizes depend on other fields:
+BeBytes supports dynamic field sizing using mathematical expressions. This enables protocol implementations where field sizes depend on other fields:
 
 ```rust
 #[derive(BeBytes)]
@@ -637,7 +656,7 @@ struct TabDelimited {
 
 ## Buffer Management
 
-BeBytes provides efficient internal buffer management for optimized operations:
+BeBytes provides internal buffer management:
 
 ```rust
 use bebytes::{BeBytes, Bytes, BytesMut};
@@ -672,12 +691,11 @@ assert_eq!(vec_bytes, bytes_buffer.as_ref());
 assert_eq!(vec_bytes, final_bytes.as_ref());
 ```
 
-### Buffer Methods Benefits
+### Buffer Types
 
-1. **Efficient operations**: Direct buffer writing without intermediate allocations
-2. **Memory efficiency**: Pre-allocated buffers reduce allocations
-3. **Clean API**: Consistent buffer-oriented interface
-4. **Compatibility**: Works with existing code unchanged
+- `BytesMut`: Growable buffer for writing
+- `Bytes`: Immutable buffer for results
+- `BufMut` trait: Interface for buffer writing
 
 ### Migration Guide
 
@@ -688,14 +706,12 @@ Existing code continues to work unchanged. To leverage bytes benefits:
 let data = packet.to_be_bytes();
 send_data(data).await;
 
-// After (optimized buffer operations)
+// After (buffer version)
 let data = packet.to_be_bytes_buf();
-send_data(data).await; // Same signature, optimized performance
+send_data(data).await;
 ```
 
-## Performance Optimizations
-
-### Direct Buffer Writing
+## Direct Buffer Writing
 
 ```rust
 use bebytes::{BeBytes, BytesMut};
@@ -714,14 +730,13 @@ buffer.put_slice(&bytes);
 packet.encode_be_to(&mut buffer)?;
 ```
 
-The `encode_be_to` and `encode_le_to` methods write directly to any `BufMut` implementation, eliminating the allocation overhead of `to_be_bytes()`. This is particularly beneficial for high-performance networking code.
+The `encode_be_to` and `encode_le_to` methods write directly to any `BufMut` implementation, avoiding the intermediate allocation of `to_be_bytes()`.
 
-### Performance Features
+### Generated Method Characteristics
 
-- **Inline annotations**: All generated methods use `#[inline]` for better optimization
-- **Pre-allocated capacity**: The `to_bytes` methods pre-allocate exact capacity
-- **Direct buffer writing**: Efficient buffer operations
-- **Zero-copy parsing**: Deserialization works directly from byte slices
+- All generated methods use `#[inline]`
+- `to_bytes` methods pre-allocate exact capacity
+- Deserialization works directly from byte slices
 
 ### Raw Pointer Methods (New in 2.5.0)
 
@@ -758,9 +773,8 @@ if Packet::supports_raw_pointer_encoding() {
 
 Raw pointer methods provide:
 
-- **Zero allocations** with stack-based methods
-- **Direct memory writes** using compile-time known offsets
-- **Pointer arithmetic and memcpy operations**
+- Stack-based methods that don't allocate
+- Direct memory writes using compile-time known offsets
 
 Raw pointer methods are available for structs that:
 
@@ -828,14 +842,10 @@ fn main() {
 }
 ```
 
-## Performance Optimizations
-
-BeBytes includes efficient buffer management, providing:
-
-### Zero-Copy Operations
+## Buffer Operations
 
 ```rust
-use bebytes::BeBytes;
+use bebytes::{BeBytes, BytesMut};
 
 #[derive(BeBytes)]
 struct Message {
@@ -843,18 +853,15 @@ struct Message {
     payload: [u8; 1024],
 }
 
-// Create zero-copy shareable buffer
 let msg = Message { header: 0x12345678, payload: [0; 1024] };
-let bytes_buf = msg.to_be_bytes_buf(); // Returns Bytes
 
-// Clone is cheap - just increments reference count
-let clone1 = bytes_buf.clone();
-let clone2 = bytes_buf.clone();
+// Get bytes as a Bytes buffer
+let bytes_buf = msg.to_be_bytes_buf();
 
-// Pass to multiple tasks without copying data
-tokio::spawn(async move {
-    network_send(clone1).await;
-});
+// Or write directly to an existing buffer (avoids intermediate allocation)
+let mut buf = BytesMut::with_capacity(msg.field_size());
+msg.encode_be_to(&mut buf).unwrap();
+let final_bytes = buf.freeze();
 ```
 
 ### Direct Buffer Writing
@@ -874,7 +881,7 @@ msg3.encode_be_to(&mut buf)?;
 let bytes = buf.freeze();
 ```
 
-The buffer management provides significant performance improvements in production workloads.
+The direct buffer writing methods avoid intermediate allocations when you already have a buffer to write to.
 
 ## Contribute
 

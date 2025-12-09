@@ -175,11 +175,10 @@ fn benchmark_bytes_performance() {
         medium_vec == medium_bytes.as_ref()
     );
 
-    println!("\n🎯 bytes Crate Benefits:");
-    println!("• Professional buffer management with zero-copy sharing");
-    println!("• Seamless integration with tokio, async-std, and networking libraries");
-    println!("• Memory-efficient with BytesMut → Bytes conversion via freeze()");
-    println!("• Direct BufMut writing eliminates intermediate Vec allocations");
+    println!("\n🎯 Buffer Management Benefits:");
+    println!("• Internal buffer types with no external dependencies");
+    println!("• BytesMut for efficient writing, Bytes for immutable results");
+    println!("• Direct BufMut writing to existing buffers");
     println!("• Compatible with existing Vec<u8> APIs for backward compatibility");
 }
 

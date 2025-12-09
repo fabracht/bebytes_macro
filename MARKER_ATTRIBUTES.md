@@ -1,6 +1,6 @@
 # Marker Attributes Documentation
 
-This document describes the marker-based field delimiting features in BeBytes, which enable efficient handling of protocols that use sentinel bytes to separate variable-length data sections.
+This document describes the marker-based field delimiting features in BeBytes for protocols that use sentinel bytes to separate variable-length data sections.
 
 ## Overview
 

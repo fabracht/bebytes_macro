@@ -434,10 +434,10 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     #be_field_writing
                                 }
                             )*
-                            buf.to_vec()
+                            buf.freeze().to_vec()
                         }
 
-                        /// Convert to big-endian bytes as a zero-copy Bytes buffer
+                        /// Convert to big-endian bytes as a Bytes buffer
                         #[inline]
                         fn to_be_bytes_buf(&self) -> ::bebytes::Bytes {
                             let capacity = Self::field_size();
@@ -482,10 +482,10 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                     #le_field_writing
                                 }
                             )*
-                            buf.to_vec()
+                            buf.freeze().to_vec()
                         }
 
-                        /// Convert to little-endian bytes as a zero-copy Bytes buffer
+                        /// Convert to little-endian bytes as a Bytes buffer
                         #[inline]
                         fn to_le_bytes_buf(&self) -> ::bebytes::Bytes {
                             let capacity = Self::field_size();
@@ -626,7 +626,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             #(#to_be_bytes_arms)*
                         };
                         ::bebytes::BufMut::put_u8(&mut buf, val);
-                        buf.to_vec()
+                        buf.freeze().to_vec()
                     }
 
                     // Little-endian implementation
@@ -652,7 +652,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             #(#to_le_bytes_arms)*
                         };
                         ::bebytes::BufMut::put_u8(&mut buf, val);
-                        buf.to_vec()
+                        buf.freeze().to_vec()
                     }
 
                     /// Convert to big-endian bytes as a Bytes buffer

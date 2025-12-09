@@ -84,48 +84,27 @@ All notable changes to this project will be documented in this file.
 - Primitive serialization using `BufMut::put_u8()`, `put_u16()`, etc.
 - Pre-allocated buffers reduce allocations in batch operations
 
-### Architecture Changes
+### Note
 
-- bytes crate is now a **native dependency** (no feature flags required)
-- `BytesMut` replaces `Vec<u8>` for internal buffer management
-- Full backward compatibility maintained - all existing `Vec<u8>` methods unchanged
-- Enhanced `std` and `no_std` support via bytes crate's feature system
-
-### Features
-
-- Zero-copy sharing via reference-counted `Bytes`
-- Automatic memory cleanup
-- Compatible with tokio, hyper, tonic, and async libraries
-- Uses same buffer management as networking libraries
+This version introduced `bytes` crate integration which was later replaced by internal buffer management in v2.8.0. See v2.8.0 changelog for current implementation details.
 
 ## [2.5.0] - 2025-07-30
 
 ### Added
 
-- **Ultra-High-Performance Raw Pointer Methods**: Revolutionary encoding optimization for maximum speed
-  - `supports_raw_pointer_encoding()` - Check if struct is eligible for raw pointer optimization
+- **Raw Pointer Methods**: Stack-allocated encoding for eligible structs
+  - `supports_raw_pointer_encoding()` - Check if struct is eligible
   - `RAW_POINTER_SIZE` - Compile-time constant for struct size
-  - `encode_be_to_raw_stack()` / `encode_le_to_raw_stack()` - Safe stack-allocated encoding methods
-  - `encode_be_to_raw_mut()` / `encode_le_to_raw_mut()` - Unsafe direct buffer writing methods
-  - **40-80x performance improvement** over standard `to_be_bytes()` for eligible structs
-  - **Zero allocations** with stack-based methods using compile-time sized arrays
-  - **Compile-time safety** - array sizes determined automatically by macro
-  - Direct memory writes using `std::ptr::copy_nonoverlapping` for maximum efficiency
-
-### Performance
-
-- Small structs (4 bytes): **60x speedup**
-- Medium structs (16 bytes): **44x speedup**
-- Large structs (72 bytes): **28x speedup**
-- Max structs (256 bytes): **5x speedup**
-- Comprehensive benchmarking suite with extensive performance validation
+  - `encode_be_to_raw_stack()` / `encode_le_to_raw_stack()` - Safe stack-allocated encoding
+  - `encode_be_to_raw_mut()` / `encode_le_to_raw_mut()` - Unsafe direct buffer writing
+  - Stack-based methods avoid heap allocation
+  - Array sizes determined at compile time
 
 ### Safety
 
-- Stack methods are completely safe with compile-time array sizing
-- No runtime size checks needed - compiler enforces correctness
+- Stack methods are safe with compile-time array sizing
 - Direct buffer methods include capacity validation
-- Methods only generated for eligible structs, preventing misuse
+- Methods only generated for eligible structs
 
 ### Eligibility
 

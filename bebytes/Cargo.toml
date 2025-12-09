@@ -22,6 +22,7 @@ required-features = ["std"]
 
 [dependencies]
 bebytes_derive = { version = "2.10.1" }
+bytes = { version = "1", optional = true }
 
 [dev-dependencies]
 trybuild = { version = "1.0.102", features = ["diff"] }
@@ -72,3 +73,4 @@ required-features = ["std"]
 [features]
 default = ["std"]
 std = []
+bytes_backend = ["bytes"]
