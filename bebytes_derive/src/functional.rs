@@ -378,10 +378,18 @@ pub mod pure_helpers {
         match endianness {
             crate::consts::Endianness::Big => match type_size {
                 1 => quote! { ::bebytes::BufMut::put_u8(bytes, #field_name as u8); _bit_sum += 8; },
-                2 => quote! { ::bebytes::BufMut::put_u16(bytes, #field_name as u16); _bit_sum += 16; },
-                4 => quote! { ::bebytes::BufMut::put_u32(bytes, #field_name as u32); _bit_sum += 32; },
-                8 => quote! { ::bebytes::BufMut::put_u64(bytes, #field_name as u64); _bit_sum += 64; },
-                16 => quote! { ::bebytes::BufMut::put_u128(bytes, #field_name as u128); _bit_sum += 128; },
+                2 => {
+                    quote! { ::bebytes::BufMut::put_u16(bytes, #field_name as u16); _bit_sum += 16; }
+                }
+                4 => {
+                    quote! { ::bebytes::BufMut::put_u32(bytes, #field_name as u32); _bit_sum += 32; }
+                }
+                8 => {
+                    quote! { ::bebytes::BufMut::put_u64(bytes, #field_name as u64); _bit_sum += 64; }
+                }
+                16 => {
+                    quote! { ::bebytes::BufMut::put_u128(bytes, #field_name as u128); _bit_sum += 128; }
+                }
                 _ => quote! {
                     let field_slice = &#field_name.to_be_bytes();
                     bytes.extend_from_slice(field_slice);
@@ -390,10 +398,18 @@ pub mod pure_helpers {
             },
             crate::consts::Endianness::Little => match type_size {
                 1 => quote! { ::bebytes::BufMut::put_u8(bytes, #field_name as u8); _bit_sum += 8; },
-                2 => quote! { ::bebytes::BufMut::put_u16_le(bytes, #field_name as u16); _bit_sum += 16; },
-                4 => quote! { ::bebytes::BufMut::put_u32_le(bytes, #field_name as u32); _bit_sum += 32; },
-                8 => quote! { ::bebytes::BufMut::put_u64_le(bytes, #field_name as u64); _bit_sum += 64; },
-                16 => quote! { ::bebytes::BufMut::put_u128_le(bytes, #field_name as u128); _bit_sum += 128; },
+                2 => {
+                    quote! { ::bebytes::BufMut::put_u16_le(bytes, #field_name as u16); _bit_sum += 16; }
+                }
+                4 => {
+                    quote! { ::bebytes::BufMut::put_u32_le(bytes, #field_name as u32); _bit_sum += 32; }
+                }
+                8 => {
+                    quote! { ::bebytes::BufMut::put_u64_le(bytes, #field_name as u64); _bit_sum += 64; }
+                }
+                16 => {
+                    quote! { ::bebytes::BufMut::put_u128_le(bytes, #field_name as u128); _bit_sum += 128; }
+                }
                 _ => quote! {
                     let field_slice = &#field_name.to_le_bytes();
                     bytes.extend_from_slice(field_slice);
@@ -431,27 +447,29 @@ pub mod pure_helpers {
             }
             if tp.path.is_ident("f32") {
                 return match endianness {
-                    crate::consts::Endianness::Big => {
-                        Ok(quote! { bytes.extend_from_slice(&#field_name.to_be_bytes()); _bit_sum += 32; })
-                    }
-                    crate::consts::Endianness::Little => {
-                        Ok(quote! { bytes.extend_from_slice(&#field_name.to_le_bytes()); _bit_sum += 32; })
-                    }
+                    crate::consts::Endianness::Big => Ok(
+                        quote! { bytes.extend_from_slice(&#field_name.to_be_bytes()); _bit_sum += 32; },
+                    ),
+                    crate::consts::Endianness::Little => Ok(
+                        quote! { bytes.extend_from_slice(&#field_name.to_le_bytes()); _bit_sum += 32; },
+                    ),
                 };
             }
             if tp.path.is_ident("f64") {
                 return match endianness {
-                    crate::consts::Endianness::Big => {
-                        Ok(quote! { bytes.extend_from_slice(&#field_name.to_be_bytes()); _bit_sum += 64; })
-                    }
-                    crate::consts::Endianness::Little => {
-                        Ok(quote! { bytes.extend_from_slice(&#field_name.to_le_bytes()); _bit_sum += 64; })
-                    }
+                    crate::consts::Endianness::Big => Ok(
+                        quote! { bytes.extend_from_slice(&#field_name.to_be_bytes()); _bit_sum += 64; },
+                    ),
+                    crate::consts::Endianness::Little => Ok(
+                        quote! { bytes.extend_from_slice(&#field_name.to_le_bytes()); _bit_sum += 64; },
+                    ),
                 };
             }
         }
 
-        Ok(create_primitive_writing_by_size(field_name, type_size, endianness))
+        Ok(create_primitive_writing_by_size(
+            field_name, type_size, endianness,
+        ))
     }
 
     pub fn create_primitive_direct_writing(
