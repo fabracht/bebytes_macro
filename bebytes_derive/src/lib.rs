@@ -299,14 +299,10 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 };
                 structs::handle_struct(&mut be_context);
 
-                // Generate little-endian implementation
-                // field_limit_check and bit_sum are endian-independent, so we don't need to regenerate them
-                // but named_fields needs to be regenerated for little-endian
                 let mut le_named_fields = Vec::new();
-                let mut le_dummy_field_limit = Vec::new(); // Dummy vector since we don't need to populate it again
-                let mut le_dummy_bit_sum = Vec::new(); // Dummy vector since we don't need to populate it again
-                let mut _le_dummy_direct_writing: Vec<proc_macro2::TokenStream> = Vec::new(); // Dummy vector since we use the shared direct_writing
-                let mut le_dummy_has_bit_fields = false; // Dummy since bit fields are endian-independent
+                let mut le_dummy_field_limit = Vec::new();
+                let mut le_dummy_bit_sum = Vec::new();
+                let mut le_dummy_has_bit_fields = false;
                 let mut le_context = structs::StructContext {
                     field_limit_check: &mut le_dummy_field_limit,
                     errors: &mut errors,

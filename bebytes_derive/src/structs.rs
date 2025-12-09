@@ -483,7 +483,6 @@ fn process_bits_field_functional(
         false
     };
 
-    // Use multi-byte path if the type is multi-byte or field is too large
     let (parsing, writing) = if number_length > 1 || size > 8 {
         let ctx = MultiByteBitFieldCtx {
             field_name,
@@ -497,7 +496,14 @@ fn process_bits_field_functional(
         };
         generate_multibyte_bit_field(&ctx)
     } else {
-        generate_single_byte_bit_field(field_name, field_type, size, mask, processing_ctx)
+        generate_single_byte_bit_field(
+            field_name,
+            field_type,
+            size,
+            mask,
+            bit_position,
+            processing_ctx,
+        )
     };
 
     let direct_writing = convert_to_direct_writing(&writing);
@@ -597,19 +603,24 @@ fn generate_multibyte_bit_field(
     (parsing, writing)
 }
 
-// Generate code for single-byte bit fields
 fn generate_single_byte_bit_field(
     field_name: &syn::Ident,
     field_type: &syn::Type,
     size: usize,
     mask: u128,
+    bit_position: usize,
     processing_ctx: &crate::functional::ProcessingContext,
 ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let bit_offset = bit_position % 8;
+    let spans_bytes = bit_offset + size > 8;
+
     let parsing = crate::functional::pure_helpers::create_single_byte_bit_parsing(
         field_name,
         field_type,
         size,
         mask,
+        bit_offset,
+        spans_bytes,
         processing_ctx.endianness,
     );
 
@@ -617,6 +628,8 @@ fn generate_single_byte_bit_field(
         field_name,
         size,
         mask,
+        bit_offset,
+        spans_bytes,
         processing_ctx.endianness,
     );
 
