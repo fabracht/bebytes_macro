@@ -437,20 +437,9 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             buf.freeze().to_vec()
                         }
 
-                        /// Convert to big-endian bytes as a Bytes buffer
                         #[inline]
                         fn to_be_bytes_buf(&self) -> ::bebytes::Bytes {
-                            let capacity = Self::field_size();
-                            let mut buf = ::bebytes::BytesMut::with_capacity(capacity);
-                            let mut _bit_sum = 0;
-                            #(
-                                #named_fields
-                                {
-                                    let bytes = &mut buf;
-                                    #be_field_writing
-                                }
-                            )*
-                            buf.freeze()
+                            ::bebytes::Bytes::from(self.to_be_bytes())
                         }
 
                         // Little-endian implementation
@@ -485,20 +474,9 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                             buf.freeze().to_vec()
                         }
 
-                        /// Convert to little-endian bytes as a Bytes buffer
                         #[inline]
                         fn to_le_bytes_buf(&self) -> ::bebytes::Bytes {
-                            let capacity = Self::field_size();
-                            let mut buf = ::bebytes::BytesMut::with_capacity(capacity);
-                            let mut _bit_sum = 0;
-                            #(
-                                #le_named_fields
-                                {
-                                    let bytes = &mut buf;
-                                    #le_field_writing
-                                }
-                            )*
-                            buf.freeze()
+                            ::bebytes::Bytes::from(self.to_le_bytes())
                         }
 
                         // Direct buffer writing methods (conditionally generated)
