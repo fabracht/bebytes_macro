@@ -479,6 +479,33 @@ pub mod pure_helpers {
         }
     }
 
+    pub fn create_option_primitive_direct_writing(
+        field_name: &Ident,
+        inner_type: &syn::Type,
+        endianness: crate::consts::Endianness,
+    ) -> Result<TokenStream, syn::Error> {
+        let type_size = crate::utils::get_primitive_type_size(inner_type)?;
+
+        match endianness {
+            crate::consts::Endianness::Big => match type_size {
+                1 => Ok(quote! { buf.put_u8(#field_name.unwrap_or(0) as u8); }),
+                2 => Ok(quote! { buf.put_u16(#field_name.unwrap_or(0) as u16); }),
+                4 => Ok(quote! { buf.put_u32(#field_name.unwrap_or(0) as u32); }),
+                8 => Ok(quote! { buf.put_u64(#field_name.unwrap_or(0) as u64); }),
+                16 => Ok(quote! { buf.put_u128(#field_name.unwrap_or(0) as u128); }),
+                _ => Ok(quote! { buf.put_slice(&#field_name.unwrap_or(0).to_be_bytes()); }),
+            },
+            crate::consts::Endianness::Little => match type_size {
+                1 => Ok(quote! { buf.put_u8(#field_name.unwrap_or(0) as u8); }),
+                2 => Ok(quote! { buf.put_u16_le(#field_name.unwrap_or(0) as u16); }),
+                4 => Ok(quote! { buf.put_u32_le(#field_name.unwrap_or(0) as u32); }),
+                8 => Ok(quote! { buf.put_u64_le(#field_name.unwrap_or(0) as u64); }),
+                16 => Ok(quote! { buf.put_u128_le(#field_name.unwrap_or(0) as u128); }),
+                _ => Ok(quote! { buf.put_slice(&#field_name.unwrap_or(0).to_le_bytes()); }),
+            },
+        }
+    }
+
     /// Create limit check for bit fields
     pub fn create_bit_field_limit_check(
         field_name: &Ident,

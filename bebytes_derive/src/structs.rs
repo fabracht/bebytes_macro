@@ -1007,7 +1007,10 @@ fn process_vector_functional(
                     field,
                 )?;
 
-                let direct_writing = convert_to_direct_writing(&writing);
+                let direct_writing = quote! {
+                    buf.put_slice(&#field_name);
+                };
+
                 return Ok(crate::functional::FieldProcessResult::new(
                     quote! {},
                     parsing,
@@ -1045,7 +1048,6 @@ fn process_vector_functional(
             };
 
             let writing = quote! {
-                // Optimized: Pre-calculate total size to avoid multiple reallocations
                 let total_size = #field_name.iter().map(|item| {
                     BeBytes::#to_bytes_method(item).len()
                 }).sum::<usize>();
@@ -1058,7 +1060,12 @@ fn process_vector_functional(
                 }
             };
 
-            let direct_writing = convert_to_direct_writing(&writing);
+            let encode_method = utils::get_encode_to_method(processing_ctx.endianness);
+            let direct_writing = quote! {
+                for item in &#field_name {
+                    let _ = BeBytes::#encode_method(item, buf);
+                }
+            };
             return Ok(crate::functional::FieldProcessResult::new(
                 quote! {},
                 parsing,
@@ -1112,13 +1119,17 @@ fn process_option_type_functional(
 
                     let writing = quote! {
                         let bytes_data = &#field_name.unwrap_or(0).#to_bytes_method();
-                        // Optimized: Reserve capacity to avoid reallocation
                         bytes.reserve(bytes_data.len());
                         bytes.extend_from_slice(bytes_data);
                         _bit_sum += bytes_data.len() * 8;
                     };
 
-                    let direct_writing = convert_to_direct_writing(&writing);
+                    let direct_writing =
+                        crate::functional::pure_helpers::create_option_primitive_direct_writing(
+                            field_name,
+                            &inner_type,
+                            processing_ctx.endianness,
+                        )?;
                     return Ok(crate::functional::FieldProcessResult::new(
                         quote! {},
                         parsing,
@@ -1155,6 +1166,7 @@ fn process_custom_type_functional(
 
     let try_from_bytes_method = utils::get_try_from_bytes_method(processing_ctx.endianness);
     let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
+    let encode_method = utils::get_encode_to_method(processing_ctx.endianness);
 
     let parsing = quote_spanned! { context.field.span() =>
         byte_index = _bit_sum / 8;
@@ -1166,13 +1178,14 @@ fn process_custom_type_functional(
 
     let writing = quote_spanned! { context.field.span() =>
         let bytes_data = &BeBytes::#to_bytes_method(&#field_name);
-        // Optimized: Reserve capacity to avoid reallocation
         bytes.reserve(bytes_data.len());
         bytes.extend_from_slice(bytes_data);
         _bit_sum += bytes_data.len() * 8;
     };
 
-    let direct_writing = convert_to_direct_writing(&writing);
+    let direct_writing = quote_spanned! { context.field.span() =>
+        let _ = BeBytes::#encode_method(&#field_name, buf);
+    };
     crate::functional::FieldProcessResult::new(
         quote! {},
         parsing,
@@ -1214,7 +1227,10 @@ fn process_string_functional(
         }
     };
 
-    let direct_writing = convert_to_direct_writing(&writing);
+    let direct_writing = quote! {
+        let string_bytes = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::to_bytes(&#field_name);
+        buf.put_slice(string_bytes);
+    };
     Ok(crate::functional::FieldProcessResult::new(
         quote! {},
         parsing,
@@ -1248,7 +1264,9 @@ fn process_size_expression_functional(
                     // Generate Vec<u8> parsing and writing
                     let (bit_sum, parsing, writing) =
                         generate_size_expression_vector(field_name, &size_calculation);
-                    let direct_writing = convert_to_direct_writing(&writing);
+                    let direct_writing = quote! {
+                        buf.put_slice(&#field_name);
+                    };
                     Ok(crate::functional::FieldProcessResult::new(
                         quote! {},
                         parsing,
@@ -1262,7 +1280,10 @@ fn process_size_expression_functional(
                     // Generate String parsing and writing
                     let (bit_sum, parsing, writing) =
                         generate_size_expression_string(field_name, &size_calculation);
-                    let direct_writing = convert_to_direct_writing(&writing);
+                    let direct_writing = quote! {
+                        let string_bytes = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::to_bytes(&#field_name);
+                        buf.put_slice(string_bytes);
+                    };
                     Ok(crate::functional::FieldProcessResult::new(
                         quote! {},
                         parsing,
@@ -1531,15 +1552,16 @@ fn process_until_marker_functional(
     };
 
     let writing = quote! {
-        // Write each byte in the vector
         bytes.extend_from_slice(&#field_name);
         _bit_sum += #field_name.len() * 8;
-        // Write the marker byte
         ::bebytes::BufMut::put_u8(bytes, #marker);
         _bit_sum += 8;
     };
 
-    let direct_writing = convert_to_direct_writing(&writing);
+    let direct_writing = quote! {
+        buf.put_slice(&#field_name);
+        buf.put_u8(#marker);
+    };
 
     crate::functional::FieldProcessResult::new(
         quote! {},
@@ -1585,16 +1607,16 @@ fn process_after_marker_functional(
     };
 
     let writing = quote! {
-        // Write the marker byte
         ::bebytes::BufMut::put_u8(bytes, #marker);
         _bit_sum += 8;
-
-        // Write all bytes in the vector
         bytes.extend_from_slice(&#field_name);
         _bit_sum += #field_name.len() * 8;
     };
 
-    let direct_writing = convert_to_direct_writing(&writing);
+    let direct_writing = quote! {
+        buf.put_u8(#marker);
+        buf.put_slice(&#field_name);
+    };
 
     crate::functional::FieldProcessResult::new(
         quote! {},
@@ -1672,7 +1694,6 @@ fn process_vec_of_vecs_with_marker_functional(
     };
 
     let writing = quote! {
-        // Write each segment with marker
         for section in #field_name {
             bytes.extend_from_slice(section);
             _bit_sum += section.len() * 8;
@@ -1681,7 +1702,12 @@ fn process_vec_of_vecs_with_marker_functional(
         }
     };
 
-    let direct_writing = convert_to_direct_writing(&writing);
+    let direct_writing = quote! {
+        for section in #field_name {
+            buf.put_slice(section);
+            buf.put_u8(#marker);
+        }
+    };
 
     crate::functional::FieldProcessResult::new(
         quote! {},

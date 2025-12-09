@@ -27,6 +27,13 @@ pub fn get_try_from_bytes_method(endianness: Endianness) -> proc_macro2::TokenSt
     }
 }
 
+pub fn get_encode_to_method(endianness: Endianness) -> proc_macro2::TokenStream {
+    match endianness {
+        Endianness::Big => quote! { encode_be_to },
+        Endianness::Little => quote! { encode_le_to },
+    }
+}
+
 /// Get the size of a primitive type in bytes
 pub fn get_primitive_type_size(field_type: &syn::Type) -> Result<usize, syn::Error> {
     match field_type {
