@@ -295,7 +295,7 @@ fn benchmark_vector_operations() {
         let size = (i % 10) as u8;
         let val = WithTailingVec {
             pre_tail: size,
-            tail: (0..size).map(|j| (j + (i % 256) as u8)).collect(),
+            tail: (0..size).map(|j| j + (i % 256) as u8).collect(),
             post_tail: 99,
         };
         let bytes = val.to_be_bytes();

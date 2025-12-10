@@ -480,3 +480,30 @@ bytes.extend_from_slice(&self.vec_field);
 let packed_byte = (field1 << 6) | (field2 << 3) | field3;
 bytes.push(packed_byte);
 ```
+
+### Direct Buffer Writing (Zero-Copy)
+
+The `encode_be_to` and `encode_le_to` methods write directly to a `BufMut` buffer without intermediate allocations.
+
+```rust
+// Generated encode_be_to for primitives - uses optimized BufMut methods
+fn encode_be_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError> {
+    buf.put_u8(self.version);           // Direct single-byte write
+    buf.put_u16(self.length);           // Direct 2-byte write (BE)
+    buf.put_u32(self.data);             // Direct 4-byte write (BE)
+    Ok(())
+}
+
+// For Vec<u8> and String fields - direct slice write
+buf.put_slice(&self.payload);
+
+// For Option<primitive> - direct write with unwrap_or
+buf.put_u32(self.optional_value.unwrap_or(0));
+
+// For custom types - delegates to their encode method
+BeBytes::encode_be_to(&self.nested_struct, buf)?;
+
+// For marker fields - direct writes without allocation
+buf.put_slice(&self.data);
+buf.put_u8(0xFF);  // marker byte
+```

@@ -1,26 +1,22 @@
 # BeBytes Derive
 
-BeBytes Derive is a high-performance procedural macro crate that provides custom derive macros for generating ultra-fast serialization and deserialization methods for network structs in Rust. The macro generates code to convert structs into byte representations and vice versa, supporting both big endian and little endian byte orders.
+BeBytes Derive is a procedural macro crate that generates serialization and deserialization methods for network structs in Rust. The macro converts structs into byte representations and vice versa, supporting both big endian and little endian byte orders.
 
-## 🌐 WebAssembly Support
+## WebAssembly Support
 
-BeBytes is **fully WebAssembly compatible** with excellent performance characteristics:
+BeBytes is WebAssembly compatible:
 
 - **no_std support**: Works without the standard library
 - **Small binary size**: ~10KB WASM output for typical use cases
-- **Zero allocations**: Efficient memory usage in constrained environments
-- **Browser & Node.js**: Compatible with all major JavaScript runtimes
+- **Browser & Node.js**: Compatible with major JavaScript runtimes
 
-## 🏆 Performance & Platform Support
+## Platform Support
 
-BeBytes offers excellent performance across all platforms:
-
-1. **Native Performance**: Zero-copy operations, minimal allocations
-2. **WebAssembly**: Full compatibility with `wasm32-unknown-unknown` target
+1. **Native**: Works on all Rust-supported platforms
+2. **WebAssembly**: Compatible with `wasm32-unknown-unknown` target
 3. **Embedded Systems**: no_std support for resource-constrained environments
-4. **Cross-platform**: Works on all Rust-supported platforms
 
-The macro supports primitive types, characters, strings (with size attributes), enums, arrays, vectors, marker-delimited fields, and nested structs, making it ideal for working with network protocols, binary formats, and high-performance message serialization.
+The macro supports primitive types, characters, strings (with size attributes), enums, arrays, vectors, marker-delimited fields, and nested structs.
 
 ## Usage
 
@@ -125,7 +121,7 @@ In this example, we define a `NetworkMessage` struct that combines bit fields wi
 
 ## Buffer Management
 
-BeBytes provides efficient internal buffer management for zero-copy operations:
+BeBytes provides internal buffer management:
 
 ```rust
 use bebytes::{BeBytes, Bytes, BytesMut};
@@ -162,26 +158,25 @@ fn main() {
     packet.encode_be_to(&mut buf).unwrap();
     let final_bytes = buf.freeze(); // Convert to immutable buffer
 
-    println!("✅ All methods produce identical results!");
+    println!("All methods produce identical results");
     assert_eq!(vec_bytes, bytes_buffer.as_ref());
     assert_eq!(vec_bytes, final_bytes.as_ref());
 }
 
 // Example integration with networking libraries
 async fn send_to_network(data: Bytes) {
-    // Works seamlessly with tokio, hyper, tonic, etc.
+    // Compatible with tokio, hyper, tonic, etc.
     // let stream = TcpStream::connect("127.0.0.1:8080").await?;
     // stream.write_all(&data).await?;
 }
 ```
 
-### Buffer Management Benefits
+### Buffer Types
 
-1. **Performance**: Optimized buffer operations without external dependencies
-2. **Zero allocations**: Direct buffer writing methods
-3. **Memory efficiency**: Pre-allocated buffers reduce allocations
-4. **Clean API**: Consistent buffer-oriented interface
-5. **No external dependencies**: Self-contained implementation
+- `BytesMut`: Growable buffer for writing
+- `Bytes`: Immutable buffer for results
+- `BufMut` trait: Interface for buffer writing
+- No external dependencies
 
 ### Migration Guide
 
@@ -218,7 +213,7 @@ struct WrongStruct {
 }
 ```
 
-will through a compile time error saying that a `U8` attribute must add up to the full byte.
+will throw a compile-time error saying that a `U8` attribute must add up to the full byte.
 
 As long as you follow the above rule, you can create custom sequence of bits by using Rust unsigned integers as types and the derived implementation will take care of the nasty shifting and masking for you.
 One of the advantages is that we don't need an intermediate vector implementation to parse groups of or individual bits.
@@ -261,7 +256,7 @@ And so on.
 
 ## Characters and Strings
 
-BeBytes provides comprehensive support for character and string types, making it easy to work with text data in binary protocols.
+BeBytes supports character and string types for text data in binary protocols.
 
 ### Character Support
 
@@ -382,9 +377,38 @@ struct Packet {
 }
 ```
 
+## Per-Field Endianness
+
+By default, all fields use the endianness of the method called (`to_be_bytes` or `to_le_bytes`). You can override this for individual fields using the `#[bebytes(big_endian)]` or `#[bebytes(little_endian)]` attributes:
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct MixedEndianPacket {
+    big_field: u32,                    // Uses method's endianness (default)
+    #[bebytes(little_endian)]
+    little_field: u16,                 // Always little-endian
+    #[bebytes(big_endian)]
+    explicit_big: u32,                 // Always big-endian
+}
+
+let packet = MixedEndianPacket {
+    big_field: 0x12345678,
+    little_field: 0xABCD,
+    explicit_big: 0xDEADBEEF,
+};
+
+// When serializing with to_be_bytes():
+// - big_field: big-endian (default)
+// - little_field: little-endian (override)
+// - explicit_big: big-endian (explicit)
+let bytes = packet.to_be_bytes();
+```
+
+This is useful for protocols that mix endianness, such as certain embedded protocols or legacy systems.
+
 ## Size Expressions (New in 2.3.0)
 
-BeBytes now supports dynamic field sizing using mathematical expressions and field references. This powerful feature enables efficient binary protocol implementations where field sizes depend on other fields in the struct.
+BeBytes supports dynamic field sizing using mathematical expressions and field references. This enables binary protocol implementations where field sizes depend on other fields in the struct.
 
 ### Basic Syntax
 
@@ -490,7 +514,7 @@ struct StringMessage {
 - **Field Dependencies**: Reference any previously defined field in the struct
 - **Mathematical Operations**: Full support for `+`, `-`, `*`, `/`, `%` with parentheses
 - **Memory Safety**: Proper bounds checking and size validation
-- **Performance**: No significant overhead compared to manual size calculations
+- **Runtime Evaluation**: Expressions are evaluated during serialization/deserialization
 
 ### Important Notes
 
@@ -830,7 +854,7 @@ You can nest structures with the BeBytes trait, but there are some important rul
    The problem is that the macro cannot determine how many bytes to consume for an unbounded vector. When nested, this causes parsing errors, as shown below:
 
 ```rust
-    // ❌ PROBLEMATIC: Nested struct with unbounded vector
+    // PROBLEMATIC: Nested struct with unbounded vector
     #[derive(Debug, PartialEq, Clone, BeBytes)]
     struct WithTailingVec {
         tail: Vec<u8>, // Unbounded vector
@@ -868,7 +892,7 @@ ReInnocentStruct: (InnocentStruct { innocent: 1, mid_tail: WithTailingVec { tail
 ### Safe Alternative:
 
 ```rust
-    // ✅ SAFE: Using size constraints for vectors in nested structs
+    // SAFE: Using size constraints for vectors in nested structs
     #[derive(Debug, PartialEq, Clone, BeBytes)]
     struct SafeNestedVec {
         size: u8,
@@ -886,7 +910,7 @@ ReInnocentStruct: (InnocentStruct { innocent: 1, mid_tail: WithTailingVec { tail
 
 ## WebAssembly Usage
 
-BeBytes works seamlessly in WebAssembly environments. Here's how to use it:
+BeBytes works in WebAssembly environments. Here's how to use it:
 
 ### Basic Setup
 
@@ -1001,10 +1025,10 @@ const encoded = new Uint8Array(memory.buffer, resultPtr, messageSize);
 
 For detailed technical documentation about the macro implementation:
 
-- [Marker Attributes](MARKER_ATTRIBUTES.md) - Complete guide to UntilMarker, AfterMarker, and Vec<Vec<u8>> features
-- [Data Flow Documentation](docs/data-flow.md) - Comprehensive diagrams showing how data flows through the BeBytes derive macro
-- [Code Generation Examples](docs/code-generation.md) - Concrete examples of generated code for various field types
-- [Mutation Testing](docs/mutation-testing.md) - Information about the project's mutation testing strategy
+- [Marker Attributes](MARKER_ATTRIBUTES.md) - UntilMarker, AfterMarker, and Vec<Vec<u8>> usage
+- [Data Flow Documentation](docs/data-flow.md) - Diagrams of macro data flow
+- [Code Generation Examples](docs/code-generation.md) - Examples of generated code
+- [Mutation Testing](docs/mutation-testing.md) - Mutation testing approach
 
 ## Contributing
 

@@ -14,10 +14,10 @@ BeBytes is a Rust procedural macro library for binary serialization/deserializat
 - Bit manipulation is done in-place without intermediate allocations
 - Only allocates when necessary (strings, vectors)
 
-### 2. Professional Buffer Management (2.6.0+)
-- Uses `bytes` crate for buffer management
-- `BytesMut` for internal operations, `Bytes` for zero-copy sharing
-- Compatible with async ecosystem (tokio, hyper, tonic)
+### 2. Internal Buffer Management (2.8.0+)
+- Uses internal `Bytes` and `BytesMut` types (no external dependencies)
+- `BytesMut` for writing operations, `Bytes` for immutable results
+- Simple Vec-based implementation focused on BeBytes' needs
 
 ### 3. Compile-Time Validation
 - Bit field completeness is validated at compile time

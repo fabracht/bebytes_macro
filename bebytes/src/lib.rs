@@ -1,18 +1,17 @@
-//! # `BeBytes` - High-Performance Binary Serialization
+//! # `BeBytes` - Binary Serialization
 //!
-//! `BeBytes` is a Rust library that provides procedural macros for generating ultra-fast
+//! `BeBytes` is a Rust library that provides procedural macros for generating
 //! serialization and deserialization methods for network structs. It supports both
-//! big-endian and little-endian byte orders and includes advanced features like bit fields,
+//! big-endian and little-endian byte orders and includes features like bit fields,
 //! marker-delimited fields, and WebAssembly compatibility.
 //!
 //! ## Key Features
 //!
-//! - **High Performance**: Zero-copy operations and minimal allocations
 //! - **Bit Fields**: Pack multiple fields into bytes with `#[bits(N)]` attribute
 //! - **Marker Attributes**: Handle variable-length sections with `#[UntilMarker]` and `#[AfterMarker]`
 //! - **Size Control**: Dynamic field sizing with `#[FromField]` and `#[With(size())]`
 //! - **WebAssembly Support**: Full `no_std` compatibility for WASM targets
-//! - **Comprehensive Types**: Support for primitives, strings, arrays, vectors, enums, and nested structs
+//! - **Type Support**: Primitives, strings, arrays, vectors, enums, and nested structs
 //!
 //! ## Quick Start
 //!
@@ -95,6 +94,7 @@ pub use alloc::vec::Vec;
 #[cfg(feature = "std")]
 pub use std::vec::Vec;
 
+#[cfg(not(feature = "bytes_backend"))]
 pub mod buffer;
 pub mod interpreter;
 
@@ -102,7 +102,12 @@ pub use bebytes_derive::BeBytes;
 #[doc(hidden)]
 pub use interpreter::{StringInterpreter, Utf8};
 
-// Re-export buffer types for generated code (previously from bytes crate)
+#[cfg(feature = "bytes_backend")]
+pub use bytes::buf::BufMut;
+#[cfg(feature = "bytes_backend")]
+pub use bytes::{Bytes, BytesMut};
+
+#[cfg(not(feature = "bytes_backend"))]
 pub use buffer::{BufMut, Bytes, BytesMut};
 
 /// Error type for `BeBytes` operations

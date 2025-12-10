@@ -1,6 +1,6 @@
 [package]
 name = "bebytes"
-version = "2.10.1"
+version = "2.11.0"
 edition = "2021"
 rust-version = "1.75.0"
 license = "MIT"
@@ -21,13 +21,14 @@ path = "./bin/performance_benchmark.rs"
 required-features = ["std"]
 
 [dependencies]
-bebytes_derive = { version = "2.10.1" }
+bebytes_derive = { version = "2.11.0" }
+bytes = { version = "1", optional = true }
 
 [dev-dependencies]
 trybuild = { version = "1.0.102", features = ["diff"] }
 test-case = "3.3.1"
 proptest = "1.4"
-criterion = { version = "0.7", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 
 [[test]]
 name = "core"
@@ -72,3 +73,4 @@ required-features = ["std"]
 [features]
 default = ["std"]
 std = []
+bytes_backend = ["bytes"]

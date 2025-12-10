@@ -2,8 +2,6 @@
 
 BeBytes Derive is a procedural macro crate that provides a custom derive macro for generating serialization and deserialization methods for network structs in Rust. The macro generates code to convert the struct into a byte representation (serialization) and vice versa (deserialization) supporting both big endian and little endian byte orders. It aims to simplify the process of working with network protocols and message formats by automating the conversion between Rust structs and byte arrays.
 
-**Note: BeBytes Derive is currently in development and has not been thoroughly tested in production environments. Use it with caution and ensure proper testing and validation in your specific use case.**
-
 ## Usage
 
 To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
@@ -47,15 +45,15 @@ The BeBytes derive macro will generate the following methods for your struct:
 - `encode_be_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to a buffer (big-endian).
 - `encode_le_to<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Write directly to a buffer (little-endian).
 
-**Ultra-high-performance raw pointer methods (New in 2.5.0):**
+**Raw pointer methods (New in 2.5.0):**
 For eligible structs (no bit fields, ≤256 bytes, primitives/arrays only):
 
 - `supports_raw_pointer_encoding() -> bool`: Check if raw pointer methods are available.
 - `RAW_POINTER_SIZE: usize`: Compile-time constant for struct size.
-- `encode_be_to_raw_stack(&self) -> [u8; N]`: **40-80x faster** stack-allocated encoding (big-endian).
-- `encode_le_to_raw_stack(&self) -> [u8; N]`: **40-80x faster** stack-allocated encoding (little-endian).
-- `unsafe encode_be_to_raw_mut<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Ultra-fast direct buffer writing (big-endian).
-- `unsafe encode_le_to_raw_mut<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Ultra-fast direct buffer writing (little-endian).
+- `encode_be_to_raw_stack(&self) -> [u8; N]`: Stack-allocated encoding (big-endian).
+- `encode_le_to_raw_stack(&self) -> [u8; N]`: Stack-allocated encoding (little-endian).
+- `unsafe encode_be_to_raw_mut<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Direct buffer writing (big-endian).
+- `unsafe encode_le_to_raw_mut<B: BufMut>(&self, buf: &mut B) -> Result<(), BeBytesError>`: Direct buffer writing (little-endian).
 
 ## Example
 
@@ -93,9 +91,9 @@ fn main() {
 
 In this example, we define a struct MyStruct with four fields. The `#[bits]` attribute is used to specify bit-level fields. The BeBytes derive macro generates the serialization and deserialization methods for the struct, allowing us to easily convert it to bytes and back.
 
-## Ultra-High-Performance Raw Pointer Methods
+## Raw Pointer Methods
 
-For maximum performance, BeBytes 2.5.0 introduces raw pointer methods that provide **40-80x speedup** over standard methods:
+BeBytes 2.5.0 introduces raw pointer methods for eligible structs:
 
 ```rust
 use bebytes_derive::BeBytes;
@@ -118,7 +116,7 @@ fn main() {
     if FastPacket::supports_raw_pointer_encoding() {
         println!("Struct size: {} bytes", FastPacket::RAW_POINTER_SIZE);
 
-        // Stack-allocated encoding (completely safe, zero allocations)
+        // Stack-allocated encoding (safe, no heap allocation)
         let bytes = packet.encode_be_to_raw_stack();
         println!("Fast encoding: {:?}", bytes);
 
@@ -126,9 +124,9 @@ fn main() {
         let standard_bytes = packet.to_be_bytes();
         assert_eq!(bytes.as_slice(), standard_bytes.as_slice());
 
-        println!("✅ Raw pointer method is 40-80x faster!");
+        println!("Raw pointer method completed");
     } else {
-        println!("❌ Struct not eligible for raw pointer optimization (has bit fields, too large, or contains unsupported types)");
+        println!("Struct not eligible for raw pointer optimization (has bit fields, too large, or contains unsupported types)");
     }
 }
 ```
@@ -144,21 +142,11 @@ Raw pointer methods are generated for structs that meet all criteria:
   - Characters: `char`
   - Fixed-size byte arrays: `[u8; N]`
 
-### Performance Characteristics
+### Safety
 
-Benchmarked performance improvements over `to_be_bytes()`:
-
-- **Small structs (4 bytes)**: 60x speedup
-- **Medium structs (16 bytes)**: 44x speedup
-- **Large structs (72 bytes)**: 28x speedup
-- **Max structs (256 bytes)**: 5x speedup
-
-### Safety Guarantees
-
-- **Stack methods are completely safe** - Array sizes determined at compile time
-- **No runtime size validation needed** - Compiler enforces correctness
-- **Direct buffer methods include capacity checks** - Prevent buffer overruns
-- **Methods only generated for eligible structs** - Prevents misuse at compile time
+- Stack methods are safe - array sizes determined at compile time
+- Direct buffer methods include capacity checks
+- Methods only generated for eligible structs
 
 ## How it works
 
@@ -301,7 +289,7 @@ Requirements for flag enums:
 
 - All enum variants must have power-of-2 values (1, 2, 4, 8, etc.)
 - Zero value is allowed for "None" or empty flags
-- Must use `#[repr(u8)]` representation
+- All discriminant values must be within 0-255 range
 
 ## Options
 
@@ -367,9 +355,26 @@ pub struct ErrorEstimate {
 
 This allows you to read the value as part of the incoming buffer, such as is the case for DNS packets, where the domain name is interleaved by the number that specifies the length of the next part of the name. (3www7example3com)
 
+## Per-Field Endianness
+
+By default, all fields use the endianness of the method called (`to_be_bytes` or `to_le_bytes`). You can override this for individual fields:
+
+```rust
+#[derive(BeBytes)]
+struct MixedEndianPacket {
+    big_field: u32,                    // Uses method's endianness
+    #[bebytes(little_endian)]
+    little_field: u16,                 // Always little-endian
+    #[bebytes(big_endian)]
+    explicit_big: u32,                 // Always big-endian
+}
+```
+
+This is useful for protocols that mix endianness.
+
 ## Size Expressions (New in 2.3.0)
 
-BeBytes now supports dynamic field sizing using mathematical expressions and field references. This powerful feature enables efficient binary protocol implementations where field sizes depend on other fields in the struct.
+BeBytes supports dynamic field sizing using mathematical expressions and field references. This enables binary protocol implementations where field sizes depend on other fields in the struct.
 
 ### Basic Syntax
 
@@ -460,7 +465,7 @@ struct StringMessage {
 - **Field Dependencies**: Reference any previously defined field in the struct
 - **Mathematical Operations**: Full support for `+`, `-`, `*`, `/`, `%` with parentheses
 - **Memory Safety**: Proper bounds checking and size validation
-- **Performance**: No significant overhead compared to manual size calculations
+- **Bounds Checking**: Size validation during serialization/deserialization
 
 ### Last field
 
@@ -470,7 +475,7 @@ NOTICE: If a vector is used as the last field of another struct, but the struct 
 
 ## Characters and Strings
 
-BeBytes provides comprehensive support for character and string types, making it easy to work with text data in binary protocols.
+BeBytes supports character and string types for text data in binary protocols.
 
 ### Character Support
 

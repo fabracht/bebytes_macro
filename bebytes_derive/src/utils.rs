@@ -4,7 +4,7 @@ use syn::AngleBracketedGenericArguments;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use crate::consts::{Endianness, PRIMITIVES, SUPPORTED_PRIMITIVES};
+use crate::consts::{Endianness, PRIMITIVES};
 
 pub fn get_from_bytes_method(endianness: Endianness) -> proc_macro2::TokenStream {
     match endianness {
@@ -27,10 +27,21 @@ pub fn get_try_from_bytes_method(endianness: Endianness) -> proc_macro2::TokenSt
     }
 }
 
+pub fn get_encode_to_method(endianness: Endianness) -> proc_macro2::TokenStream {
+    match endianness {
+        Endianness::Big => quote! { encode_be_to },
+        Endianness::Little => quote! { encode_le_to },
+    }
+}
+
 /// Get the size of a primitive type in bytes
 pub fn get_primitive_type_size(field_type: &syn::Type) -> Result<usize, syn::Error> {
     match field_type {
-        syn::Type::Path(tp) if tp.path.is_ident("i8") || tp.path.is_ident("u8") => Ok(1),
+        syn::Type::Path(tp)
+            if tp.path.is_ident("i8") || tp.path.is_ident("u8") || tp.path.is_ident("bool") =>
+        {
+            Ok(1)
+        }
         syn::Type::Path(tp) if tp.path.is_ident("i16") || tp.path.is_ident("u16") => Ok(2),
         syn::Type::Path(tp)
             if tp.path.is_ident("i32") || tp.path.is_ident("u32") || tp.path.is_ident("f32") =>
@@ -91,12 +102,6 @@ pub fn is_primitive_identity(ident: &syn::Ident) -> bool {
 
 pub fn is_primitive_type(tp: &syn::TypePath) -> bool {
     PRIMITIVES
-        .iter()
-        .any(|&primitive| tp.path.is_ident(primitive))
-}
-
-pub fn is_supported_primitive_type(tp: &syn::TypePath) -> bool {
-    SUPPORTED_PRIMITIVES
         .iter()
         .any(|&primitive| tp.path.is_ident(primitive))
 }
@@ -293,46 +298,6 @@ mod tests {
             } else {
                 // Non-path types are definitely not primitives
                 // Non-path type is not primitive
-            }
-        }
-    }
-
-    #[test]
-    fn test_is_supported_primitive_type() {
-        // BeBytes supports most primitives except usize/isize
-        let supported = vec![
-            "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
-        ];
-
-        for prim in supported {
-            let ident = syn::Ident::new(prim, proc_macro2::Span::call_site());
-            let ty: syn::Type = parse_quote!(#ident);
-            if let syn::Type::Path(tp) = &ty {
-                assert!(
-                    is_supported_primitive_type(tp),
-                    "{prim} should be supported"
-                );
-            } else {
-                panic!("Expected Type::Path for {prim}");
-            }
-        }
-
-        // Unsupported types
-        let unsupported = vec![
-            parse_quote!(usize),
-            parse_quote!(isize),
-            parse_quote!(f32),
-            parse_quote!(f64),
-            parse_quote!(bool),
-            parse_quote!(String),
-        ];
-
-        for ty in unsupported {
-            if let syn::Type::Path(tp) = &ty {
-                assert!(!is_supported_primitive_type(tp), "Should not be supported");
-            } else {
-                // Non-path types are definitely not supported
-                // Non-path type is not supported
             }
         }
     }
