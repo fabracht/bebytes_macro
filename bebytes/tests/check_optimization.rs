@@ -1,11 +1,5 @@
 use bebytes::BeBytes;
 
-#[derive(BeBytes, Clone, Copy, Debug, PartialEq)]
-enum E {
-    A = 0,
-    B = 1,
-}
-
 // Should use optimization
 #[derive(BeBytes, Debug, PartialEq)]
 struct WithoutAuto {
@@ -19,7 +13,7 @@ struct WithoutAuto {
 struct WithBitFields {
     p: u64, // 0-63
     #[bits(1)]
-    e: u8, // 64 (1 bit) - enum E as u8
+    e: u8, // 64 (1 bit)
     #[bits(7)]
     x: u8, // 65-71
     #[bits(16)]
@@ -37,7 +31,7 @@ fn test_check_optimization() {
         e: 1,
         x: 0x55,
         f: 0x5678,
-    }; // e: 1 = E::B
+    };
     let b2 = s2.to_be_bytes();
     assert_eq!(b2.len(), 11);
 

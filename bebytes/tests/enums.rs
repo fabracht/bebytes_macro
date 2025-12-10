@@ -91,37 +91,28 @@ mod auto_sized_enums {
         V4 = 4,
     }
 
-    #[derive(Debug, Clone, Copy, PartialEq, BeBytes)]
-    enum FiveBitEnum {
-        V0 = 0,
-        V1 = 1,
-        V16 = 16,
-        V31 = 31,
-    }
-
     #[derive(BeBytes, Debug, PartialEq)]
     struct AutoSizedPacket {
         #[bits(4)]
         prefix: u8,
-        #[bits(2)] // TwoBitEnum as u8: 0-3, needs 2 bits
+        #[bits(2)]
         two_bit: u8,
-        #[bits(2)] // ThreeBitEnum as u8: 0-4, needs 2 bits (reduced from 3 to make byte complete)
+        #[bits(2)]
         three_bit: u8,
-        suffix: u8, // Full byte for simplicity
+        suffix: u8,
     }
 
     #[test]
     fn test_bit_packing() {
-        // Test bit packing without auto-sized enums
         let packet = AutoSizedPacket {
-            prefix: 0xF,  // 4 bits: 1111
-            two_bit: 2,   // 2 bits: 10 (represents TwoBitEnum::C)
-            three_bit: 1, // 2 bits: 01 (represents ThreeBitEnum::V1)
-            suffix: 0x55, // Full byte
+            prefix: 0xF,
+            two_bit: 2,
+            three_bit: 1,
+            suffix: 0x55,
         };
 
         let bytes = packet.to_be_bytes();
-        assert_eq!(bytes.len(), 2); // 4+2+2 = 8 bits (1 byte) + 1 full byte = 2 bytes
+        assert_eq!(bytes.len(), 2);
 
         let (decoded, _) = AutoSizedPacket::try_from_be_bytes(&bytes).unwrap();
         assert_eq!(decoded, packet);
@@ -392,31 +383,21 @@ mod enum_bit_packing {
 
     #[test]
     fn test_non_contiguous_enum_values() {
-        #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-        enum NonContiguous {
-            First = 0,
-            Second = 5,
-            Third = 10,
-            Fourth = 15,
-        }
-
-        // NonContiguous needs 4 bits to represent value 15
-
         #[derive(BeBytes, Debug, PartialEq)]
         struct NonContiguousPacket {
             #[bits(4)]
             prefix: u8,
             #[bits(4)]
-            value: u8, // NonContiguous as u8
+            value: u8,
         }
 
         let packet = NonContiguousPacket {
             prefix: 0xA,
-            value: 10, // 10 = NonContiguous::Third
+            value: 10,
         };
 
         let bytes = packet.to_be_bytes();
         let (decoded, _) = NonContiguousPacket::try_from_be_bytes(&bytes).unwrap();
-        assert_eq!(decoded.value, 10); // 10 = NonContiguous::Third
+        assert_eq!(decoded.value, 10);
     }
 }

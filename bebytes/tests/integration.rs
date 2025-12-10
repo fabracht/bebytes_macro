@@ -358,46 +358,30 @@ mod edge_case_integration {
         FeatureD = 8,
     }
 
-    #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
-    enum Mode {
-        Normal = 0,
-        Extended = 1,
-        Compact = 2,
-    }
-
     #[derive(BeBytes, Debug, PartialEq)]
     struct KitchenSink {
-        // Primitive types
         u8_field: u8,
         i16_field: i16,
         u32_field: u32,
 
-        // Arrays
         fixed_array: [u8; 4],
 
-        // Bit fields
         #[bits(3)]
         small_bits: u8,
         #[bits(13)]
         medium_bits: u16,
 
-        // Mode as u8 (2 bits for 3 values: Normal=0, Extended=1, Compact=2)
         #[bits(2)]
         mode: u8,
-        // Padding to complete the byte (3 + 13 + 2 + 6 = 24 bits = 3 bytes)
         #[bits(6)]
         padding_bits: u8,
 
-        // Flag enum (stored as u8 due to bitwise operations)
         flags: u8,
 
-        // Options
         optional_value: Option<u32>,
 
-        // Nested struct
         nested: ComplexNested,
 
-        // Vectors
         vec_length: u16,
         #[FromField(vec_length)]
         dynamic_vec: Vec<u8>,
@@ -405,7 +389,6 @@ mod edge_case_integration {
         #[With(size(8))]
         fixed_vec: Vec<u8>,
 
-        // Vector as last field
         padding: Vec<u8>,
     }
 
