@@ -235,12 +235,6 @@ mod complex_protocols {
     }
 
     #[derive(BeBytes, Debug, PartialEq)]
-    struct AuthInfo {
-        method: u8,
-        token: [u8; 32],
-    }
-
-    #[derive(BeBytes, Debug, PartialEq)]
     struct Command {
         header: CommandHeader,
         payload_length: u32,

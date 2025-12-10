@@ -63,8 +63,6 @@ fn test_parse_attributes_returns_values() {
 
 #[test]
 fn test_determine_field_type_returns_correct_type() {
-    // Test that determine_field_type returns correct types
-
     #[derive(BeBytes, Debug, PartialEq)]
     struct FieldTypeReturnTest {
         count: u16,
@@ -75,29 +73,32 @@ fn test_determine_field_type_returns_correct_type() {
         primitive_field: u64,
     }
 
-    // This struct wouldn't compile correctly if determine_field_type returned None
-    // The fact it compiles and has the right size proves the function works
-    let _expected_size = 2 + 5 + 10 + 8; // count + option + array + u64
+    let test = FieldTypeReturnTest {
+        count: 3,
+        vec_field: vec![1, 2, 3],
+        opt_field: Some(42),
+        array_field: [0; 10],
+        primitive_field: 123,
+    };
+
+    let bytes = test.to_be_bytes();
+    let (decoded, _) = FieldTypeReturnTest::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(decoded, test);
 }
 
 #[test]
 fn test_functional_helpers_return_valid_tokens() {
-    // Test that functional helpers don't return Default::default()
-
     #[derive(BeBytes, Debug, PartialEq)]
     struct FunctionalHelperTest {
-        // Tests create_primitive_parsing/writing
         u8_val: u8,
         u16_val: u16,
         u32_val: u32,
         u64_val: u64,
         u128_val: u128,
 
-        // Tests create_field_accessor
         #[FromField(u8_val)]
         dynamic: Vec<u8>,
 
-        // Tests bit operations
         #[bits(12)]
         twelve: u16,
         #[bits(4)]
