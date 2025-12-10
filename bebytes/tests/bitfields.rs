@@ -272,24 +272,20 @@ mod endianness {
         field2: u32,
     }
 
-    // TODO: This test is disabled due to a bug in multi-byte bitfield deserialization
-    // The deserializer incorrectly requires extra bytes when fields don't align on byte boundaries
-    // It checks for the full size of the underlying type instead of actual bytes needed
-    // #[test]
-    // fn test_bitfield_endianness() {
-    //     let data = BitfieldEndian {
-    //         field1: 0xABC,
-    //         field2: 0xDEF01,
-    //     };
-    //
-    //     let be_bytes = data.to_be_bytes();
-    //     let le_bytes = data.to_le_bytes();
-    //
-    //     // Both should deserialize correctly with their respective methods
-    //     let (be_decoded, _) = BitfieldEndian::try_from_be_bytes(&be_bytes).unwrap();
-    //     let (le_decoded, _) = BitfieldEndian::try_from_le_bytes(&le_bytes).unwrap();
-    //
-    //     assert_eq!(be_decoded, data);
-    //     assert_eq!(le_decoded, data);
-    // }
+    #[test]
+    fn test_bitfield_endianness() {
+        let data = BitfieldEndian {
+            field1: 0xABC,
+            field2: 0xDEF01,
+        };
+
+        let be_bytes = data.to_be_bytes();
+        let le_bytes = data.to_le_bytes();
+
+        let (be_decoded, _) = BitfieldEndian::try_from_be_bytes(&be_bytes).unwrap();
+        let (le_decoded, _) = BitfieldEndian::try_from_le_bytes(&le_bytes).unwrap();
+
+        assert_eq!(be_decoded, data);
+        assert_eq!(le_decoded, data);
+    }
 }
