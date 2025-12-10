@@ -32,8 +32,10 @@ fn ui_tests() {
 
     // ===== TYPE TESTS =====
     t.compile_fail("tests/compile_time/types/unsupported_structure.rs");
-    t.compile_fail("tests/compile_time/types/unsupported_f64.rs");
     t.compile_fail("tests/compile_time/types/unsupported_isize.rs");
+    t.compile_fail("tests/compile_time/types/bits_on_f32.rs");
+    t.compile_fail("tests/compile_time/types/bits_on_f64.rs");
+    t.compile_fail("tests/compile_time/types/bits_on_bool.rs");
 
     // ===== VECTOR TESTS =====
     t.compile_fail("tests/compile_time/vectors/fromfield_nonexistent.rs");
