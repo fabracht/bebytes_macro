@@ -341,6 +341,165 @@ mod flag_enums {
     }
 }
 
+#[cfg(feature = "std")]
+mod multibyte_flags {
+    use super::*;
+
+    #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+    #[bebytes(flags)]
+    enum U16Flags {
+        None = 0,
+        Bit0 = 1,
+        Bit8 = 256,
+        Bit15 = 32768,
+    }
+
+    #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+    #[bebytes(flags(u32))]
+    enum ExplicitU32Flags {
+        None = 0,
+        Low = 1,
+        Mid = 65536,
+        High = 0x8000_0000,
+    }
+
+    #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+    #[bebytes(flags)]
+    enum AutoDetectU32 {
+        A = 1,
+        B = 0x1_0000,
+    }
+
+    #[test]
+    fn test_u16_flags_basic() {
+        assert_eq!(U16Flags::field_size(), 2);
+
+        let flag = U16Flags::Bit8;
+        assert!(flag.contains(U16Flags::Bit8));
+        assert!(!flag.contains(U16Flags::Bit0));
+
+        let combined: u16 = U16Flags::Bit0 | U16Flags::Bit8;
+        assert_eq!(combined, 257);
+    }
+
+    #[test]
+    fn test_u16_flags_serialization() {
+        let bytes = U16Flags::Bit8.to_be_bytes();
+        assert_eq!(bytes, vec![0x01, 0x00]);
+
+        let bytes_le = U16Flags::Bit8.to_le_bytes();
+        assert_eq!(bytes_le, vec![0x00, 0x01]);
+
+        let (parsed, consumed) = U16Flags::try_from_be_bytes(&[0x01, 0x00]).unwrap();
+        assert_eq!(parsed, U16Flags::Bit8);
+        assert_eq!(consumed, 2);
+    }
+
+    #[test]
+    fn test_u16_flags_bitwise_ops() {
+        let combined = U16Flags::Bit0 | U16Flags::Bit15;
+        assert_eq!(combined, 32769);
+
+        let masked = combined & U16Flags::Bit0;
+        assert_eq!(masked, 1);
+
+        let toggled = U16Flags::Bit0 ^ U16Flags::Bit0;
+        assert_eq!(toggled, 0);
+
+        let inverted = !U16Flags::None;
+        assert_eq!(inverted, 0xFFFF);
+    }
+
+    #[test]
+    fn test_u16_flags_from_bits() {
+        let valid = U16Flags::from_bits(257);
+        assert_eq!(valid, Some(257));
+
+        let invalid = U16Flags::from_bits(2);
+        assert!(invalid.is_none());
+    }
+
+    #[test]
+    fn test_u16_flags_decompose() {
+        let combined = U16Flags::Bit0 | U16Flags::Bit8 | U16Flags::Bit15;
+        let decomposed = U16Flags::decompose(combined);
+        assert_eq!(decomposed.len(), 3);
+        assert!(decomposed.contains(&U16Flags::Bit0));
+        assert!(decomposed.contains(&U16Flags::Bit8));
+        assert!(decomposed.contains(&U16Flags::Bit15));
+    }
+
+    #[test]
+    fn test_explicit_u32_flags() {
+        assert_eq!(ExplicitU32Flags::field_size(), 4);
+
+        let bytes = ExplicitU32Flags::High.to_be_bytes();
+        assert_eq!(bytes, vec![0x80, 0x00, 0x00, 0x00]);
+
+        let combined: u32 = ExplicitU32Flags::Low | ExplicitU32Flags::High;
+        assert_eq!(combined, 0x8000_0001);
+    }
+
+    #[test]
+    fn test_explicit_u32_flags_round_trip() {
+        let bytes = ExplicitU32Flags::Mid.to_be_bytes();
+        let (parsed, _) = ExplicitU32Flags::try_from_be_bytes(&bytes).unwrap();
+        assert_eq!(parsed, ExplicitU32Flags::Mid);
+    }
+
+    #[test]
+    fn test_auto_detect_u32() {
+        assert_eq!(AutoDetectU32::field_size(), 4);
+
+        let combined: u32 = AutoDetectU32::A | AutoDetectU32::B;
+        assert_eq!(combined, 0x1_0001);
+    }
+
+    #[test]
+    fn test_u32_flags_in_struct() {
+        #[derive(BeBytes, Debug, PartialEq)]
+        struct FlagPacket32 {
+            header: u8,
+            flags: u32,
+            trailer: u8,
+        }
+
+        let packet = FlagPacket32 {
+            header: 0xAA,
+            flags: ExplicitU32Flags::Low | ExplicitU32Flags::High,
+            trailer: 0xBB,
+        };
+
+        let bytes = packet.to_be_bytes();
+        assert_eq!(bytes.len(), 6);
+        assert_eq!(bytes[0], 0xAA);
+        assert_eq!(&bytes[1..5], &[0x80, 0x00, 0x00, 0x01]);
+        assert_eq!(bytes[5], 0xBB);
+
+        let (decoded, _) = FlagPacket32::try_from_be_bytes(&bytes).unwrap();
+        assert_eq!(decoded, packet);
+    }
+
+    #[test]
+    fn test_try_from_for_multibyte() {
+        let val: u16 = 256;
+        let flag = U16Flags::try_from(val).unwrap();
+        assert_eq!(flag, U16Flags::Bit8);
+
+        let invalid = U16Flags::try_from(2u16);
+        assert!(invalid.is_err());
+    }
+
+    #[test]
+    fn test_u16_flags_iter() {
+        let combined: u16 = U16Flags::Bit0 | U16Flags::Bit15;
+        let flags: Vec<_> = U16Flags::iter_flags(combined).collect();
+        assert_eq!(flags.len(), 2);
+        assert!(flags.contains(&U16Flags::Bit0));
+        assert!(flags.contains(&U16Flags::Bit15));
+    }
+}
+
 mod enum_bit_packing {
     use super::*;
 

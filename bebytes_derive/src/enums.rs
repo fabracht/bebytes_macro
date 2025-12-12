@@ -6,16 +6,63 @@ use std::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlagType {
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+}
+
+impl FlagType {
+    pub fn from_max_value(max: u128) -> Self {
+        if max <= u128::from(u8::MAX) {
+            FlagType::U8
+        } else if max <= u128::from(u16::MAX) {
+            FlagType::U16
+        } else if max <= u128::from(u32::MAX) {
+            FlagType::U32
+        } else if max <= u128::from(u64::MAX) {
+            FlagType::U64
+        } else {
+            FlagType::U128
+        }
+    }
+
+    pub fn byte_size(self) -> usize {
+        match self {
+            FlagType::U8 => 1,
+            FlagType::U16 => 2,
+            FlagType::U32 => 4,
+            FlagType::U64 => 8,
+            FlagType::U128 => 16,
+        }
+    }
+
+    pub fn type_tokens(self) -> proc_macro2::TokenStream {
+        match self {
+            FlagType::U8 => quote! { u8 },
+            FlagType::U16 => quote! { u16 },
+            FlagType::U32 => quote! { u32 },
+            FlagType::U64 => quote! { u64 },
+            FlagType::U128 => quote! { u128 },
+        }
+    }
+}
+
 // Type alias for the complex return type
 type EnumHandleResult = (
     Vec<proc_macro2::TokenStream>,
     Vec<proc_macro2::TokenStream>,
     usize,
     Vec<proc_macro2::TokenStream>,
-    Vec<(syn::Ident, u8)>,
+    Vec<(syn::Ident, u128)>,
     Vec<proc_macro2::TokenStream>, // errors
+    FlagType,
 );
 
+#[allow(clippy::too_many_lines)]
 pub fn handle_enum(
     mut errors: Vec<proc_macro2::TokenStream>,
     data_enum: syn::DataEnum,
@@ -27,7 +74,6 @@ pub fn handle_enum(
         .map(|(index, variant)| {
             let ident = &variant.ident;
 
-            // Check for data variants (not supported by BeBytes)
             match &variant.fields {
                 syn::Fields::Named(_) => {
                     let error = syn::Error::new(
@@ -43,71 +89,80 @@ pub fn handle_enum(
                     );
                     errors.push(error.to_compile_error());
                 }
-                syn::Fields::Unit => {
-                    // This is fine - unit variants are supported
-                }
+                syn::Fields::Unit => {}
             }
-            let mut assigned_value = u8::try_from(index).unwrap_or_else(|_| {
-                let error = syn::Error::new(
-                    ident.span(),
-                    format!("Enum variant index {index} exceeds u8 range"),
-                );
-                errors.push(error.to_compile_error());
-                0
-            });
+
+            let mut assigned_value = index as u128;
+
             if let Some((_, syn::Expr::Lit(expr_lit))) = &variant.discriminant {
                 if let syn::Lit::Int(token) = &expr_lit.lit {
-                    // First parse as usize to check the actual value
-                    let value: usize = token.base10_parse().unwrap_or_else(|_e| {
+                    assigned_value = token.base10_parse::<u128>().unwrap_or_else(|_e| {
                         let error =
                             syn::Error::new(token.span(), "Failed to parse discriminant value");
                         errors.push(error.to_compile_error());
                         0
                     });
-
-                    // Check if value exceeds u8 range
-                    if value > 255 {
-                        let error = syn::Error::new(
-                            token.span(),
-                            format!("Enum discriminant value {value} exceeds u8 range (0-255)"),
-                        );
-                        errors.push(error.to_compile_error());
-                        assigned_value = 0; // Use 0 as fallback to continue compilation
-                    } else {
-                        assigned_value = u8::try_from(value).unwrap_or(0);
-                    }
                 }
             }
             (ident.clone(), assigned_value)
         })
         .collect::<Vec<_>>();
 
-    let from_bytes_arms = values
-        .iter()
-        .map(|(ident, assigned_value)| {
-            quote! {
-                #assigned_value => Ok((Self::#ident, 1)),
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let to_bytes_arms = values
-        .iter()
-        .map(|(ident, assigned_value)| {
-            quote! {
-                Self::#ident => #assigned_value as u8,
-            }
-        })
-        .collect::<Vec<_>>();
-
-    // Calculate minimum bits needed for this enum
     let max_discriminant = values.iter().map(|(_, value)| *value).max().unwrap_or(0);
+    let flag_type = FlagType::from_max_value(max_discriminant);
+    let byte_size = flag_type.byte_size();
 
-    // Calculate minimum bits: ceil(log2(max_discriminant + 1))
+    #[allow(clippy::cast_possible_truncation)]
+    let typed_values: Vec<_> = values
+        .iter()
+        .map(|(ident, val)| {
+            let typed_val = match flag_type {
+                FlagType::U8 => {
+                    let v = *val as u8;
+                    quote! { #v }
+                }
+                FlagType::U16 => {
+                    let v = *val as u16;
+                    quote! { #v }
+                }
+                FlagType::U32 => {
+                    let v = *val as u32;
+                    quote! { #v }
+                }
+                FlagType::U64 => {
+                    let v = *val as u64;
+                    quote! { #v }
+                }
+                FlagType::U128 => {
+                    let v = *val;
+                    quote! { #v }
+                }
+            };
+            (ident.clone(), typed_val, *val)
+        })
+        .collect();
+
+    let from_bytes_arms = typed_values
+        .iter()
+        .map(|(ident, typed_val, _)| {
+            quote! {
+                #typed_val => Ok((Self::#ident, #byte_size)),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let to_bytes_arms = typed_values
+        .iter()
+        .map(|(ident, typed_val, _)| {
+            quote! {
+                Self::#ident => #typed_val,
+            }
+        })
+        .collect::<Vec<_>>();
+
     let min_bits = if max_discriminant == 0 {
-        1 // Even a single variant needs at least 1 bit
+        1
     } else {
-        // Find the position of the highest set bit
         let mut bits = 0;
         let mut val = max_discriminant;
         while val > 0 {
@@ -117,17 +172,15 @@ pub fn handle_enum(
         bits
     };
 
-    // Generate TryFrom<u8> arms for auto-sized bit fields
-    let try_from_arms = values
+    let try_from_arms = typed_values
         .iter()
-        .map(|(ident, assigned_value)| {
+        .map(|(ident, typed_val, _)| {
             quote! {
-                #assigned_value => Ok(Self::#ident),
+                #typed_val => Ok(Self::#ident),
             }
         })
         .collect::<Vec<_>>();
 
-    // For enums, the byte representation is the same for both endianness since we're just storing a single byte value
     (
         from_bytes_arms,
         to_bytes_arms,
@@ -135,5 +188,6 @@ pub fn handle_enum(
         try_from_arms,
         values,
         errors,
+        flag_type,
     )
 }

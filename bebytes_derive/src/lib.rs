@@ -520,22 +520,37 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
             }
         },
         Data::Enum(data_enum) => {
-            // Check if this is a flags enum
-            let is_flags_enum = input.attrs.iter().any(|attr| {
-                attr.path().is_ident("bebytes") && {
-                    let mut is_flags = false;
-                    if let Ok(()) = attr.parse_nested_meta(|meta| {
+            let mut is_flags_enum = false;
+            let mut explicit_flag_type: Option<enums::FlagType> = None;
+
+            for attr in &input.attrs {
+                if attr.path().is_ident("bebytes") {
+                    let _ = attr.parse_nested_meta(|meta| {
                         if meta.path.is_ident("flags") {
-                            is_flags = true;
+                            is_flags_enum = true;
+                            if meta.input.peek(syn::token::Paren) {
+                                let content;
+                                syn::parenthesized!(content in meta.input);
+                                let type_ident: syn::Ident = content.parse()?;
+                                explicit_flag_type = match type_ident.to_string().as_str() {
+                                    "u8" => Some(enums::FlagType::U8),
+                                    "u16" => Some(enums::FlagType::U16),
+                                    "u32" => Some(enums::FlagType::U32),
+                                    "u64" => Some(enums::FlagType::U64),
+                                    "u128" => Some(enums::FlagType::U128),
+                                    _ => {
+                                        return Err(syn::Error::new(
+                                            type_ident.span(),
+                                            "Invalid flag type. Expected u8, u16, u32, u64, or u128",
+                                        ));
+                                    }
+                                };
+                            }
                         }
                         Ok(())
-                    }) {
-                        is_flags
-                    } else {
-                        false
-                    }
+                    });
                 }
-            });
+            }
 
             let (
                 from_be_bytes_arms,
@@ -544,9 +559,12 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 try_from_arms,
                 discriminants,
                 enum_errors,
+                detected_flag_type,
             ) = enums::handle_enum(Vec::new(), data_enum.clone());
-            let (from_le_bytes_arms, to_le_bytes_arms, _, _, _, _) =
+            let (from_le_bytes_arms, to_le_bytes_arms, _, _, _, _, _) =
                 enums::handle_enum(Vec::new(), data_enum);
+
+            let flag_type = explicit_flag_type.unwrap_or(detected_flag_type);
 
             // If there are any errors from enum validation, return them
             if !enum_errors.is_empty() {
@@ -556,17 +574,68 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 .into();
             }
 
+            let type_tokens = flag_type.type_tokens();
+            let byte_size = flag_type.byte_size();
+            let byte_size_lit = syn::LitInt::new(&byte_size.to_string(), Span::call_site());
+
+            let (big_endian_read, little_endian_read, big_endian_write, little_endian_write) =
+                match flag_type {
+                    enums::FlagType::U8 => (
+                        quote! { bytes[0] },
+                        quote! { bytes[0] },
+                        quote! { put_u8 },
+                        quote! { put_u8 },
+                    ),
+                    enums::FlagType::U16 => (
+                        quote! { u16::from_be_bytes([bytes[0], bytes[1]]) },
+                        quote! { u16::from_le_bytes([bytes[0], bytes[1]]) },
+                        quote! { put_u16 },
+                        quote! { put_u16_le },
+                    ),
+                    enums::FlagType::U32 => (
+                        quote! { u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) },
+                        quote! { u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) },
+                        quote! { put_u32 },
+                        quote! { put_u32_le },
+                    ),
+                    enums::FlagType::U64 => (
+                        quote! { u64::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]) },
+                        quote! { u64::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]) },
+                        quote! { put_u64 },
+                        quote! { put_u64_le },
+                    ),
+                    enums::FlagType::U128 => (
+                        quote! { u128::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]]) },
+                        quote! { u128::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]]) },
+                        quote! { put_u128 },
+                        quote! { put_u128_le },
+                    ),
+                };
+
+            let error_expr = if flag_type == enums::FlagType::U8 {
+                quote! {
+                    Err(::bebytes::BeBytesError::InvalidDiscriminant {
+                        value,
+                        type_name: stringify!(#name),
+                    })
+                }
+            } else {
+                quote! {
+                    Err(::bebytes::BeBytesError::InvalidDiscriminantLarge {
+                        value: value as u128,
+                        type_name: stringify!(#name),
+                    })
+                }
+            };
+
             let expanded = quote! {
-                impl ::core::convert::TryFrom<u8> for #name {
+                impl ::core::convert::TryFrom<#type_tokens> for #name {
                     type Error = ::bebytes::BeBytesError;
 
-                    fn try_from(value: u8) -> ::core::result::Result<Self, Self::Error> {
+                    fn try_from(value: #type_tokens) -> ::core::result::Result<Self, Self::Error> {
                         match value {
                             #(#try_from_arms)*
-                            _ => Err(::bebytes::BeBytesError::InvalidDiscriminant {
-                                value,
-                                type_name: stringify!(#name),
-                            }),
+                            _ => #error_expr,
                         }
                     }
                 }
@@ -574,102 +643,96 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 impl #my_trait_path for #name {
                     #[inline(always)]
                     fn field_size() -> usize {
-                        1
+                        #byte_size_lit
                     }
 
-                    // Big-endian implementation
                     #[inline]
                     fn try_from_be_bytes(bytes: &[u8]) -> ::core::result::Result<(Self, usize), ::bebytes::BeBytesError> {
-                        if bytes.is_empty() {
-                            return Err(::bebytes::BeBytesError::EmptyBuffer);
+                        if bytes.len() < #byte_size_lit {
+                            return Err(::bebytes::BeBytesError::InsufficientData {
+                                expected: #byte_size_lit,
+                                actual: bytes.len(),
+                            });
                         }
-                        let value = bytes[0];
+                        let value = #big_endian_read;
                         match value {
                             #(#from_be_bytes_arms)*
-                            _ => Err(::bebytes::BeBytesError::InvalidDiscriminant {
-                                value,
-                                type_name: stringify!(#name),
-                            }),
+                            _ => #error_expr,
                         }
                     }
 
                     #[inline]
                     fn to_be_bytes(&self) -> Vec<u8> {
-                        let mut buf = ::bebytes::BytesMut::with_capacity(1);
+                        let mut buf = ::bebytes::BytesMut::with_capacity(#byte_size_lit);
                         let val = match self {
                             #(#to_be_bytes_arms)*
                         };
-                        ::bebytes::BufMut::put_u8(&mut buf, val);
+                        ::bebytes::BufMut::#big_endian_write(&mut buf, val);
                         buf.freeze().to_vec()
                     }
 
-                    // Little-endian implementation
                     #[inline]
                     fn try_from_le_bytes(bytes: &[u8]) -> ::core::result::Result<(Self, usize), ::bebytes::BeBytesError> {
-                        if bytes.is_empty() {
-                            return Err(::bebytes::BeBytesError::EmptyBuffer);
+                        if bytes.len() < #byte_size_lit {
+                            return Err(::bebytes::BeBytesError::InsufficientData {
+                                expected: #byte_size_lit,
+                                actual: bytes.len(),
+                            });
                         }
-                        let value = bytes[0];
+                        let value = #little_endian_read;
                         match value {
                             #(#from_le_bytes_arms)*
-                            _ => Err(::bebytes::BeBytesError::InvalidDiscriminant {
-                                value,
-                                type_name: stringify!(#name),
-                            }),
+                            _ => #error_expr,
                         }
                     }
 
                     #[inline]
                     fn to_le_bytes(&self) -> Vec<u8> {
-                        let mut buf = ::bebytes::BytesMut::with_capacity(1);
+                        let mut buf = ::bebytes::BytesMut::with_capacity(#byte_size_lit);
                         let val = match self {
                             #(#to_le_bytes_arms)*
                         };
-                        ::bebytes::BufMut::put_u8(&mut buf, val);
+                        ::bebytes::BufMut::#little_endian_write(&mut buf, val);
                         buf.freeze().to_vec()
                     }
 
-                    /// Convert to big-endian bytes as a Bytes buffer
                     #[inline]
                     fn to_be_bytes_buf(&self) -> ::bebytes::Bytes {
                         ::bebytes::Bytes::from(self.to_be_bytes())
                     }
 
-                    /// Convert to little-endian bytes as a Bytes buffer
                     #[inline]
                     fn to_le_bytes_buf(&self) -> ::bebytes::Bytes {
                         ::bebytes::Bytes::from(self.to_le_bytes())
                     }
 
-                    /// Encode directly to a buffer in big-endian format
                     #[inline]
                     fn encode_be_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
-                        if buf.remaining_mut() < 1 {
+                        if buf.remaining_mut() < #byte_size_lit {
                             return Err(::bebytes::BeBytesError::InsufficientData {
-                                expected: 1,
+                                expected: #byte_size_lit,
                                 actual: buf.remaining_mut(),
                             });
                         }
                         let val = match self {
                             #(#to_be_bytes_arms)*
                         };
-                        buf.put_u8(val);
+                        buf.#big_endian_write(val);
                         Ok(())
                     }
 
-                    /// Encode directly to a buffer in little-endian format
                     #[inline]
                     fn encode_le_to<B: ::bebytes::BufMut>(&self, buf: &mut B) -> ::core::result::Result<(), ::bebytes::BeBytesError> {
-                        if buf.remaining_mut() < 1 {
+                        if buf.remaining_mut() < #byte_size_lit {
                             return Err(::bebytes::BeBytesError::InsufficientData {
-                                expected: 1,
+                                expected: #byte_size_lit,
                                 actual: buf.remaining_mut(),
                             });
                         }
                         let val = match self {
                             #(#to_le_bytes_arms)*
                         };
-                        buf.put_u8(val);
+                        buf.#little_endian_write(val);
                         Ok(())
                     }
                 }
@@ -702,100 +765,96 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     quote! {
                         #expanded
 
-                        // Bitwise operations for flag enums
                         impl core::ops::BitOr for #name {
-                            type Output = u8;
+                            type Output = #type_tokens;
 
                             fn bitor(self, rhs: Self) -> Self::Output {
-                                (self as u8) | (rhs as u8)
+                                (self as #type_tokens) | (rhs as #type_tokens)
                             }
                         }
 
-                        impl core::ops::BitOr<u8> for #name {
-                            type Output = u8;
+                        impl core::ops::BitOr<#type_tokens> for #name {
+                            type Output = #type_tokens;
 
-                            fn bitor(self, rhs: u8) -> Self::Output {
-                                (self as u8) | rhs
+                            fn bitor(self, rhs: #type_tokens) -> Self::Output {
+                                (self as #type_tokens) | rhs
                             }
                         }
 
-                        impl core::ops::BitOr<#name> for u8 {
-                            type Output = u8;
+                        impl core::ops::BitOr<#name> for #type_tokens {
+                            type Output = #type_tokens;
 
                             fn bitor(self, rhs: #name) -> Self::Output {
-                                self | (rhs as u8)
+                                self | (rhs as #type_tokens)
                             }
                         }
 
                         impl core::ops::BitAnd for #name {
-                            type Output = u8;
+                            type Output = #type_tokens;
 
                             fn bitand(self, rhs: Self) -> Self::Output {
-                                (self as u8) & (rhs as u8)
+                                (self as #type_tokens) & (rhs as #type_tokens)
                             }
                         }
 
-                        impl core::ops::BitAnd<u8> for #name {
-                            type Output = u8;
+                        impl core::ops::BitAnd<#type_tokens> for #name {
+                            type Output = #type_tokens;
 
-                            fn bitand(self, rhs: u8) -> Self::Output {
-                                (self as u8) & rhs
+                            fn bitand(self, rhs: #type_tokens) -> Self::Output {
+                                (self as #type_tokens) & rhs
                             }
                         }
 
-                        impl core::ops::BitAnd<#name> for u8 {
-                            type Output = u8;
+                        impl core::ops::BitAnd<#name> for #type_tokens {
+                            type Output = #type_tokens;
 
                             fn bitand(self, rhs: #name) -> Self::Output {
-                                self & (rhs as u8)
+                                self & (rhs as #type_tokens)
                             }
                         }
 
                         impl core::ops::BitXor for #name {
-                            type Output = u8;
+                            type Output = #type_tokens;
 
                             fn bitxor(self, rhs: Self) -> Self::Output {
-                                (self as u8) ^ (rhs as u8)
+                                (self as #type_tokens) ^ (rhs as #type_tokens)
                             }
                         }
 
-                        impl core::ops::BitXor<u8> for #name {
-                            type Output = u8;
+                        impl core::ops::BitXor<#type_tokens> for #name {
+                            type Output = #type_tokens;
 
-                            fn bitxor(self, rhs: u8) -> Self::Output {
-                                (self as u8) ^ rhs
+                            fn bitxor(self, rhs: #type_tokens) -> Self::Output {
+                                (self as #type_tokens) ^ rhs
                             }
                         }
 
-                        impl core::ops::BitXor<#name> for u8 {
-                            type Output = u8;
+                        impl core::ops::BitXor<#name> for #type_tokens {
+                            type Output = #type_tokens;
 
                             fn bitxor(self, rhs: #name) -> Self::Output {
-                                self ^ (rhs as u8)
+                                self ^ (rhs as #type_tokens)
                             }
                         }
 
                         impl core::ops::Not for #name {
-                            type Output = u8;
+                            type Output = #type_tokens;
 
                             fn not(self) -> Self::Output {
-                                !(self as u8)
+                                !(self as #type_tokens)
                             }
                         }
 
                         impl #name {
-                            /// Check if this flag value contains the given flag
                             pub fn contains(self, flag: Self) -> bool {
-                                ((self as u8) & (flag as u8)) == (flag as u8)
+                                ((self as #type_tokens) & (flag as #type_tokens)) == (flag as #type_tokens)
                             }
 
-                            /// Create a flags value from a u8
-                            pub fn from_bits(bits: u8) -> Option<u8> {
-                                // Validate that all bits correspond to valid flags
+                            pub fn from_bits(bits: #type_tokens) -> Option<#type_tokens> {
                                 let mut remaining = bits;
                                 #(
-                                    if (bits & #variant_values) == #variant_values {
-                                        remaining &= !#variant_values;
+                                    if (bits & (#variant_values as #type_tokens)) == (#variant_values as #type_tokens) {
+                                        remaining &= !(#variant_values as #type_tokens);
                                     }
                                 )*
                                 if remaining == 0 {
@@ -805,12 +864,11 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 }
                             }
 
-                            /// Decompose a u8 value into individual flag variants
-                            pub fn decompose(bits: u8) -> ::bebytes::Vec<Self> {
+                            pub fn decompose(bits: #type_tokens) -> ::bebytes::Vec<Self> {
                                 let mut flags = ::bebytes::Vec::new();
                                 #(
-                                    if bits & #variant_values == #variant_values && #variant_values != 0 {
-                                        if let Ok(flag) = Self::try_from(#variant_values) {
+                                    if bits & (#variant_values as #type_tokens) == (#variant_values as #type_tokens) && #variant_values != 0 {
+                                        if let Ok(flag) = Self::try_from(#variant_values as #type_tokens) {
                                             flags.push(flag);
                                         }
                                     }
@@ -818,12 +876,11 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                                 flags
                             }
 
-                            /// Iterate over individual flag variants set in a u8 value
-                            pub fn iter_flags(bits: u8) -> impl Iterator<Item = Self> {
+                            pub fn iter_flags(bits: #type_tokens) -> impl Iterator<Item = Self> {
                                 [
                                     #(
-                                        if bits & #variant_values == #variant_values && #variant_values != 0 {
-                                            Self::try_from(#variant_values).ok()
+                                        if bits & (#variant_values as #type_tokens) == (#variant_values as #type_tokens) && #variant_values != 0 {
+                                            Self::try_from(#variant_values as #type_tokens).ok()
                                         } else {
                                             None
                                         },

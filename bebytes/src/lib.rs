@@ -113,22 +113,31 @@ pub use buffer::{BufMut, Bytes, BytesMut};
 /// Error type for `BeBytes` operations
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BeBytesError {
-    /// Buffer is empty when data was expected
     EmptyBuffer,
-    /// Not enough data in buffer
-    InsufficientData { expected: usize, actual: usize },
-    /// Invalid enum discriminant value
-    InvalidDiscriminant { value: u8, type_name: &'static str },
-    /// Bit field value exceeds maximum allowed
+    InsufficientData {
+        expected: usize,
+        actual: usize,
+    },
+    InvalidDiscriminant {
+        value: u8,
+        type_name: &'static str,
+    },
+    InvalidDiscriminantLarge {
+        value: u128,
+        type_name: &'static str,
+    },
     InvalidBitField {
         value: u128,
         max: u128,
         field: &'static str,
     },
-    /// Invalid UTF-8 sequence in string field
-    InvalidUtf8 { field: &'static str },
-    /// Marker byte not found when expected
-    MarkerNotFound { marker: u8, field: &'static str },
+    InvalidUtf8 {
+        field: &'static str,
+    },
+    MarkerNotFound {
+        marker: u8,
+        field: &'static str,
+    },
 }
 
 impl core::fmt::Display for BeBytesError {
@@ -139,6 +148,9 @@ impl core::fmt::Display for BeBytesError {
                 write!(f, "Not enough bytes: expected {expected}, got {actual}")
             }
             Self::InvalidDiscriminant { value, type_name } => {
+                write!(f, "Invalid discriminant {value} for type {type_name}")
+            }
+            Self::InvalidDiscriminantLarge { value, type_name } => {
                 write!(f, "Invalid discriminant {value} for type {type_name}")
             }
             Self::InvalidBitField { value, max, field } => {
