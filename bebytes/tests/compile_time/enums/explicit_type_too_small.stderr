@@ -1,0 +1,7 @@
+error: Explicit flag type u8 cannot hold discriminant value 256. Use u16 or larger.
+ --> tests/compile_time/enums/explicit_type_too_small.rs:3:10
+  |
+3 | #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+  |          ^^^^^^^
+  |
+  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)

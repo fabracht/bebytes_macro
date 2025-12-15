@@ -49,6 +49,26 @@ impl FlagType {
             FlagType::U128 => quote! { u128 },
         }
     }
+
+    pub fn max_value(self) -> u128 {
+        match self {
+            FlagType::U8 => u128::from(u8::MAX),
+            FlagType::U16 => u128::from(u16::MAX),
+            FlagType::U32 => u128::from(u32::MAX),
+            FlagType::U64 => u128::from(u64::MAX),
+            FlagType::U128 => u128::MAX,
+        }
+    }
+
+    pub fn type_name(self) -> &'static str {
+        match self {
+            FlagType::U8 => "u8",
+            FlagType::U16 => "u16",
+            FlagType::U32 => "u32",
+            FlagType::U64 => "u64",
+            FlagType::U128 => "u128",
+        }
+    }
 }
 
 // Type alias for the complex return type
@@ -66,6 +86,7 @@ type EnumHandleResult = (
 pub fn handle_enum(
     mut errors: Vec<proc_macro2::TokenStream>,
     data_enum: syn::DataEnum,
+    explicit_flag_type: Option<FlagType>,
 ) -> EnumHandleResult {
     let variants = data_enum.variants;
     let values = variants
@@ -109,7 +130,8 @@ pub fn handle_enum(
         .collect::<Vec<_>>();
 
     let max_discriminant = values.iter().map(|(_, value)| *value).max().unwrap_or(0);
-    let flag_type = FlagType::from_max_value(max_discriminant);
+    let detected_flag_type = FlagType::from_max_value(max_discriminant);
+    let flag_type = explicit_flag_type.unwrap_or(detected_flag_type);
     let byte_size = flag_type.byte_size();
 
     #[allow(clippy::cast_possible_truncation)]

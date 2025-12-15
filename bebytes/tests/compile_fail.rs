@@ -21,6 +21,8 @@ fn ui_tests() {
     t.compile_fail("tests/compile_time/enums/data_variants.rs");
     #[cfg(feature = "std")]
     t.compile_fail("tests/compile_time/enums/invalid_flag_enum.rs");
+    #[cfg(feature = "std")]
+    t.compile_fail("tests/compile_time/enums/explicit_type_too_small.rs");
 
     // ===== SIZE EXPRESSION TESTS =====
     t.compile_fail("tests/compile_time/size_expressions/nonexistent_field.rs");

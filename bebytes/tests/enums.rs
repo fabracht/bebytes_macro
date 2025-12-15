@@ -498,6 +498,225 @@ mod multibyte_flags {
         assert!(flags.contains(&U16Flags::Bit0));
         assert!(flags.contains(&U16Flags::Bit15));
     }
+
+    #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+    #[bebytes(flags)]
+    enum U64Flags {
+        None = 0,
+        Bit0 = 1,
+        Bit32 = 0x1_0000_0000,
+        Bit62 = 0x4000_0000_0000_0000,
+    }
+
+    #[test]
+    fn test_u64_flags_basic() {
+        assert_eq!(U64Flags::field_size(), 8);
+
+        let flag = U64Flags::Bit32;
+        assert!(flag.contains(U64Flags::Bit32));
+        assert!(!flag.contains(U64Flags::Bit0));
+
+        let combined: u64 = U64Flags::Bit0 | U64Flags::Bit62;
+        assert_eq!(combined, 0x4000_0000_0000_0001);
+    }
+
+    #[test]
+    fn test_u64_flags_serialization() {
+        let bytes = U64Flags::Bit32.to_be_bytes();
+        assert_eq!(bytes, vec![0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]);
+
+        let bytes_le = U64Flags::Bit32.to_le_bytes();
+        assert_eq!(
+            bytes_le,
+            vec![0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]
+        );
+
+        let (parsed, consumed) = U64Flags::try_from_be_bytes(&bytes).unwrap();
+        assert_eq!(parsed, U64Flags::Bit32);
+        assert_eq!(consumed, 8);
+    }
+
+    #[test]
+    fn test_u64_flags_bitwise_ops() {
+        let combined = U64Flags::Bit0 | U64Flags::Bit62;
+        assert_eq!(combined, 0x4000_0000_0000_0001);
+
+        let masked = combined & U64Flags::Bit0;
+        assert_eq!(masked, 1);
+
+        let toggled = U64Flags::Bit0 ^ U64Flags::Bit0;
+        assert_eq!(toggled, 0);
+    }
+
+    #[test]
+    fn test_u64_flags_decompose() {
+        let combined = U64Flags::Bit0 | U64Flags::Bit32 | U64Flags::Bit62;
+        let decomposed = U64Flags::decompose(combined);
+        assert_eq!(decomposed.len(), 3);
+        assert!(decomposed.contains(&U64Flags::Bit0));
+        assert!(decomposed.contains(&U64Flags::Bit32));
+        assert!(decomposed.contains(&U64Flags::Bit62));
+    }
+
+    #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+    #[bebytes(flags(u128))]
+    enum U128Flags {
+        None = 0,
+        Bit0 = 1,
+        Bit16 = 0x1_0000,
+        Bit32 = 0x1_0000_0000,
+    }
+
+    #[test]
+    fn test_u128_flags_basic() {
+        assert_eq!(U128Flags::field_size(), 16);
+
+        let flag = U128Flags::Bit32;
+        assert!(flag.contains(U128Flags::Bit32));
+        assert!(!flag.contains(U128Flags::Bit0));
+
+        let combined: u128 = U128Flags::Bit0 | U128Flags::Bit32;
+        assert_eq!(combined, 0x1_0000_0001);
+    }
+
+    #[test]
+    fn test_u128_flags_serialization() {
+        let bytes = U128Flags::Bit32.to_be_bytes();
+        assert_eq!(bytes.len(), 16);
+        assert_eq!(bytes[11], 0x01);
+
+        let (parsed, consumed) = U128Flags::try_from_be_bytes(&bytes).unwrap();
+        assert_eq!(parsed, U128Flags::Bit32);
+        assert_eq!(consumed, 16);
+    }
+
+    #[test]
+    fn test_u128_flags_decompose() {
+        let combined = U128Flags::Bit0 | U128Flags::Bit16;
+        let decomposed = U128Flags::decompose(combined);
+        assert_eq!(decomposed.len(), 2);
+        assert!(decomposed.contains(&U128Flags::Bit0));
+        assert!(decomposed.contains(&U128Flags::Bit16));
+    }
+
+    #[test]
+    fn test_invalid_discriminant_large_u16() {
+        let invalid = U16Flags::try_from(2u16);
+        match invalid {
+            Err(bebytes::BeBytesError::InvalidDiscriminantLarge { value, type_name }) => {
+                assert_eq!(value, 2);
+                assert_eq!(type_name, "U16Flags");
+            }
+            _ => panic!("Expected InvalidDiscriminantLarge error"),
+        }
+    }
+
+    #[test]
+    fn test_invalid_discriminant_large_u32() {
+        let invalid = ExplicitU32Flags::try_from(3u32);
+        match invalid {
+            Err(bebytes::BeBytesError::InvalidDiscriminantLarge { value, type_name }) => {
+                assert_eq!(value, 3);
+                assert_eq!(type_name, "ExplicitU32Flags");
+            }
+            _ => panic!("Expected InvalidDiscriminantLarge error"),
+        }
+    }
+
+    #[test]
+    fn test_invalid_discriminant_large_u64() {
+        let invalid = U64Flags::try_from(5u64);
+        match invalid {
+            Err(bebytes::BeBytesError::InvalidDiscriminantLarge { value, type_name }) => {
+                assert_eq!(value, 5);
+                assert_eq!(type_name, "U64Flags");
+            }
+            _ => panic!("Expected InvalidDiscriminantLarge error"),
+        }
+    }
+
+    #[test]
+    fn test_invalid_discriminant_large_from_bytes() {
+        let bytes = [0x00, 0x02];
+        let result = U16Flags::try_from_be_bytes(&bytes);
+        match result {
+            Err(bebytes::BeBytesError::InvalidDiscriminantLarge { value, type_name }) => {
+                assert_eq!(value, 2);
+                assert_eq!(type_name, "U16Flags");
+            }
+            _ => panic!("Expected InvalidDiscriminantLarge error"),
+        }
+    }
+
+    #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+    #[bebytes(flags)]
+    enum MaxU8Flags {
+        Bit7 = 128,
+    }
+
+    #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+    #[bebytes(flags)]
+    enum MinU16Flags {
+        Bit8 = 256,
+    }
+
+    #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+    #[bebytes(flags)]
+    enum MaxU16Flags {
+        Bit15 = 32768,
+    }
+
+    #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+    #[bebytes(flags)]
+    enum MinU32Flags {
+        Bit16 = 65536,
+    }
+
+    #[test]
+    fn test_auto_detect_boundary_u8_max() {
+        assert_eq!(MaxU8Flags::field_size(), 1);
+        let bytes = MaxU8Flags::Bit7.to_be_bytes();
+        assert_eq!(bytes.len(), 1);
+        assert_eq!(bytes[0], 128);
+    }
+
+    #[test]
+    fn test_auto_detect_boundary_u16_min() {
+        assert_eq!(MinU16Flags::field_size(), 2);
+        let bytes = MinU16Flags::Bit8.to_be_bytes();
+        assert_eq!(bytes.len(), 2);
+        assert_eq!(bytes, vec![0x01, 0x00]);
+    }
+
+    #[test]
+    fn test_auto_detect_boundary_u16_max() {
+        assert_eq!(MaxU16Flags::field_size(), 2);
+        let bytes = MaxU16Flags::Bit15.to_be_bytes();
+        assert_eq!(bytes.len(), 2);
+        assert_eq!(bytes, vec![0x80, 0x00]);
+    }
+
+    #[test]
+    fn test_auto_detect_boundary_u32_min() {
+        assert_eq!(MinU32Flags::field_size(), 4);
+        let bytes = MinU32Flags::Bit16.to_be_bytes();
+        assert_eq!(bytes.len(), 4);
+        assert_eq!(bytes, vec![0x00, 0x01, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_explicit_type_forces_larger_size() {
+        #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
+        #[bebytes(flags(u32))]
+        enum SmallButU32 {
+            Flag1 = 1,
+            Flag2 = 2,
+        }
+
+        assert_eq!(SmallButU32::field_size(), 4);
+        let bytes = SmallButU32::Flag1.to_be_bytes();
+        assert_eq!(bytes, vec![0x00, 0x00, 0x00, 0x01]);
+    }
 }
 
 mod enum_bit_packing {

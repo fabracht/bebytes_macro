@@ -552,27 +552,37 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                 }
             }
 
-            let (
-                from_be_bytes_arms,
-                to_be_bytes_arms,
-                _,
-                try_from_arms,
-                discriminants,
-                enum_errors,
-                detected_flag_type,
-            ) = enums::handle_enum(Vec::new(), data_enum.clone());
-            let (from_le_bytes_arms, to_le_bytes_arms, _, _, _, _, _) =
-                enums::handle_enum(Vec::new(), data_enum);
+            let (_, _, _, _, discriminants, enum_errors, detected_flag_type) =
+                enums::handle_enum(Vec::new(), data_enum.clone(), None);
 
-            let flag_type = explicit_flag_type.unwrap_or(detected_flag_type);
-
-            // If there are any errors from enum validation, return them
             if !enum_errors.is_empty() {
                 return quote! {
                     #(#enum_errors)*
                 }
                 .into();
             }
+
+            let max_discriminant = discriminants.iter().map(|(_, v)| *v).max().unwrap_or(0);
+            if let Some(explicit) = explicit_flag_type {
+                if max_discriminant > explicit.max_value() {
+                    let error = syn::Error::new(
+                        Span::call_site(),
+                        format!(
+                            "Explicit flag type {} cannot hold discriminant value {}. Use {} or larger.",
+                            explicit.type_name(),
+                            max_discriminant,
+                            detected_flag_type.type_name()
+                        ),
+                    );
+                    return error.to_compile_error().into();
+                }
+            }
+
+            let flag_type = explicit_flag_type.unwrap_or(detected_flag_type);
+            let (from_be_bytes_arms, to_be_bytes_arms, _, try_from_arms, _, _, _) =
+                enums::handle_enum(Vec::new(), data_enum.clone(), Some(flag_type));
+            let (from_le_bytes_arms, to_le_bytes_arms, _, _, _, _, _) =
+                enums::handle_enum(Vec::new(), data_enum, Some(flag_type));
 
             let type_tokens = flag_type.type_tokens();
             let byte_size = flag_type.byte_size();
