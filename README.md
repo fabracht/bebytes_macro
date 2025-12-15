@@ -731,7 +731,7 @@ pub struct DummyStruct {
 }
 ```
 
-**Vectors can ONLY be used as the last field.**
+**Unbounded vectors can ONLY be used as the last field.**
 
 Example:
 

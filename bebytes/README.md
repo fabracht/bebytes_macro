@@ -14,7 +14,7 @@ To use BeBytes, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "2.10.0"
+bebytes = "2.12.0"
 ```
 
 Then, import the BeBytes trait from the bebytes crate and derive it for your struct:
@@ -186,6 +186,7 @@ Key features:
 
 - All Enum variants must have power-of-2 values (1, 2, 4, 8, etc.)
 - Zero value is allowed for "None" or empty flags
+- Supports u8, u16, u32, u64, u128 (auto-detected or explicit via `#[bebytes(flags(u32))]`)
 - Automatic implementation of bitwise operators
 - `contains()` method to check if a flag is set
 - `from_bits()` method to validate flag combinations
