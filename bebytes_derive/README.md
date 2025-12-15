@@ -8,7 +8,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes_derive = "2.10.0"
+bebytes_derive = "2.12.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -289,7 +289,7 @@ Requirements for flag enums:
 
 - All enum variants must have power-of-2 values (1, 2, 4, 8, etc.)
 - Zero value is allowed for "None" or empty flags
-- All discriminant values must be within 0-255 range
+- Supports u8, u16, u32, u64, u128 (auto-detected or explicit via `#[bebytes(flags(u32))]`)
 
 ## Options
 
