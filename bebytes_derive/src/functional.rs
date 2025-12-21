@@ -297,9 +297,8 @@ pub mod pure_helpers {
                     bytes[byte_index + 2], bytes[byte_index + 3]
                 ]);
                 let #field_name = char::from_u32(char_value)
-                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
-                        value: (char_value & 0xFF) as u8,
-                        type_name: "char",
+                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidChar {
+                        value: char_value,
                     })?;
             },
             crate::consts::Endianness::Little => quote! {
@@ -308,9 +307,8 @@ pub mod pure_helpers {
                     bytes[byte_index + 2], bytes[byte_index + 3]
                 ]);
                 let #field_name = char::from_u32(char_value)
-                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
-                        value: (char_value & 0xFF) as u8,
-                        type_name: "char",
+                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidChar {
+                        value: char_value,
                     })?;
             },
         }

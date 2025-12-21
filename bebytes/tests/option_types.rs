@@ -451,3 +451,24 @@ fn test_option_array_invalid_tag() {
     let result = OptionArray4::try_from_be_bytes(&invalid_bytes);
     assert!(result.is_err());
 }
+
+#[test]
+fn test_option_little_endian_round_trip() {
+    let s = OptionU32 {
+        value: Some(0x12345678),
+    };
+    let bytes = s.to_le_bytes();
+    assert_eq!(bytes.len(), 5);
+    assert_eq!(bytes[0], 0x01);
+    assert_eq!(&bytes[1..5], &[0x78, 0x56, 0x34, 0x12]);
+
+    let (parsed, _) = OptionU32::try_from_le_bytes(&bytes).unwrap();
+    assert_eq!(parsed.value, Some(0x12345678));
+
+    let none = OptionU32 { value: None };
+    let none_bytes = none.to_le_bytes();
+    assert_eq!(none_bytes[0], 0x00);
+
+    let (parsed_none, _) = OptionU32::try_from_le_bytes(&none_bytes).unwrap();
+    assert_eq!(parsed_none.value, None);
+}

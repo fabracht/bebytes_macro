@@ -138,6 +138,9 @@ pub enum BeBytesError {
         marker: u8,
         field: &'static str,
     },
+    InvalidChar {
+        value: u32,
+    },
 }
 
 impl core::fmt::Display for BeBytesError {
@@ -161,6 +164,9 @@ impl core::fmt::Display for BeBytesError {
             }
             Self::MarkerNotFound { marker, field } => {
                 write!(f, "Marker byte 0x{marker:02X} not found in field '{field}'")
+            }
+            Self::InvalidChar { value } => {
+                write!(f, "Invalid Unicode code point: 0x{value:08X}")
             }
         }
     }

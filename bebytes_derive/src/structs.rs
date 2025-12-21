@@ -1115,9 +1115,8 @@ fn option_parse_special(
                 bytes[value_start + 2], bytes[value_start + 3]
             ]);
             Some(char::from_u32(char_value)
-                .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
-                    value: (char_value & 0xFF) as u8,
-                    type_name: "char",
+                .ok_or_else(|| ::bebytes::BeBytesError::InvalidChar {
+                    value: char_value,
                 })?)
         }});
     }
