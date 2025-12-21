@@ -362,3 +362,92 @@ fn test_option_none_in_mixed_struct() {
     let (parsed, _) = MixedStruct::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(parsed, s);
 }
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct OptionArray4 {
+    value: Option<[u8; 4]>,
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct OptionArray16 {
+    value: Option<[u8; 16]>,
+}
+
+#[test]
+fn test_option_array_some() {
+    let s = OptionArray4 {
+        value: Some([1, 2, 3, 4]),
+    };
+    let bytes = s.to_be_bytes();
+    assert_eq!(bytes.len(), 5);
+    assert_eq!(bytes[0], 0x01);
+    assert_eq!(&bytes[1..5], &[1, 2, 3, 4]);
+
+    let (parsed, consumed) = OptionArray4::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(parsed.value, Some([1, 2, 3, 4]));
+    assert_eq!(consumed, 5);
+}
+
+#[test]
+fn test_option_array_none() {
+    let s = OptionArray4 { value: None };
+    let bytes = s.to_be_bytes();
+    assert_eq!(bytes.len(), 5);
+    assert_eq!(bytes[0], 0x00);
+    assert_eq!(&bytes[1..5], &[0, 0, 0, 0]);
+
+    let (parsed, consumed) = OptionArray4::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(parsed.value, None);
+    assert_eq!(consumed, 5);
+}
+
+#[test]
+fn test_option_array_field_size() {
+    assert_eq!(OptionArray4::field_size(), 5);
+    assert_eq!(OptionArray16::field_size(), 17);
+}
+
+#[test]
+fn test_option_array_round_trip() {
+    let values: [Option<[u8; 4]>; 3] = [Some([0, 0, 0, 0]), Some([255, 255, 255, 255]), None];
+
+    for value in values {
+        let s = OptionArray4 { value };
+        let bytes = s.to_be_bytes();
+        let (parsed, _) = OptionArray4::try_from_be_bytes(&bytes).unwrap();
+        assert_eq!(parsed.value, value);
+    }
+}
+
+#[test]
+fn test_option_array_in_struct() {
+    #[derive(BeBytes, Debug, PartialEq)]
+    struct MixedWithArray {
+        prefix: u8,
+        opt_array: Option<[u8; 4]>,
+        suffix: u16,
+    }
+
+    let s = MixedWithArray {
+        prefix: 0xAA,
+        opt_array: Some([1, 2, 3, 4]),
+        suffix: 0xBBCC,
+    };
+
+    let bytes = s.to_be_bytes();
+    assert_eq!(bytes.len(), 1 + 5 + 2);
+    assert_eq!(bytes[0], 0xAA);
+    assert_eq!(bytes[1], 0x01);
+    assert_eq!(&bytes[2..6], &[1, 2, 3, 4]);
+    assert_eq!(&bytes[6..8], &[0xBB, 0xCC]);
+
+    let (parsed, _) = MixedWithArray::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(parsed, s);
+}
+
+#[test]
+fn test_option_array_invalid_tag() {
+    let invalid_bytes = [0x02, 0x00, 0x00, 0x00, 0x00];
+    let result = OptionArray4::try_from_be_bytes(&invalid_bytes);
+    assert!(result.is_err());
+}

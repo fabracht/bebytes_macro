@@ -395,8 +395,30 @@ fn process_field_type(
             let result = process_option_type_functional(context, processing_ctx)?;
             if let syn::Type::Path(tp) = context.field_type {
                 if let Some(inner_type) = utils::solve_for_inner_type(tp, "Option") {
-                    let field_size = utils::get_primitive_type_size(&inner_type)?;
-                    *current_bit_position += (field_size + 1) * 8;
+                    let inner_size = match &inner_type {
+                        syn::Type::Path(_) => utils::get_primitive_type_size(&inner_type)?,
+                        syn::Type::Array(arr) => {
+                            if let syn::Expr::Lit(syn::ExprLit {
+                                lit: syn::Lit::Int(lit_int),
+                                ..
+                            }) = &arr.len
+                            {
+                                lit_int.base10_parse()?
+                            } else {
+                                return Err(syn::Error::new_spanned(
+                                    &inner_type,
+                                    "Array length must be a literal",
+                                ));
+                            }
+                        }
+                        _ => {
+                            return Err(syn::Error::new_spanned(
+                                &inner_type,
+                                "Unsupported Option inner type",
+                            ));
+                        }
+                    };
+                    *current_bit_position += (inner_size + 1) * 8;
                 }
             }
             Ok(result)
@@ -1215,6 +1237,95 @@ fn create_option_inner_writing(
     }
 }
 
+fn process_option_array(
+    field_name: &syn::Ident,
+    arr: &syn::TypeArray,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+    if let syn::Type::Path(elem) = &*arr.elem {
+        if elem.path.is_ident("u8") {
+            if let syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Int(lit_int),
+                ..
+            }) = &arr.len
+            {
+                let array_len: usize = lit_int.base10_parse()?;
+                let total_size = array_len + 1;
+
+                let accessor =
+                    crate::functional::pure_helpers::create_field_accessor(field_name, true);
+                let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(total_size);
+
+                let parsing = quote! {
+                    byte_index = _bit_sum / 8;
+                    end_byte_index = byte_index + #total_size;
+                    if end_byte_index > bytes.len() {
+                        return Err(::bebytes::BeBytesError::InsufficientData {
+                            expected: end_byte_index,
+                            actual: bytes.len(),
+                        });
+                    }
+                    let #field_name = match bytes[byte_index] {
+                        0x00 => None,
+                        0x01 => {
+                            let value_start = byte_index + 1;
+                            let mut arr = [0u8; #array_len];
+                            arr.copy_from_slice(&bytes[value_start..value_start + #array_len]);
+                            Some(arr)
+                        }
+                        tag => return Err(::bebytes::BeBytesError::InvalidDiscriminant {
+                            value: tag,
+                            type_name: "Option",
+                        }),
+                    };
+                    _bit_sum += 8 * #total_size;
+                };
+
+                let writing = quote! {
+                    match #field_name {
+                        None => {
+                            bytes.reserve(#total_size);
+                            ::bebytes::BufMut::put_u8(bytes, 0x00);
+                            bytes.extend_from_slice(&[0u8; #array_len]);
+                        }
+                        Some(arr) => {
+                            bytes.reserve(#total_size);
+                            ::bebytes::BufMut::put_u8(bytes, 0x01);
+                            bytes.extend_from_slice(&arr);
+                        }
+                    }
+                    _bit_sum += #total_size * 8;
+                };
+
+                let direct_writing = quote! {
+                    match #field_name {
+                        None => {
+                            buf.put_u8(0x00);
+                            buf.put_slice(&[0u8; #array_len]);
+                        }
+                        Some(arr) => {
+                            buf.put_u8(0x01);
+                            buf.put_slice(&arr);
+                        }
+                    }
+                };
+
+                return Ok(crate::functional::FieldProcessResult::new(
+                    quote! {},
+                    parsing,
+                    writing,
+                    direct_writing,
+                    accessor,
+                    bit_sum,
+                ));
+            }
+        }
+    }
+    Err(syn::Error::new_spanned(
+        arr,
+        "Only [u8; N] arrays are supported in Option",
+    ))
+}
+
 fn process_option_type_functional(
     context: &FieldContext,
     processing_ctx: &crate::functional::ProcessingContext,
@@ -1298,6 +1409,10 @@ fn process_option_type_functional(
                         bit_sum,
                     ));
                 }
+            }
+
+            if let syn::Type::Array(arr) = &inner_type {
+                return process_option_array(field_name, arr);
             }
         }
     }
