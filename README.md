@@ -24,7 +24,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "2.10.0"
+bebytes = "3.0.0"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -704,17 +704,49 @@ for flag in ProtocolFlags::iter_flags(decoded.flags) {
 
 ## Options
 
-Options are supported, as long as the internal type is a primitive
-Example:
+Options are supported for primitives and byte arrays:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
 pub struct Optional {
-    pub optional_number: Option<i32>,
+    pub opt_number: Option<i32>,
+    pub opt_float: Option<f64>,
+    pub opt_bool: Option<bool>,
+    pub opt_char: Option<char>,
+    pub opt_array: Option<[u8; 4]>,
 }
 ```
 
-Options are serialized as the internal type. A `None` is serialized as a zero byte.
+### Wire Format
+
+Options use a tagged format for unambiguous serialization:
+- `None` → `[0x00, zeros...]` (1 tag byte + N zero-padding bytes)
+- `Some(value)` → `[0x01, value...]` (1 tag byte + value bytes)
+
+This allows `Some(0)` to be distinguished from `None`:
+
+```rust
+let some_zero = OptionU8 { value: Some(0) };
+let none = OptionU8 { value: None };
+
+assert_eq!(some_zero.to_be_bytes(), [0x01, 0x00]);  // Tag + value
+assert_eq!(none.to_be_bytes(), [0x00, 0x00]);       // Tag + padding
+```
+
+### Supported Types
+
+- All integer types: `u8`-`u128`, `i8`-`i128`
+- Floating point: `f32`, `f64`
+- Boolean: `bool`
+- Character: `char`
+- Byte arrays: `[u8; N]`
+
+### Field Size
+
+`field_size()` returns the inner type size + 1 byte for the tag:
+- `Option<u8>` = 2 bytes
+- `Option<u32>` = 5 bytes
+- `Option<[u8; 16]>` = 17 bytes
 
 ## Byte arrays and Vectors
 
@@ -918,7 +950,7 @@ For WebAssembly projects, disable the default features to use no_std:
 
 ```toml
 [dependencies]
-bebytes = { version = "2.10.0", default-features = false }
+bebytes = { version = "3.0.0", default-features = false }
 
 # For WASM builds, you'll also need an allocator
 [target.'cfg(target_arch = "wasm32")'.dependencies]
