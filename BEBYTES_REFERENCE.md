@@ -8,7 +8,7 @@ BeBytes is a high-performance Rust derive macro for binary serialization/deseria
 
 ```toml
 [dependencies]
-bebytes = "2.8.0"
+bebytes = "3.0.0"
 ```
 
 ## Basic Usage
@@ -185,15 +185,25 @@ let perms = Permissions::Read | Permissions::Write;  // = 3
 ```
 
 ### Options
-Supported for primitive types only:
+Supported for primitives and byte arrays:
 
 ```rust
 #[derive(BeBytes)]
 struct OptionalFields {
     required: u32,
-    optional: Option<u16>,  // None serializes as zeros
+    opt_int: Option<u16>,
+    opt_float: Option<f32>,
+    opt_bool: Option<bool>,
+    opt_char: Option<char>,
+    opt_array: Option<[u8; 4]>,
 }
 ```
+
+Options use a tagged wire format:
+- `None` → `[0x00, zeros...]` (tag + padding)
+- `Some(val)` → `[0x01, value...]` (tag + value bytes)
+
+This disambiguates `Some(0)` from `None`. Field size = inner size + 1 byte for tag.
 
 ## Important Rules
 

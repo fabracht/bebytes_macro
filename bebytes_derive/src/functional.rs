@@ -297,9 +297,8 @@ pub mod pure_helpers {
                     bytes[byte_index + 2], bytes[byte_index + 3]
                 ]);
                 let #field_name = char::from_u32(char_value)
-                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
-                        value: (char_value & 0xFF) as u8,
-                        type_name: "char",
+                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidChar {
+                        value: char_value,
                     })?;
             },
             crate::consts::Endianness::Little => quote! {
@@ -308,9 +307,8 @@ pub mod pure_helpers {
                     bytes[byte_index + 2], bytes[byte_index + 3]
                 ]);
                 let #field_name = char::from_u32(char_value)
-                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidDiscriminant {
-                        value: (char_value & 0xFF) as u8,
-                        type_name: "char",
+                    .ok_or_else(|| ::bebytes::BeBytesError::InvalidChar {
+                        value: char_value,
                     })?;
             },
         }
@@ -535,31 +533,96 @@ pub mod pure_helpers {
         }
     }
 
+    fn option_direct_write_special(
+        field_name: &Ident,
+        inner_tp: &syn::TypePath,
+        endianness: crate::consts::Endianness,
+    ) -> Option<TokenStream> {
+        if inner_tp.path.is_ident("bool") {
+            return Some(quote! {
+                match #field_name {
+                    None => { buf.put_u8(0x00); buf.put_u8(0x00); }
+                    Some(v) => { buf.put_u8(0x01); buf.put_u8(if v { 1 } else { 0 }); }
+                }
+            });
+        }
+        if inner_tp.path.is_ident("char") {
+            let conv = match endianness {
+                crate::consts::Endianness::Big => quote! { (v as u32).to_be_bytes() },
+                crate::consts::Endianness::Little => quote! { (v as u32).to_le_bytes() },
+            };
+            return Some(quote! {
+                match #field_name {
+                    None => { buf.put_u8(0x00); buf.put_slice(&[0u8; 4]); }
+                    Some(v) => { buf.put_u8(0x01); buf.put_slice(&#conv); }
+                }
+            });
+        }
+        if inner_tp.path.is_ident("f32") {
+            let conv = match endianness {
+                crate::consts::Endianness::Big => quote! { v.to_be_bytes() },
+                crate::consts::Endianness::Little => quote! { v.to_le_bytes() },
+            };
+            return Some(quote! {
+                match #field_name {
+                    None => { buf.put_u8(0x00); buf.put_slice(&[0u8; 4]); }
+                    Some(v) => { buf.put_u8(0x01); buf.put_slice(&#conv); }
+                }
+            });
+        }
+        if inner_tp.path.is_ident("f64") {
+            let conv = match endianness {
+                crate::consts::Endianness::Big => quote! { v.to_be_bytes() },
+                crate::consts::Endianness::Little => quote! { v.to_le_bytes() },
+            };
+            return Some(quote! {
+                match #field_name {
+                    None => { buf.put_u8(0x00); buf.put_slice(&[0u8; 8]); }
+                    Some(v) => { buf.put_u8(0x01); buf.put_slice(&#conv); }
+                }
+            });
+        }
+        None
+    }
+
+    fn option_direct_write_integer(
+        field_name: &Ident,
+        type_size: usize,
+        endianness: crate::consts::Endianness,
+    ) -> TokenStream {
+        let put_value = match (endianness, type_size) {
+            (_, 1) => quote! { buf.put_u8(v as u8) },
+            (crate::consts::Endianness::Big, 2) => quote! { buf.put_u16(v as u16) },
+            (crate::consts::Endianness::Big, 4) => quote! { buf.put_u32(v as u32) },
+            (crate::consts::Endianness::Big, 8) => quote! { buf.put_u64(v as u64) },
+            (crate::consts::Endianness::Big, 16) => quote! { buf.put_u128(v as u128) },
+            (crate::consts::Endianness::Big, _) => quote! { buf.put_slice(&v.to_be_bytes()) },
+            (crate::consts::Endianness::Little, 2) => quote! { buf.put_u16_le(v as u16) },
+            (crate::consts::Endianness::Little, 4) => quote! { buf.put_u32_le(v as u32) },
+            (crate::consts::Endianness::Little, 8) => quote! { buf.put_u64_le(v as u64) },
+            (crate::consts::Endianness::Little, 16) => quote! { buf.put_u128_le(v as u128) },
+            (crate::consts::Endianness::Little, _) => quote! { buf.put_slice(&v.to_le_bytes()) },
+        };
+        quote! {
+            match #field_name {
+                None => { buf.put_u8(0x00); buf.put_slice(&[0u8; #type_size]); }
+                Some(v) => { buf.put_u8(0x01); #put_value; }
+            }
+        }
+    }
+
     pub fn create_option_primitive_direct_writing(
         field_name: &Ident,
         inner_type: &syn::Type,
+        type_size: usize,
         endianness: crate::consts::Endianness,
-    ) -> Result<TokenStream, syn::Error> {
-        let type_size = crate::utils::get_primitive_type_size(inner_type)?;
-
-        match endianness {
-            crate::consts::Endianness::Big => match type_size {
-                1 => Ok(quote! { buf.put_u8(#field_name.unwrap_or(0) as u8); }),
-                2 => Ok(quote! { buf.put_u16(#field_name.unwrap_or(0) as u16); }),
-                4 => Ok(quote! { buf.put_u32(#field_name.unwrap_or(0) as u32); }),
-                8 => Ok(quote! { buf.put_u64(#field_name.unwrap_or(0) as u64); }),
-                16 => Ok(quote! { buf.put_u128(#field_name.unwrap_or(0) as u128); }),
-                _ => Ok(quote! { buf.put_slice(&#field_name.unwrap_or(0).to_be_bytes()); }),
-            },
-            crate::consts::Endianness::Little => match type_size {
-                1 => Ok(quote! { buf.put_u8(#field_name.unwrap_or(0) as u8); }),
-                2 => Ok(quote! { buf.put_u16_le(#field_name.unwrap_or(0) as u16); }),
-                4 => Ok(quote! { buf.put_u32_le(#field_name.unwrap_or(0) as u32); }),
-                8 => Ok(quote! { buf.put_u64_le(#field_name.unwrap_or(0) as u64); }),
-                16 => Ok(quote! { buf.put_u128_le(#field_name.unwrap_or(0) as u128); }),
-                _ => Ok(quote! { buf.put_slice(&#field_name.unwrap_or(0).to_le_bytes()); }),
-            },
+    ) -> TokenStream {
+        if let syn::Type::Path(inner_tp) = inner_type {
+            if let Some(ts) = option_direct_write_special(field_name, inner_tp, endianness) {
+                return ts;
+            }
         }
+        option_direct_write_integer(field_name, type_size, endianness)
     }
 
     /// Create limit check for bit fields

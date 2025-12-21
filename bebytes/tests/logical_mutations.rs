@@ -176,10 +176,8 @@ fn test_conditional_field_types() {
     };
 
     let bytes_some = test_some.to_be_bytes();
-    // primitive(4) + array(5) + option with Some(2) + bits(2) = 13
-    assert_eq!(bytes_some.len(), 13);
+    assert_eq!(bytes_some.len(), 14);
 
-    // Test with None
     let test_none = MixedFieldTypes {
         primitive: 0x12345678,
         array: [1, 2, 3, 4, 5],
@@ -188,9 +186,7 @@ fn test_conditional_field_types() {
     };
 
     let bytes_none = test_none.to_be_bytes();
-    // Option<u32> seems to always serialize the value, even for None
-    // primitive(4) + array(5) + option(2) + bits(2) = 13
-    assert_eq!(bytes_none.len(), 13);
+    assert_eq!(bytes_none.len(), 14);
 }
 
 #[test]

@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2025-12-21
+
+### Breaking Changes
+
+- **Option wire format changed**: Options now use a tagged format for unambiguous serialization
+  - `None` → `[0x00, zeros...]` (1 tag byte + N zero-padding bytes)
+  - `Some(value)` → `[0x01, value...]` (1 tag byte + value bytes)
+  - This fixes the ambiguity where `Some(0)` was indistinguishable from `None`
+  - `field_size()` now returns inner type size + 1 byte for the tag
+  - **Wire format is incompatible with previous versions**
+
+### Added
+
+- **Option<[u8; N]> array support**: Byte arrays can now be wrapped in Option
+- **Option support for f32, f64, bool, char**: All primitive types now work with Option
+- **InvalidChar error variant**: Proper error type for invalid Unicode code points in char fields
+- Comprehensive test suite for all Option types (32 tests)
+- Little-endian round-trip tests for Options
+
+### Fixed
+
+- `Some(0)` vs `None` disambiguation issue
+- Invalid char validation now uses `InvalidChar` error instead of `InvalidDiscriminant`
+
 ## [2.11.0] - 2025-12-09
 
 ### Added

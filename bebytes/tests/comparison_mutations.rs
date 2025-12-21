@@ -49,11 +49,11 @@ fn test_option_type_identification() {
     };
 
     let bytes_some = test_some.to_be_bytes();
-    // Option<u32> in BeBytes just includes the value if Some
-    assert_eq!(bytes_some.len(), 6); // 1 + 4 + 1
+    assert_eq!(bytes_some.len(), 7);
     assert_eq!(bytes_some[0], 0xAA);
-    assert_eq!(&bytes_some[1..5], &[0x12, 0x34, 0x56, 0x78]);
-    assert_eq!(bytes_some[5], 0xBB);
+    assert_eq!(bytes_some[1], 0x01);
+    assert_eq!(&bytes_some[2..6], &[0x12, 0x34, 0x56, 0x78]);
+    assert_eq!(bytes_some[6], 0xBB);
 }
 
 #[test]

@@ -393,11 +393,32 @@ fn process_field_type(
         }
         FieldType::OptionType => {
             let result = process_option_type_functional(context, processing_ctx)?;
-            // Options of primitives have the size of the primitive
             if let syn::Type::Path(tp) = context.field_type {
                 if let Some(inner_type) = utils::solve_for_inner_type(tp, "Option") {
-                    let field_size = utils::get_primitive_type_size(&inner_type)?;
-                    *current_bit_position += field_size * 8;
+                    let inner_size = match &inner_type {
+                        syn::Type::Path(_) => utils::get_primitive_type_size(&inner_type)?,
+                        syn::Type::Array(arr) => {
+                            if let syn::Expr::Lit(syn::ExprLit {
+                                lit: syn::Lit::Int(lit_int),
+                                ..
+                            }) = &arr.len
+                            {
+                                lit_int.base10_parse()?
+                            } else {
+                                return Err(syn::Error::new_spanned(
+                                    &inner_type,
+                                    "Array length must be a literal",
+                                ));
+                            }
+                        }
+                        _ => {
+                            return Err(syn::Error::new_spanned(
+                                &inner_type,
+                                "Unsupported Option inner type",
+                            ));
+                        }
+                    };
+                    *current_bit_position += (inner_size + 1) * 8;
                 }
             }
             Ok(result)
@@ -1076,7 +1097,234 @@ fn process_vector_functional(
     Err(syn::Error::new_spanned(field_type, "Not a vector type"))
 }
 
-// Functional version of handle_option_type
+fn option_parse_special(
+    inner_tp: &syn::TypePath,
+    endianness: crate::consts::Endianness,
+) -> Option<proc_macro2::TokenStream> {
+    if inner_tp.path.is_ident("bool") {
+        return Some(quote! { Some(bytes[value_start] != 0) });
+    }
+    if inner_tp.path.is_ident("char") {
+        let from_bytes = match endianness {
+            crate::consts::Endianness::Big => quote! { u32::from_be_bytes },
+            crate::consts::Endianness::Little => quote! { u32::from_le_bytes },
+        };
+        return Some(quote! {{
+            let char_value = #from_bytes([
+                bytes[value_start], bytes[value_start + 1],
+                bytes[value_start + 2], bytes[value_start + 3]
+            ]);
+            Some(char::from_u32(char_value)
+                .ok_or_else(|| ::bebytes::BeBytesError::InvalidChar {
+                    value: char_value,
+                })?)
+        }});
+    }
+    if inner_tp.path.is_ident("f32") {
+        let from_bytes = match endianness {
+            crate::consts::Endianness::Big => quote! { f32::from_be_bytes },
+            crate::consts::Endianness::Little => quote! { f32::from_le_bytes },
+        };
+        return Some(quote! {
+            Some(#from_bytes([
+                bytes[value_start], bytes[value_start + 1],
+                bytes[value_start + 2], bytes[value_start + 3]
+            ]))
+        });
+    }
+    if inner_tp.path.is_ident("f64") {
+        let from_bytes = match endianness {
+            crate::consts::Endianness::Big => quote! { f64::from_be_bytes },
+            crate::consts::Endianness::Little => quote! { f64::from_le_bytes },
+        };
+        return Some(quote! {
+            Some(#from_bytes([
+                bytes[value_start], bytes[value_start + 1],
+                bytes[value_start + 2], bytes[value_start + 3],
+                bytes[value_start + 4], bytes[value_start + 5],
+                bytes[value_start + 6], bytes[value_start + 7]
+            ]))
+        });
+    }
+    None
+}
+
+fn option_parse_integer(
+    inner_tp: &syn::TypePath,
+    field_size: usize,
+    from_bytes_method: &proc_macro2::TokenStream,
+) -> Result<proc_macro2::TokenStream, syn::Error> {
+    match field_size {
+        1 => Ok(quote! { Some(bytes[value_start] as #inner_tp) }),
+        2 => Ok(quote! {
+            Some(<#inner_tp>::#from_bytes_method([bytes[value_start], bytes[value_start + 1]]))
+        }),
+        4 => Ok(quote! {
+            Some(<#inner_tp>::#from_bytes_method([
+                bytes[value_start], bytes[value_start + 1],
+                bytes[value_start + 2], bytes[value_start + 3]
+            ]))
+        }),
+        8 => Ok(quote! {
+            Some(<#inner_tp>::#from_bytes_method([
+                bytes[value_start], bytes[value_start + 1], bytes[value_start + 2], bytes[value_start + 3],
+                bytes[value_start + 4], bytes[value_start + 5], bytes[value_start + 6], bytes[value_start + 7]
+            ]))
+        }),
+        16 => Ok(quote! {
+            Some(<#inner_tp>::#from_bytes_method([
+                bytes[value_start], bytes[value_start + 1], bytes[value_start + 2], bytes[value_start + 3],
+                bytes[value_start + 4], bytes[value_start + 5], bytes[value_start + 6], bytes[value_start + 7],
+                bytes[value_start + 8], bytes[value_start + 9], bytes[value_start + 10], bytes[value_start + 11],
+                bytes[value_start + 12], bytes[value_start + 13], bytes[value_start + 14], bytes[value_start + 15]
+            ]))
+        }),
+        _ => Err(syn::Error::new_spanned(
+            inner_tp,
+            "Unsupported primitive type size for Option",
+        )),
+    }
+}
+
+fn create_option_inner_parsing(
+    inner_tp: &syn::TypePath,
+    field_size: usize,
+    endianness: crate::consts::Endianness,
+) -> Result<proc_macro2::TokenStream, syn::Error> {
+    if let Some(ts) = option_parse_special(inner_tp, endianness) {
+        return Ok(ts);
+    }
+    let from_bytes_method = utils::get_from_bytes_method(endianness);
+    option_parse_integer(inner_tp, field_size, &from_bytes_method)
+}
+
+fn create_option_inner_writing(
+    inner_tp: &syn::TypePath,
+    endianness: crate::consts::Endianness,
+) -> proc_macro2::TokenStream {
+    if inner_tp.path.is_ident("bool") {
+        return quote! {
+            ::bebytes::BufMut::put_u8(bytes, if inner_val { 1 } else { 0 });
+        };
+    }
+
+    if inner_tp.path.is_ident("char") {
+        return match endianness {
+            crate::consts::Endianness::Big => quote! {
+                bytes.extend_from_slice(&(inner_val as u32).to_be_bytes());
+            },
+            crate::consts::Endianness::Little => quote! {
+                bytes.extend_from_slice(&(inner_val as u32).to_le_bytes());
+            },
+        };
+    }
+
+    if inner_tp.path.is_ident("f32") || inner_tp.path.is_ident("f64") {
+        return match endianness {
+            crate::consts::Endianness::Big => quote! {
+                bytes.extend_from_slice(&inner_val.to_be_bytes());
+            },
+            crate::consts::Endianness::Little => quote! {
+                bytes.extend_from_slice(&inner_val.to_le_bytes());
+            },
+        };
+    }
+
+    let to_bytes_method = utils::get_to_bytes_method(endianness);
+    quote! {
+        bytes.extend_from_slice(&inner_val.#to_bytes_method());
+    }
+}
+
+fn process_option_array(
+    field_name: &syn::Ident,
+    arr: &syn::TypeArray,
+) -> Result<crate::functional::FieldProcessResult, syn::Error> {
+    if let syn::Type::Path(elem) = &*arr.elem {
+        if elem.path.is_ident("u8") {
+            if let syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Int(lit_int),
+                ..
+            }) = &arr.len
+            {
+                let array_len: usize = lit_int.base10_parse()?;
+                let total_size = array_len + 1;
+
+                let accessor =
+                    crate::functional::pure_helpers::create_field_accessor(field_name, true);
+                let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(total_size);
+
+                let parsing = quote! {
+                    byte_index = _bit_sum / 8;
+                    end_byte_index = byte_index + #total_size;
+                    if end_byte_index > bytes.len() {
+                        return Err(::bebytes::BeBytesError::InsufficientData {
+                            expected: end_byte_index,
+                            actual: bytes.len(),
+                        });
+                    }
+                    let #field_name = match bytes[byte_index] {
+                        0x00 => None,
+                        0x01 => {
+                            let value_start = byte_index + 1;
+                            let mut arr = [0u8; #array_len];
+                            arr.copy_from_slice(&bytes[value_start..value_start + #array_len]);
+                            Some(arr)
+                        }
+                        tag => return Err(::bebytes::BeBytesError::InvalidDiscriminant {
+                            value: tag,
+                            type_name: "Option",
+                        }),
+                    };
+                    _bit_sum += 8 * #total_size;
+                };
+
+                let writing = quote! {
+                    match #field_name {
+                        None => {
+                            bytes.reserve(#total_size);
+                            ::bebytes::BufMut::put_u8(bytes, 0x00);
+                            bytes.extend_from_slice(&[0u8; #array_len]);
+                        }
+                        Some(arr) => {
+                            bytes.reserve(#total_size);
+                            ::bebytes::BufMut::put_u8(bytes, 0x01);
+                            bytes.extend_from_slice(&arr);
+                        }
+                    }
+                    _bit_sum += #total_size * 8;
+                };
+
+                let direct_writing = quote! {
+                    match #field_name {
+                        None => {
+                            buf.put_u8(0x00);
+                            buf.put_slice(&[0u8; #array_len]);
+                        }
+                        Some(arr) => {
+                            buf.put_u8(0x01);
+                            buf.put_slice(&arr);
+                        }
+                    }
+                };
+
+                return Ok(crate::functional::FieldProcessResult::new(
+                    quote! {},
+                    parsing,
+                    writing,
+                    direct_writing,
+                    accessor,
+                    bit_sum,
+                ));
+            }
+        }
+    }
+    Err(syn::Error::new_spanned(
+        arr,
+        "Only [u8; N] arrays are supported in Option",
+    ))
+}
+
 fn process_option_type_functional(
     context: &FieldContext,
     processing_ctx: &crate::functional::ProcessingContext,
@@ -1089,43 +1337,68 @@ fn process_option_type_functional(
             if let syn::Type::Path(inner_tp) = &inner_type {
                 if utils::is_primitive_type(inner_tp) {
                     let field_size = utils::get_primitive_type_size(&inner_type)?;
+                    let total_size = field_size + 1;
 
                     let accessor =
                         crate::functional::pure_helpers::create_field_accessor(field_name, false);
-                    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(field_size);
+                    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(total_size);
 
-                    let from_bytes_method = utils::get_from_bytes_method(processing_ctx.endianness);
-                    let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
+                    let value_parsing = create_option_inner_parsing(
+                        inner_tp,
+                        field_size,
+                        processing_ctx.endianness,
+                    )?;
 
                     let parsing = quote! {
                         byte_index = _bit_sum / 8;
-                        end_byte_index = byte_index + #field_size;
-                        _bit_sum += 8 * #field_size;
-                        let #field_name = if bytes[byte_index..end_byte_index] == [0_u8; #field_size] {
-                            None
-                        } else {
-                            Some(<#inner_tp>::#from_bytes_method({
-                                let slice = &bytes[byte_index..end_byte_index];
-                                let mut arr = [0; #field_size];
-                                arr.copy_from_slice(slice);
-                                arr
-                            }))
+                        end_byte_index = byte_index + #total_size;
+                        if end_byte_index > bytes.len() {
+                            return Err(::bebytes::BeBytesError::InsufficientData {
+                                expected: end_byte_index,
+                                actual: bytes.len(),
+                            });
+                        }
+                        let #field_name = match bytes[byte_index] {
+                            0x00 => None,
+                            0x01 => {
+                                let value_start = byte_index + 1;
+                                #value_parsing
+                            }
+                            tag => return Err(::bebytes::BeBytesError::InvalidDiscriminant {
+                                value: tag,
+                                type_name: "Option",
+                            }),
                         };
+                        _bit_sum += 8 * #total_size;
                     };
 
+                    let value_writing =
+                        create_option_inner_writing(inner_tp, processing_ctx.endianness);
+
                     let writing = quote! {
-                        let bytes_data = &#field_name.unwrap_or(0).#to_bytes_method();
-                        bytes.reserve(bytes_data.len());
-                        bytes.extend_from_slice(bytes_data);
-                        _bit_sum += bytes_data.len() * 8;
+                        match #field_name {
+                            None => {
+                                bytes.reserve(#total_size);
+                                ::bebytes::BufMut::put_u8(bytes, 0x00);
+                                bytes.extend_from_slice(&[0u8; #field_size]);
+                            }
+                            Some(inner_val) => {
+                                bytes.reserve(#total_size);
+                                ::bebytes::BufMut::put_u8(bytes, 0x01);
+                                #value_writing
+                            }
+                        }
+                        _bit_sum += #total_size * 8;
                     };
 
                     let direct_writing =
                         crate::functional::pure_helpers::create_option_primitive_direct_writing(
                             field_name,
                             &inner_type,
+                            field_size,
                             processing_ctx.endianness,
-                        )?;
+                        );
+
                     return Ok(crate::functional::FieldProcessResult::new(
                         quote! {},
                         parsing,
@@ -1135,6 +1408,10 @@ fn process_option_type_functional(
                         bit_sum,
                     ));
                 }
+            }
+
+            if let syn::Type::Array(arr) = &inner_type {
+                return process_option_array(field_name, arr);
             }
         }
     }
