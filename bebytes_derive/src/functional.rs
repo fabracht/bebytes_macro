@@ -215,11 +215,13 @@ pub mod pure_helpers {
     use syn::Ident;
 
     /// Create a field accessor without side effects
-    pub fn create_field_accessor(field_name: &Ident, needs_owned: bool) -> TokenStream {
-        if needs_owned {
-            quote! { let #field_name = self.#field_name.clone(); }
-        } else {
+    /// For Copy types, pass `is_copy=true` to generate a value copy
+    /// For non-Copy types, pass `is_copy=false` to generate a reference (avoids clone)
+    pub fn create_field_accessor(field_name: &Ident, is_copy: bool) -> TokenStream {
+        if is_copy {
             quote! { let #field_name = self.#field_name; }
+        } else {
+            quote! { let #field_name = &self.#field_name; }
         }
     }
 

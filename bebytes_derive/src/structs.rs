@@ -482,7 +482,7 @@ fn process_bits_field_functional(
     let field_name = &context.field_name;
     let field_type = context.field_type;
 
-    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, false);
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, true);
     let bit_sum = crate::functional::pure_helpers::create_bit_sum(size);
     let limit_check =
         crate::functional::pure_helpers::create_bit_field_limit_check(field_name, field_type, size);
@@ -769,7 +769,7 @@ fn process_primitive_type_functional(
 
     let field_size = utils::get_primitive_type_size(field_type)?;
 
-    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, false);
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, true);
     let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(field_size);
 
     let parsing_tokens = vec![
@@ -1011,7 +1011,7 @@ fn process_vector_functional(
     let field = context.field;
     let is_last_field = context.is_last_field;
 
-    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, true);
+    let accessor = quote! { let #field_name = self.#field_name.clone(); };
 
     if let syn::Type::Path(tp) = field_type {
         if let Some(syn::Type::Path(ref inner_tp)) = utils::solve_for_inner_type(tp, "Vec") {
@@ -1340,7 +1340,7 @@ fn process_option_type_functional(
                     let total_size = field_size + 1;
 
                     let accessor =
-                        crate::functional::pure_helpers::create_field_accessor(field_name, false);
+                        crate::functional::pure_helpers::create_field_accessor(field_name, true);
                     let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(total_size);
 
                     let value_parsing = create_option_inner_parsing(
@@ -1430,8 +1430,7 @@ fn process_custom_type_functional(
     let field_name = &context.field_name;
     let field_type = context.field_type;
 
-    let needs_owned = !utils::is_copy(field_type);
-    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, needs_owned);
+    let accessor = quote! { let #field_name = self.#field_name.clone(); };
 
     let bit_sum = quote! {
         bit_sum += 8 * #field_type::field_size();
@@ -1480,7 +1479,7 @@ fn process_string_functional(
     let field = context.field;
     let is_last_field = context.is_last_field;
 
-    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, true);
+    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, false);
 
     // Generate parsing code based on size constraints
     let (bit_sum, parsing, writing) = match (size, string_size_ident) {
@@ -1523,7 +1522,7 @@ fn process_size_expression_functional(
     let field_name = &context.field_name;
     let field_type = context.field_type;
 
-    let accessor = crate::functional::pure_helpers::create_field_accessor(field_name, true);
+    let accessor = quote! { let #field_name = self.#field_name.clone(); };
 
     // Generate the size calculation code
     let size_calculation = size_expr.generate_evaluation_code();
