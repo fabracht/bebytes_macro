@@ -214,12 +214,18 @@ pub mod pure_helpers {
     use quote::quote;
     use syn::Ident;
 
-    /// Create a field accessor without side effects
-    pub fn create_field_accessor(field_name: &Ident, needs_owned: bool) -> TokenStream {
-        if needs_owned {
-            quote! { let #field_name = self.#field_name.clone(); }
-        } else {
-            quote! { let #field_name = self.#field_name; }
+    #[derive(Clone, Copy)]
+    pub enum AccessorMode {
+        Copy,
+        Reference,
+        Clone,
+    }
+
+    pub fn create_field_accessor(field_name: &Ident, mode: AccessorMode) -> TokenStream {
+        match mode {
+            AccessorMode::Copy => quote! { let #field_name = self.#field_name; },
+            AccessorMode::Reference => quote! { let #field_name = &self.#field_name; },
+            AccessorMode::Clone => quote! { let #field_name = self.#field_name.clone(); },
         }
     }
 

@@ -1,6 +1,6 @@
 [package]
 name = "bebytes"
-version = "3.0.0"
+version = "3.0.1"
 edition = "2021"
 rust-version = "1.75.0"
 license = "MIT"
@@ -21,7 +21,7 @@ path = "./bin/performance_benchmark.rs"
 required-features = ["std"]
 
 [dependencies]
-bebytes_derive = { version = "3.0.0" }
+bebytes_derive = { version = "3.0.1" }
 bytes = { version = "1", optional = true }
 
 [dev-dependencies]
