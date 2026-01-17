@@ -4,8 +4,7 @@
 extern crate alloc;
 
 use alloc::vec;
-use alloc::vec::Vec;
-use bebytes::{BeBytes, BeBytesError};
+use bebytes::{BeBytes, BeBytesError, Vec};
 
 #[derive(BeBytes, Debug, PartialEq)]
 struct SimpleStruct {
