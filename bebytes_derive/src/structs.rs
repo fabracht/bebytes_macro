@@ -9,7 +9,7 @@ fn convert_to_direct_writing(writing_code: &proc_macro2::TokenStream) -> proc_ma
     // This avoids variable name conflicts while maintaining correctness
     quote! {
         {
-            let mut field_bytes = Vec::new();
+            let mut field_bytes = ::bebytes::Vec::new();
             {
                 let bytes = &mut field_bytes; // Create alias to avoid conflicts with 'bytes' crate
                 #writing_code
@@ -884,7 +884,7 @@ fn generate_primitive_vector_tokens(
                     if end_index > bytes.len() {
                         panic!("Not enough bytes to parse a vector of size {} (field: {}, byte_index: {}, bytes.len(): {})", vec_size, stringify!(#field_name), byte_index, bytes.len());
                     }
-                    let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                    let #field_name = ::bebytes::Vec::from(&bytes[byte_index..end_index]);
                     _bit_sum += vec_size * 8;
                 },
                 quote! {
@@ -900,7 +900,7 @@ fn generate_primitive_vector_tokens(
                 let vec_size = #s as usize;
                 byte_index = _bit_sum / 8;
                 let end_index = byte_index + vec_size;
-                let #field_name = Vec::from(&bytes[byte_index..end_index]);
+                let #field_name = ::bebytes::Vec::from(&bytes[byte_index..end_index]);
                 _bit_sum += #s * 8;
             },
             quote! {
@@ -920,7 +920,7 @@ fn generate_primitive_vector_tokens(
                 quote! { bit_sum = 4096 * 8; },
                 quote! {
                     byte_index = _bit_sum / 8;
-                    let #field_name = Vec::from(&bytes[byte_index..]);
+                    let #field_name = ::bebytes::Vec::from(&bytes[byte_index..]);
                     _bit_sum += #field_name.len() * 8;
                 },
                 quote! {
@@ -1046,7 +1046,7 @@ fn process_vector_functional(
             let to_bytes_method = utils::get_to_bytes_method(processing_ctx.endianness);
 
             let parsing_init = quote! {
-                let mut #field_name = Vec::new();
+                let mut #field_name = ::bebytes::Vec::new();
             };
 
             let parsing_loop = generate_custom_vector_parsing(
@@ -1776,7 +1776,7 @@ fn process_until_marker_functional(
         // Last field: consume all remaining bytes if marker not found
         quote! {
             byte_index = _bit_sum / 8;
-            let mut #field_name = Vec::new();
+            let mut #field_name = ::bebytes::Vec::new();
 
             // Read bytes until we find the marker
             while byte_index < bytes.len() && bytes[byte_index] != #marker {
@@ -1795,7 +1795,7 @@ fn process_until_marker_functional(
         // Not last field: error if marker not found
         quote! {
             byte_index = _bit_sum / 8;
-            let mut #field_name = Vec::new();
+            let mut #field_name = ::bebytes::Vec::new();
             let mut marker_found = false;
 
             // Read bytes until we find the marker
@@ -1872,7 +1872,7 @@ fn process_after_marker_functional(
             remaining
         } else {
             // No marker found, field is empty
-            Vec::new()
+            ::bebytes::Vec::new()
         };
     };
 
@@ -1931,11 +1931,11 @@ fn process_vec_of_vecs_with_marker_functional(
 
     let parsing = quote! {
         byte_index = _bit_sum / 8;
-        let mut #field_name = Vec::new();
+        let mut #field_name = ::bebytes::Vec::new();
 
         // Read exactly the specified number of segments
         for segment_idx in 0..#size_expr {
-            let mut current_section = Vec::new();
+            let mut current_section = ::bebytes::Vec::new();
             let mut marker_found = false;
 
             // Read until marker for this segment

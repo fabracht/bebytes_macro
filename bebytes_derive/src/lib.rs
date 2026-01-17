@@ -419,7 +419,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
 
                         #[inline]
-                        fn to_be_bytes(&self) -> Vec<u8> {
+                        fn to_be_bytes(&self) -> ::bebytes::Vec<u8> {
                             let capacity = Self::field_size();
                             let mut buf = ::bebytes::BytesMut::with_capacity(capacity);
                             let mut _bit_sum = 0;
@@ -456,7 +456,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                         }
 
                         #[inline]
-                        fn to_le_bytes(&self) -> Vec<u8> {
+                        fn to_le_bytes(&self) -> ::bebytes::Vec<u8> {
                             let capacity = Self::field_size();
                             let mut buf = ::bebytes::BytesMut::with_capacity(capacity);
                             let mut _bit_sum = 0;
@@ -672,7 +672,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     }
 
                     #[inline]
-                    fn to_be_bytes(&self) -> Vec<u8> {
+                    fn to_be_bytes(&self) -> ::bebytes::Vec<u8> {
                         let mut buf = ::bebytes::BytesMut::with_capacity(#byte_size_lit);
                         let val = match self {
                             #(#to_be_bytes_arms)*
@@ -697,7 +697,7 @@ pub fn derive_be_bytes(input: TokenStream) -> TokenStream {
                     }
 
                     #[inline]
-                    fn to_le_bytes(&self) -> Vec<u8> {
+                    fn to_le_bytes(&self) -> ::bebytes::Vec<u8> {
                         let mut buf = ::bebytes::BytesMut::with_capacity(#byte_size_lit);
                         let val = match self {
                             #(#to_le_bytes_arms)*

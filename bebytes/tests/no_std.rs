@@ -4,8 +4,7 @@
 extern crate alloc;
 
 use alloc::vec;
-use alloc::vec::Vec;
-use bebytes::{BeBytes, BeBytesError};
+use bebytes::{BeBytes, BeBytesError, Vec};
 
 #[derive(BeBytes, Debug, PartialEq)]
 struct SimpleStruct {
@@ -175,4 +174,81 @@ fn test_error_formatting_no_std() {
     };
     let formatted = format!("{}", err);
     assert_eq!(formatted, "Invalid discriminant 42 for type TestEnum");
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct VectorFromField {
+    len: u8,
+    #[FromField(len)]
+    data: Vec<u8>,
+}
+
+#[test]
+fn test_vector_from_field_no_std() {
+    let original = VectorFromField {
+        len: 3,
+        data: vec![0x11, 0x22, 0x33],
+    };
+
+    let bytes = original.to_be_bytes();
+    let (decoded, _) = VectorFromField::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(decoded, original);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct UnboundedVector {
+    header: u16,
+    data: Vec<u8>,
+}
+
+#[test]
+fn test_unbounded_vector_no_std() {
+    let original = UnboundedVector {
+        header: 0xABCD,
+        data: vec![1, 2, 3, 4, 5],
+    };
+
+    let bytes = original.to_be_bytes();
+    let (decoded, _) = UnboundedVector::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(decoded, original);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct MarkerStruct {
+    #[UntilMarker(0xFF)]
+    data: Vec<u8>,
+    footer: u8,
+}
+
+#[test]
+fn test_marker_field_no_std() {
+    let original = MarkerStruct {
+        data: vec![0x11, 0x22, 0x33],
+        footer: 0xAA,
+    };
+
+    let bytes = original.to_be_bytes();
+    assert_eq!(bytes, vec![0x11, 0x22, 0x33, 0xFF, 0xAA]);
+
+    let (decoded, _) = MarkerStruct::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(decoded, original);
+}
+
+#[derive(BeBytes, Debug, PartialEq)]
+struct MarkerLastField {
+    header: u8,
+    #[UntilMarker(0xFF)]
+    data: Vec<u8>,
+}
+
+#[test]
+fn test_marker_last_field_no_std() {
+    let original = MarkerLastField {
+        header: 0x42,
+        data: vec![0xAA, 0xBB],
+    };
+
+    let bytes = original.to_be_bytes();
+    let (decoded, _) = MarkerLastField::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(decoded, original);
 }

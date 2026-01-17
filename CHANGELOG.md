@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2] - 2025-01-17
+
+### Fixed
+
+- **no_std compatibility**: Use fully qualified `::bebytes::Vec` paths in all generated code
+  - Fixed 4 return type declarations in `lib.rs` (`to_be_bytes`, `to_le_bytes` for structs and enums)
+  - Fixed 10 `Vec::new()` and `Vec::from()` calls in `structs.rs` for vector parsing/writing
+  - Prevents compilation failures in no_std environments where `Vec` is not in prelude
+
+### Changed
+
+- **no_std test improvements**: Tests now import `Vec` from `bebytes` instead of `alloc`
+  - Added 4 new tests covering all Vec codegen paths (FromField, unbounded, marker fields)
+  - Tests will now catch any future regressions in qualified path usage
+
 ## [3.0.0] - 2025-12-21
 
 ### Breaking Changes
