@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.3] - 2026-10-11
+
+### Fixed
+
+- **Truncated input no longer panics**: `try_from_be_bytes` and `try_from_le_bytes` now return `BeBytesError::InsufficientData` instead of panicking when the input ends early
+  - `[u8; N]` array fields are length-checked before they are copied
+  - Sub-byte bit fields check that the byte (or both bytes, for a field spanning a byte boundary) is present before reading it
+  - `Vec<u8>` fields sized with `#[FromField]` return an error instead of calling `panic!`
+  - Added `truncated_input` tests that cut each affected shape at every length, big- and little-endian
+
 ## [3.0.2] - 2025-01-17
 
 ### Fixed

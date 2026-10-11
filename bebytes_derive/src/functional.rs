@@ -980,6 +980,18 @@ pub mod pure_helpers {
         }
     }
 
+    fn single_byte_bounds_check(spans_bytes: bool) -> TokenStream {
+        let bytes_read: usize = if spans_bytes { 2 } else { 1 };
+        quote! {
+            if byte_idx + #bytes_read > bytes.len() {
+                return Err(::bebytes::BeBytesError::InsufficientData {
+                    expected: #bytes_read,
+                    actual: bytes.len().saturating_sub(byte_idx),
+                });
+            }
+        }
+    }
+
     pub fn create_single_byte_bit_parsing(
         field_name: &Ident,
         field_type: &syn::Type,
@@ -989,6 +1001,7 @@ pub mod pure_helpers {
         spans_bytes: bool,
         endianness: crate::consts::Endianness,
     ) -> TokenStream {
+        let bounds_check = single_byte_bounds_check(spans_bytes);
         match endianness {
             crate::consts::Endianness::Big => {
                 if spans_bytes {
@@ -1000,6 +1013,7 @@ pub mod pure_helpers {
                     quote! {
                         let #field_name = {
                             let byte_idx = _bit_sum / 8;
+                            #bounds_check
                             let first_part = ((bytes[byte_idx] >> #first_shift) & #first_mask as u8) as #field_type;
                             let second_part = ((bytes[byte_idx + 1] >> (8 - #second_byte_bits)) & #second_mask as u8) as #field_type;
                             (first_part << #second_byte_bits) | second_part
@@ -1011,6 +1025,7 @@ pub mod pure_helpers {
                     quote! {
                         let #field_name = {
                             let byte_idx = _bit_sum / 8;
+                            #bounds_check
                             ((bytes[byte_idx] >> #shift) & #mask as u8) as #field_type
                         };
                         _bit_sum += #size;
@@ -1026,6 +1041,7 @@ pub mod pure_helpers {
                     quote! {
                         let #field_name = {
                             let byte_idx = _bit_sum / 8;
+                            #bounds_check
                             let first_part = ((bytes[byte_idx] >> #bit_offset) & #first_mask as u8) as #field_type;
                             let second_part = (bytes[byte_idx + 1] & #second_mask as u8) as #field_type;
                             first_part | (second_part << #first_byte_bits)
@@ -1036,6 +1052,7 @@ pub mod pure_helpers {
                     quote! {
                         let #field_name = {
                             let byte_idx = _bit_sum / 8;
+                            #bounds_check
                             ((bytes[byte_idx] >> #bit_offset) & #mask as u8) as #field_type
                         };
                         _bit_sum += #size;
@@ -1374,19 +1391,11 @@ pub mod functional_attrs {
     ) -> Result<Vec<syn::Ident>, syn::Error> {
         let field_path: Vec<syn::Ident>;
 
-        // Parse the attribute content as a token stream
         match &attr.meta {
             syn::Meta::List(list) => {
-                // Parse tokens inside FromField(...)
                 let tokens = list.tokens.clone();
                 let parser = syn::punctuated::Punctuated::<syn::Ident, syn::Token![.]>::parse_separated_nonempty;
-                match parser.parse2(tokens) {
-                    Ok(punctuated) => {
-                        // Convert punctuated list to Vec<Ident>
-                        field_path = punctuated.into_iter().collect();
-                    }
-                    Err(e) => return Err(e),
-                }
+                field_path = parser.parse2(tokens)?.into_iter().collect();
             }
             _ => {
                 return Err(syn::Error::new_spanned(
