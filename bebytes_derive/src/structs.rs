@@ -823,6 +823,12 @@ fn process_array_functional(
 
                 let parsing = quote! {
                     byte_index = _bit_sum / 8;
+                    if byte_index + #length > bytes.len() {
+                        return Err(::bebytes::BeBytesError::InsufficientData {
+                            expected: #length,
+                            actual: bytes.len().saturating_sub(byte_index),
+                        });
+                    }
                     let mut #field_name = [0u8; #length];
                     #field_name.copy_from_slice(&bytes[byte_index..#length + byte_index]);
                     _bit_sum += 8 * #length;
@@ -882,7 +888,10 @@ fn generate_primitive_vector_tokens(
                     byte_index = _bit_sum / 8;
                     let end_index = byte_index + vec_size;
                     if end_index > bytes.len() {
-                        panic!("Not enough bytes to parse a vector of size {} (field: {}, byte_index: {}, bytes.len(): {})", vec_size, stringify!(#field_name), byte_index, bytes.len());
+                        return Err(::bebytes::BeBytesError::InsufficientData {
+                            expected: vec_size,
+                            actual: bytes.len().saturating_sub(byte_index),
+                        });
                     }
                     let #field_name = ::bebytes::Vec::from(&bytes[byte_index..end_index]);
                     _bit_sum += vec_size * 8;
