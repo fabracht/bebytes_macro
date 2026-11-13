@@ -92,17 +92,17 @@ fn test_mixed_attributes() {
     struct MixedAttributes {
         #[bits(4)]
         nibble: u8,
-        regular: u8,
         #[bits(12)]
         twelve: u16,
+        regular: u8,
     }
 
     assert_eq!(MixedAttributes::field_size(), 3); // 4 + 8 + 12 = 24 bits
 
     let test = MixedAttributes {
         nibble: 15,
-        regular: 255,
         twelve: 4095,
+        regular: 255,
     };
 
     let bytes = test.to_be_bytes();
