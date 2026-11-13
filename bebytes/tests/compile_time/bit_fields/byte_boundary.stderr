@@ -1,0 +1,5 @@
+error: Bit fields must complete a full byte before any byte-aligned field. Add #[bits(N)] to this field or ensure previous bit fields sum to a multiple of 8 bits.
+ --> tests/compile_time/bit_fields/byte_boundary.rs:9:5
+  |
+9 |     regular: u8,
+  |     ^^^^^^^^^^^

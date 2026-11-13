@@ -1,9 +1,0 @@
-**/target
-/Cargo.lock
-expanded.rs
-.DS_Store
-CLAUDE.md
-.vscode/ltex.dictionary.en-US.txt
-mutants.out*
-profiling_results*
-test_project*
