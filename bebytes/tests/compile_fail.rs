@@ -10,6 +10,7 @@ fn ui_tests() {
     t.compile_fail("tests/compile_time/attributes/multiple_endian_attrs.rs");
 
     // ===== BIT FIELD TESTS =====
+    t.compile_fail("tests/compile_time/bit_fields/byte_boundary.rs");
     t.compile_fail("tests/compile_time/bit_fields/incomplete_byte.rs");
     t.compile_fail("tests/compile_time/bit_fields/zero_bits.rs");
     t.compile_fail("tests/compile_time/bit_fields/exceeds_type_size.rs");
