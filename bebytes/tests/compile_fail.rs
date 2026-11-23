@@ -11,6 +11,14 @@ fn ui_tests() {
 
     // ===== BIT FIELD TESTS =====
     t.compile_fail("tests/compile_time/bit_fields/byte_boundary.rs");
+    t.compile_fail("tests/compile_time/bit_fields/byte_boundary_option.rs");
+    t.compile_fail("tests/compile_time/bit_fields/byte_boundary_vec.rs");
+    t.compile_fail("tests/compile_time/bit_fields/byte_boundary_string.rs");
+    t.compile_fail("tests/compile_time/bit_fields/byte_boundary_array.rs");
+    t.compile_fail("tests/compile_time/bit_fields/byte_boundary_marker.rs");
+    t.compile_fail("tests/compile_time/bit_fields/byte_boundary_enum.rs");
+    t.compile_fail("tests/compile_time/bit_fields/byte_boundary_nested_struct.rs");
+    t.compile_fail("tests/compile_time/bit_fields/byte_boundary_bool.rs");
     t.compile_fail("tests/compile_time/bit_fields/incomplete_byte.rs");
     t.compile_fail("tests/compile_time/bit_fields/zero_bits.rs");
     t.compile_fail("tests/compile_time/bit_fields/exceeds_type_size.rs");
