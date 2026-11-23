@@ -86,8 +86,7 @@ fn test_no_attributes() {
 }
 
 #[test]
-fn test_mixed_attributes() {
-    // Test mix of fields with and without attributes
+fn test_mixed_attributes_preserve_distinct_values() {
     #[derive(BeBytes, Debug, PartialEq)]
     struct MixedAttributes {
         #[bits(4)]
@@ -97,7 +96,32 @@ fn test_mixed_attributes() {
         regular: u8,
     }
 
-    assert_eq!(MixedAttributes::field_size(), 3); // 4 + 8 + 12 = 24 bits
+    let test = MixedAttributes {
+        nibble: 0xA,
+        twelve: 0xBCD,
+        regular: 0xEF,
+    };
+
+    let bytes = test.to_be_bytes();
+    assert_eq!(bytes, [0xAB, 0xCD, 0xEF]);
+
+    let (parsed, consumed) = MixedAttributes::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(parsed, test);
+    assert_eq!(consumed, 3);
+}
+
+#[test]
+fn test_mixed_attributes() {
+    #[derive(BeBytes, Debug, PartialEq)]
+    struct MixedAttributes {
+        #[bits(4)]
+        nibble: u8,
+        #[bits(12)]
+        twelve: u16,
+        regular: u8,
+    }
+
+    assert_eq!(MixedAttributes::field_size(), 3);
 
     let test = MixedAttributes {
         nibble: 15,
