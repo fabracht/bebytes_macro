@@ -226,9 +226,9 @@ pub enum DummyEnum {
 }
 ```
 
-### Enum Bit Packing (New in 1.2.0)
+### Enums in Bit Fields
 
-Enums can now be used with the `#[bits()]` attribute for automatic bit-width calculation. When you use `#[bits()]` (with empty parentheses) on an enum field, the macro automatically calculates the minimum number of bits needed to represent all enum variants.
+Enum fields cannot carry `#[bits(N)]`. To pack an enum into a bit field, store its discriminant in an integer bit field and convert with the generated `TryFrom`:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
@@ -243,19 +243,19 @@ enum Status {
 struct PacketHeader {
     #[bits(4)]
     version: u8,
-    #[bits()]  // Automatically uses 2 bits (minimum needed for 4 variants)
-    status: Status,
+    #[bits(2)]
+    status: u8,
     #[bits(2)]
     flags: u8,
 }
+
+let (header, _) = PacketHeader::try_from_be_bytes(&bytes)?;
+let status = Status::try_from(header.status)?;
 ```
 
-The macro:
-
-- Calculates minimum bits as `ceil(log2(max_discriminant + 1))`
-- Generates a `__BEBYTES_MIN_BITS` constant for each enum
-- Implements `TryFrom<u8>` for safe conversion from discriminant values
-- Handles byte-spanning fields automatically
+- `Status::try_from` returns an error for a value that is not a variant discriminant
+- Write the field with `Status::Running as u8`
+- Choose the width yourself: 2 variants need 1 bit, 3-4 variants need 2 bits, 5-8 variants need 3 bits, and so on
 
 ### Flag Enums
 

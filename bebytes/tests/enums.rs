@@ -130,20 +130,46 @@ mod auto_sized_enums {
     }
 
     #[test]
+    fn test_enum_stored_in_bits_field_via_try_from() {
+        #[derive(BeBytes, Debug, PartialEq)]
+        struct Header {
+            #[bits(4)]
+            version: u8,
+            #[bits(2)]
+            status: u8,
+            #[bits(2)]
+            flags: u8,
+        }
+
+        let bytes = [0x1A];
+        let (header, _) = Header::try_from_be_bytes(&bytes).unwrap();
+        assert_eq!(header.version, 1);
+        assert_eq!(TwoBitEnum::try_from(header.status).unwrap(), TwoBitEnum::C);
+        assert_eq!(header.flags, 2);
+
+        let rebuilt = Header {
+            version: 1,
+            status: TwoBitEnum::C as u8,
+            flags: 2,
+        };
+        assert_eq!(rebuilt.to_be_bytes(), bytes);
+    }
+
+    #[test]
     fn test_mixed_auto_and_explicit_bits() {
         #[derive(BeBytes, Debug, PartialEq)]
         struct MixedPacket {
             #[bits(3)]
             manual_bits: u8,
             #[bits(2)]
-            auto_enum: u8, // TwoBitEnum as u8
+            auto_enum: u8,
             #[bits(3)]
             more_manual: u8,
         }
 
         let packet = MixedPacket {
             manual_bits: 7,
-            auto_enum: 1, // 1 = TwoBitEnum::B
+            auto_enum: 1,
             more_manual: 5,
         };
 
@@ -356,6 +382,7 @@ mod multibyte_flags {
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
     #[bebytes(flags(u32))]
+    #[repr(u32)]
     enum ExplicitU32Flags {
         None = 0,
         Low = 1,
@@ -501,6 +528,7 @@ mod multibyte_flags {
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
     #[bebytes(flags)]
+    #[repr(u64)]
     enum U64Flags {
         None = 0,
         Bit0 = 1,
@@ -560,6 +588,7 @@ mod multibyte_flags {
 
     #[derive(BeBytes, Debug, PartialEq, Clone, Copy)]
     #[bebytes(flags(u128))]
+    #[repr(u128)]
     enum U128Flags {
         None = 0,
         Bit0 = 1,
