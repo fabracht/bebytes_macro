@@ -24,7 +24,7 @@ To use BeBytes Derive, add it as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-bebytes = "3.0.0"
+bebytes = "3.2"
 ```
 
 Then, import the BeBytes trait from the bebytes_derive crate and derive it for your struct:
@@ -935,7 +935,7 @@ For WebAssembly projects, disable the default features to use no_std:
 
 ```toml
 [dependencies]
-bebytes = { version = "3.0.0", default-features = false }
+bebytes = { version = "3.2", default-features = false }
 
 # For WASM builds, you'll also need an allocator
 [target.'cfg(target_arch = "wasm32")'.dependencies]

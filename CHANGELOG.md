@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0] - 2026-11-24
+
+### Changed
+
+- **Counted `Vec<CustomType>` rejects truncated input**: fields sized with `#[FromField(count)]` or `#[With(size(n))]` now return `BeBytesError::InsufficientData` when fewer than the declared number of items can be parsed, instead of returning a shorter `Vec`. Unsized trailing `Vec<CustomType>` fields still stop at the first incomplete item
+- **Size expressions are validated by the derive**: a `#[With(size(...))]` or `#[bebytes(size = "...")]` expression that references a field not declared before the sized field (circular, forward or nonexistent) now fails with `Size expression references `x`, which is not a field declared before `y``. These structs already failed to compile; only the message changed
+
+### Documentation
+
+- Corrected the "Enum Bit Packing" sections: enum fields cannot carry `#[bits(N)]`. Store the discriminant in an integer bit field and convert with the generated `TryFrom`
+- Updated the install snippets in the READMEs
+
+### Internal
+
+- CI uses `actions/checkout@v7`
+- Float tests use `std::f32::consts::PI` and `std::f64::consts::PI` so `clippy -D warnings` passes
+
+## [3.1.0] - 2026-11-23
+
+### Fixed
+
+- **Bit fields followed by a byte-aligned field no longer corrupt data**: a struct whose `#[bits(N)]` fields leave a partial byte before a byte-aligned field now fails to compile with `Bit fields must complete a full byte before any byte-aligned field`. Previously such structs compiled and then failed to round-trip at runtime (#76)
+- Added a bit layout oracle test and compile-fail fixtures covering `Option`, `Vec`, `String`, arrays, marker fields, enums, nested structs and `bool` after a partial byte
+
 ## [3.0.3] - 2026-10-11
 
 ### Fixed
