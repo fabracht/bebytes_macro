@@ -1,7 +1,6 @@
-error[E0425]: cannot find value `nonexistent` in this scope
- --> tests/compile_time/size_expressions/nonexistent_field.rs:8:10
-  |
-8 | #[derive(BeBytes, Debug, PartialEq)]
-  |          ^^^^^^^ not found in this scope
-  |
-  = note: this error originates in the derive macro `BeBytes` (in Nightly builds, run with -Z macro-backtrace for more info)
+error: Size expression references `nonexistent`, which is not a field declared before `data`
+  --> tests/compile_time/size_expressions/nonexistent_field.rs:12:5
+   |
+12 | /     #[bebytes(size = "nonexistent")]
+13 | |     data: Vec<u8>,
+   | |_________________^
