@@ -549,9 +549,9 @@ The following code
 
 Produces `DummyEnum: [2]`
 
-### Enum Bit Packing
+### Enums in Bit Fields
 
-Enums can be used with the `#[bits(N)]` attribute where you specify the exact number of bits needed. You must specify the bit width explicitly based on the number of enum variants:
+Enum fields cannot carry `#[bits(N)]`. To pack an enum into a bit field, store its discriminant in an integer bit field and convert with the generated `TryFrom`:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
@@ -562,38 +562,23 @@ enum Status {
     Stopped = 3,
 }
 
-#[derive(BeBytes, Debug, PartialEq)]
+#[derive(BeBytes)]
 struct PacketHeader {
     #[bits(4)]
     version: u8,
-    #[bits(2)]  // 2 bits needed for 4 variants (2^2 = 4)
-    status: Status,
+    #[bits(2)]
+    status: u8,
     #[bits(2)]
     flags: u8,
 }
+
+let (header, _) = PacketHeader::try_from_be_bytes(&bytes)?;
+let status = Status::try_from(header.status)?;
 ```
 
-In this example:
-
-- The `Status` enum has 4 variants, which requires 2 bits to represent (2^2 = 4)
-- You must specify `#[bits(2)]` explicitly for the status field
-- The total struct uses 8 bits (4 + 2 + 2), fitting perfectly in 1 byte
-
-#### Bit Calculation for Enums
-
-To determine the number of bits needed for an enum:
-
-- 2 variants need 1 bit (2^1 = 2)
-- 3-4 variants need 2 bits (2^2 = 4)
-- 5-8 variants need 3 bits (2^3 = 8)
-- 9-16 variants need 4 bits (2^4 = 16)
-- And so on...
-
-#### Requirements
-
-1. **Explicit Bit Width**: You must specify the exact number of bits with `#[bits(N)]`
-2. **u8 Range**: All discriminant values must be within 0-255 range (automatically validated by BeBytes)
-3. **Manual Calculation**: Calculate the required bits based on your enum variant count
+- `Status::try_from` returns an error for a value that is not a variant discriminant
+- Write the field with `Status::Running as u8`
+- Choose the width yourself: 2 variants need 1 bit, 3-4 variants need 2 bits, 5-8 variants need 3 bits, and so on
 
 ### Flag Enums
 

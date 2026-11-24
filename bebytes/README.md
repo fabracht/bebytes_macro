@@ -116,13 +116,12 @@ struct U16Example {
 
 The same rules apply - all bits fields must complete a byte boundary together.
 
-### Enum Bit Packing
+### Enums in Bit Fields
 
-Enums can be used with the `#[bits()]` attribute for automatic bit-width calculation. While `#[repr(u8)]` is not strictly required, it is recommended as it makes the u8 constraint explicit and provides compile-time guarantees:
+Enum fields cannot carry `#[bits(N)]`. To pack an enum into a bit field, store its discriminant in an integer bit field and convert with the generated `TryFrom`:
 
 ```rust
 #[derive(BeBytes, Debug, PartialEq)]
-#[repr(u8)]  // Recommended: ensures discriminants fit in u8 at compile time
 enum Status {
     Idle = 0,
     Running = 1,
@@ -134,21 +133,19 @@ enum Status {
 struct PacketHeader {
     #[bits(4)]
     version: u8,
-    #[bits()]  // Automatically uses 2 bits (minimum for 4 variants)
-    status: Status,
+    #[bits(2)]
+    status: u8,
     #[bits(2)]
     flags: u8,
 }
+
+let (header, _) = PacketHeader::try_from_be_bytes(&bytes)?;
+let status = Status::try_from(header.status)?;
 ```
 
-Key features:
-
-- Automatic bit calculation: `ceil(log2(max_discriminant + 1))`
-- No need to specify the bit width in both enum definition and usage
-- Type-safe conversion with generated `TryFrom<u8>` implementation
-- Supports byte-spanning fields automatically
-- Compile-time validation: discriminants exceeding u8 range (255) will produce an error
-- Works without `#[repr(u8)]`, but using it is recommended for clarity and compile-time safety
+- `Status::try_from` returns an error for a value that is not a variant discriminant
+- Write the field with `Status::Running as u8`
+- Choose the width yourself: 2 variants need 1 bit, 3-4 variants need 2 bits, 5-8 variants need 3 bits, and so on
 
 ### Flag Enums
 
@@ -202,7 +199,6 @@ BeBytes supports:
 - Strings: Standard Rust `String` type with attributes for size control
 - Arrays: `[u8; N]`, `[u16; N]`, etc.
 - Enums with named fields (serialized as a single byte)
-- Enums with `#[bits()]` for automatic bit-width calculation
 - `Option<T>` where T is a primitive
 - Nested structs that also implement `BeBytes`
 - `Vec<T>` with some restrictions (see below)
