@@ -219,23 +219,12 @@ mod error_propagation {
 
     #[test]
     fn test_vector_item_error_propagation() {
-        // Test that vector parsing is lenient - it parses as many complete items as possible
-        let bytes = vec![
-            2, // count = 2
-            0x12, 0x34, 0x56, 0x78, // First item (complete)
-            0xAB, 0xCD, // Second item (incomplete)
-        ];
+        let bytes = vec![2, 0x12, 0x34, 0x56, 0x78, 0xAB, 0xCD];
 
-        match VectorPacket::try_from_be_bytes(&bytes) {
-            Ok((packet, consumed)) => {
-                // Vector parsing is lenient - it parsed 1 item instead of failing
-                assert_eq!(packet.count, 2);
-                assert_eq!(packet.items.len(), 1);
-                assert_eq!(packet.items[0].value, 0x12345678);
-                assert_eq!(consumed, 5); // 1 byte count + 4 bytes for one item
-            }
-            Err(e) => panic!("Unexpected error: {:?}", e),
-        }
+        assert!(matches!(
+            VectorPacket::try_from_be_bytes(&bytes),
+            Err(BeBytesError::InsufficientData { .. })
+        ));
     }
 }
 
