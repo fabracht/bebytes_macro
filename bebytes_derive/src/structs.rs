@@ -321,6 +321,28 @@ pub fn handle_struct(context: &mut StructContext) {
             &mut errors,
             context.has_bit_fields,
         ) {
+            if let FieldType::SizeExpression(size_expr) = &field_type {
+                let preceding: Vec<&syn::Ident> = context
+                    .fields
+                    .named
+                    .iter()
+                    .take(idx)
+                    .filter_map(|earlier| earlier.ident.as_ref())
+                    .collect();
+                if let Some(unknown) = size_expr.first_unknown_field(&preceding) {
+                    errors.push(
+                        syn::Error::new_spanned(
+                            field,
+                            format!(
+                                "Size expression references `{unknown}`, which is not a field declared before `{}`",
+                                field_context.field_name
+                            ),
+                        )
+                        .to_compile_error(),
+                    );
+                    continue;
+                }
+            }
             let result = process_field_type(
                 &field_context,
                 field_type,

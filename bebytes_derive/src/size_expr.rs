@@ -77,6 +77,28 @@ impl SizeExpression {
         Self::from_syn_expr(&expr)
     }
 
+    pub fn first_unknown_field<'a>(&'a self, known: &[&Ident]) -> Option<&'a Ident> {
+        match self {
+            SizeExpression::Literal(_) => None,
+            SizeExpression::FieldRef(path) => {
+                path.segments.first().filter(|root| !known.contains(root))
+            }
+            SizeExpression::BinaryOp { left, right, .. } => left
+                .first_unknown_field(known)
+                .or_else(|| right.first_unknown_field(known)),
+            SizeExpression::Conditional {
+                condition,
+                then_expr,
+                else_expr,
+            } => condition
+                .left
+                .first_unknown_field(known)
+                .or_else(|| condition.right.first_unknown_field(known))
+                .or_else(|| then_expr.first_unknown_field(known))
+                .or_else(|| else_expr.first_unknown_field(known)),
+        }
+    }
+
     /// Convert a `syn::Expr` to a `SizeExpression`
     fn from_syn_expr(expr: &Expr) -> Result<Self> {
         match expr {
