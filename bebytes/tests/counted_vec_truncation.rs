@@ -50,6 +50,14 @@ struct UnsizedLast {
     items: Vec<Inner>,
 }
 
+#[derive(BeBytes, Debug, PartialEq)]
+struct FieldNamedLikeInternals {
+    vec_size: u8,
+    #[With(size(1))]
+    items: Vec<Inner>,
+    tail: u8,
+}
+
 fn item(seed: u8) -> [u8; 5] {
     [seed, seed, seed, seed, 0x56]
 }
@@ -187,4 +195,16 @@ fn unsized_last_stops_at_first_incomplete_item() {
     let (parsed, consumed) = UnsizedLast::try_from_be_bytes(&bytes).unwrap();
     assert_eq!(parsed.items, vec![inner(1)]);
     assert_eq!(consumed, 5);
+}
+
+#[test]
+fn sized_vec_does_not_shadow_user_fields() {
+    let mut bytes = vec![5];
+    bytes.extend_from_slice(&item(1));
+    bytes.push(7);
+    let (parsed, consumed) = FieldNamedLikeInternals::try_from_be_bytes(&bytes).unwrap();
+    assert_eq!(parsed.vec_size, 5);
+    assert_eq!(parsed.items, vec![inner(1)]);
+    assert_eq!(parsed.tail, 7);
+    assert_eq!(consumed, 7);
 }

@@ -964,9 +964,8 @@ fn generate_custom_vector_parsing(
 
     match item_count {
         Some(item_count) => Ok(quote! {
-            let vec_size = #item_count;
             let mut bytes_consumed = 0;
-            for _ in 0..vec_size {
+            for _ in 0..(#item_count) {
                 let item_offset = _bit_sum / 8 + bytes_consumed;
                 if item_offset >= bytes.len() {
                     return Err(::bebytes::BeBytesError::InsufficientData {
