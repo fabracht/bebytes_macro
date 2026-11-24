@@ -952,8 +952,39 @@ fn generate_custom_vector_parsing(
     vec_size_ident: Option<Vec<syn::Ident>>,
     field: &syn::Field,
 ) -> Result<proc_macro2::TokenStream, syn::Error> {
-    if is_last_field {
-        Ok(quote! {
+    let item_count = match (size, vec_size_ident) {
+        (Some(vec_size), _) => Some(quote! { #vec_size }),
+        (None, Some(ident_path)) => {
+            let field_access_parse =
+                crate::functional::pure_helpers::generate_field_access_path(&ident_path);
+            Some(quote! { #field_access_parse as usize })
+        }
+        (None, None) => None,
+    };
+
+    match item_count {
+        Some(item_count) => Ok(quote! {
+            let vec_size = #item_count;
+            let mut bytes_consumed = 0;
+            for _ in 0..vec_size {
+                let item_offset = _bit_sum / 8 + bytes_consumed;
+                if item_offset >= bytes.len() {
+                    return Err(::bebytes::BeBytesError::InsufficientData {
+                        expected: item_offset + 1,
+                        actual: bytes.len(),
+                    });
+                }
+                match #inner_type_name::#try_from_bytes_method(&bytes[item_offset..]) {
+                    Ok((item, consumed)) => {
+                        #field_name.push(item);
+                        bytes_consumed += consumed;
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            _bit_sum += bytes_consumed * 8;
+        }),
+        None if is_last_field => Ok(quote! {
             let mut bytes_consumed = 0;
             while _bit_sum / 8 + bytes_consumed < bytes.len() {
                 match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
@@ -961,50 +992,12 @@ fn generate_custom_vector_parsing(
                         #field_name.push(item);
                         bytes_consumed += consumed;
                     }
-                    Err(e) => break,
+                    Err(_) => break,
                 }
             }
             _bit_sum += bytes_consumed * 8;
-        })
-    } else if let Some(vec_size) = size {
-        Ok(quote! {
-            let mut bytes_consumed = 0;
-            for _ in 0..#vec_size {
-                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
-                    break;
-                }
-                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                    Ok((item, consumed)) => {
-                        #field_name.push(item);
-                        bytes_consumed += consumed;
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
-            _bit_sum += bytes_consumed * 8;
-        })
-    } else if let Some(ident_path) = vec_size_ident {
-        let field_access_parse =
-            crate::functional::pure_helpers::generate_field_access_path(&ident_path);
-        Ok(quote! {
-            let vec_size = #field_access_parse as usize;
-            let mut bytes_consumed = 0;
-            for _ in 0..vec_size {
-                if _bit_sum / 8 + bytes_consumed >= bytes.len() {
-                    break;
-                }
-                match #inner_type_name::#try_from_bytes_method(&bytes[_bit_sum / 8 + bytes_consumed..]) {
-                    Ok((item, consumed)) => {
-                        #field_name.push(item);
-                        bytes_consumed += consumed;
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
-            _bit_sum += bytes_consumed * 8;
-        })
-    } else {
-        Err(syn::Error::new(field.ty.span(), "Vectors of custom types need size information. Use #[With(size(n))] or #[FromField(field_name)]"))
+        }),
+        None => Err(syn::Error::new(field.ty.span(), "Vectors of custom types need size information. Use #[With(size(n))] or #[FromField(field_name)]")),
     }
 }
 
