@@ -24,7 +24,15 @@ struct MixedStruct {
 
 #[test]
 fn test_f32_round_trip() {
-    let values = [0.0f32, 1.0, -1.0, 3.14159, f32::MAX, f32::MIN, f32::EPSILON];
+    let values = [
+        0.0f32,
+        1.0,
+        -1.0,
+        std::f32::consts::PI,
+        f32::MAX,
+        f32::MIN,
+        f32::EPSILON,
+    ];
 
     for &val in &values {
         let s = FloatStruct {
@@ -43,7 +51,7 @@ fn test_f64_round_trip() {
         0.0f64,
         1.0,
         -1.0,
-        3.141592653589793,
+        std::f64::consts::PI,
         f64::MAX,
         f64::MIN,
         f64::EPSILON,

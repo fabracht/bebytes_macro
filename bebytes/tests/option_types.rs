@@ -195,7 +195,7 @@ fn test_option_i128_round_trip() {
 
 #[test]
 fn test_option_f32_round_trip() {
-    for val in [0.0f32, 1.0, -1.0, 3.14159, f32::MAX, f32::MIN] {
+    for val in [0.0f32, 1.0, -1.0, std::f32::consts::PI, f32::MAX, f32::MIN] {
         let s = OptionF32 { value: Some(val) };
         let bytes = s.to_be_bytes();
         assert_eq!(bytes[0], 0x01);
