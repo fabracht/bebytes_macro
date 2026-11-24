@@ -1,4 +1,4 @@
-error: Bit fields must complete a full byte before any byte-aligned field. Add #[bits(N)] to this field or ensure previous bit fields sum to a multiple of 8 bits.
+error: Bit fields must complete a full byte before any byte-aligned field. Ensure the preceding #[bits(N)] fields sum to a multiple of 8 bits, or give this field #[bits(N)] if it is an integer or char.
   --> tests/compile_time/bit_fields/byte_boundary_string.rs:9:5
    |
  9 | /     #[With(size(2))]

@@ -52,7 +52,7 @@ pub fn validate_byte_completeness(fields: &syn::FieldsNamed) -> Result<(), Token
         if !field_has_bits && !has_auto_sized && total_bits % 8 != 0 {
             return Err(syn::Error::new_spanned(
                 field,
-                "Bit fields must complete a full byte before any byte-aligned field. Add #[bits(N)] to this field or ensure previous bit fields sum to a multiple of 8 bits.",
+                "Bit fields must complete a full byte before any byte-aligned field. Ensure the preceding #[bits(N)] fields sum to a multiple of 8 bits, or give this field #[bits(N)] if it is an integer or char.",
             )
             .to_compile_error());
         }
