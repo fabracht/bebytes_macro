@@ -8,7 +8,7 @@ BeBytes is a high-performance Rust derive macro for binary serialization/deseria
 
 ```toml
 [dependencies]
-bebytes = "3.0.0"
+bebytes = "3.2"
 ```
 
 ## Basic Usage
