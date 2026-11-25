@@ -7,10 +7,8 @@ use std::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-/// Error aggregation type for handling multiple parse errors
 pub type ParseResult<T> = Result<T, Vec<SynError>>;
 
-/// Processing context to thread through computations
 #[derive(Clone, Debug)]
 pub struct ProcessingContext {
     pub endianness: crate::consts::Endianness,
@@ -38,13 +36,12 @@ impl ProcessingContext {
     }
 }
 
-/// Result of processing a single field
 #[derive(Debug, Clone)]
 pub struct FieldProcessResult {
     pub limit_check: TokenStream,
     pub parsing: TokenStream,
     pub writing: TokenStream,
-    pub direct_writing: TokenStream, // New: direct buffer writing
+    pub direct_writing: TokenStream,
     pub accessor: TokenStream,
     pub bit_sum: TokenStream,
 }
@@ -69,12 +66,11 @@ impl FieldProcessResult {
     }
 }
 
-/// Builder pattern for complex `FieldData` structures
 pub struct FieldDataBuilder {
     limit_checks: Vec<TokenStream>,
     parsings: Vec<TokenStream>,
     writings: Vec<TokenStream>,
-    direct_writings: Vec<TokenStream>, // New: direct buffer writings
+    direct_writings: Vec<TokenStream>,
     accessors: Vec<TokenStream>,
     bit_sums: Vec<TokenStream>,
 }
@@ -104,7 +100,7 @@ impl FieldDataBuilder {
     pub fn build(self) -> crate::structs::FieldData {
         crate::structs::FieldData {
             field_limit_check: self.limit_checks,
-            errors: Vec::new(), // Errors handled separately now
+            errors: Vec::new(),
             field_parsing: self.parsings,
             bit_sum: self.bit_sums,
             field_writing: self.writings,
@@ -120,7 +116,6 @@ impl Default for FieldDataBuilder {
     }
 }
 
-/// Attribute data structure for functional parsing
 #[derive(Debug, Default, Clone)]
 pub struct AttributeData {
     pub size: Option<usize>,
@@ -166,7 +161,6 @@ impl AttributeData {
         self
     }
 
-    /// Merge multiple `AttributeData` instances, prioritizing non-`None` values
     pub fn merge(attrs: Vec<Self>) -> Self {
         attrs.into_iter().fold(Self::default(), |mut acc, attr| {
             acc.size = attr.size.or(acc.size);
@@ -180,11 +174,9 @@ impl AttributeData {
     }
 }
 
-/// Error aggregation utilities
 pub mod error_utils {
     use super::{ParseResult, SynError, Vec};
 
-    /// Collect results, separating successes from errors
     pub fn aggregate_results<T>(
         results: impl Iterator<Item = Result<T, SynError>>,
     ) -> ParseResult<Vec<T>> {
@@ -207,7 +199,6 @@ pub mod error_utils {
     }
 }
 
-/// Pure helper functions to replace mutation-based ones
 pub mod pure_helpers {
     use super::TokenStream;
     use quote::quote;
@@ -228,20 +219,16 @@ pub mod pure_helpers {
         }
     }
 
-    /// Create a bit sum token without side effects
     pub fn create_bit_sum(size: usize) -> TokenStream {
         quote! { bit_sum += #size; }
     }
 
-    /// Create a bit sum for byte-aligned fields
     pub fn create_byte_bit_sum(size: usize) -> TokenStream {
         quote! { bit_sum += #size * 8; }
     }
 
-    /// Create byte indices tokens
     pub fn create_byte_indices(field_size: usize) -> TokenStream {
         quote! {
-            // Ensure byte alignment when transitioning from bitfields
             if _bit_sum % 8 != 0 {
                 _bit_sum = usize::div_ceil(_bit_sum, 8) * 8;
             }
@@ -257,7 +244,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Create primitive type parsing code
     pub fn create_primitive_parsing(
         field_name: &Ident,
         field_type: &syn::Type,
@@ -290,7 +276,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Create char type parsing code
     fn create_char_parsing(
         field_name: &Ident,
         endianness: crate::consts::Endianness,
@@ -319,7 +304,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Create numeric type parsing code
     fn create_numeric_parsing(
         field_name: &Ident,
         field_type: &syn::Type,
@@ -630,7 +614,6 @@ pub mod pure_helpers {
         option_direct_write_integer(field_name, type_size, endianness)
     }
 
-    /// Create limit check for bit fields
     pub fn create_bit_field_limit_check(
         field_name: &Ident,
         field_type: &syn::Type,
@@ -638,7 +621,6 @@ pub mod pure_helpers {
     ) -> TokenStream {
         let mask: u128 = (1 << size) - 1;
 
-        // Special handling for char type
         if let syn::Type::Path(tp) = field_type {
             if tp.path.is_ident("char") {
                 return quote! {
@@ -658,7 +640,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Generate field access path from a vector of idents
     pub fn generate_field_access_path(ident_path: &[Ident]) -> TokenStream {
         if ident_path.len() == 1 {
             let ident = &ident_path[0];
@@ -671,7 +652,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Calculate bits in byte helper - returns min(8 - `bit_offset`, `total_bits` - `bits_processed`)
     pub fn create_bits_in_byte_calc(
         bit_offset_expr: &TokenStream,
         total_bits: &TokenStream,
@@ -682,7 +662,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Generate aligned multi-byte bit field parsing code
     pub fn create_aligned_multibyte_parsing(
         field_type: &syn::Type,
         from_bytes_method: &TokenStream,
@@ -696,7 +675,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Generate aligned char bit field parsing code with validation
     pub fn create_aligned_char_parsing(
         from_bytes_method: &TokenStream,
         number_length: usize,
@@ -716,7 +694,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Generate unaligned multi-byte bit field parsing code
     pub fn create_unaligned_multibyte_parsing(
         field_type: &syn::Type,
         size: usize,
@@ -768,7 +745,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Generate unaligned char bit field parsing code with validation
     pub fn create_unaligned_char_parsing(
         size: usize,
         endianness: crate::consts::Endianness,
@@ -831,7 +807,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Generate aligned multi-byte bit field writing code
     pub fn create_aligned_multibyte_writing(
         field_type: &syn::Type,
         to_bytes_method: &TokenStream,
@@ -846,7 +821,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Generate unaligned multi-byte bit field writing code
     pub fn create_unaligned_multibyte_writing(
         field_type: &syn::Type,
         size: usize,
@@ -906,7 +880,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Generate aligned char bit field writing code
     pub fn create_aligned_char_writing(
         to_bytes_method: &TokenStream,
         number_length: usize,
@@ -920,7 +893,6 @@ pub mod pure_helpers {
         }
     }
 
-    /// Generate unaligned char bit field writing code
     pub fn create_unaligned_char_writing(
         size: usize,
         endianness: crate::consts::Endianness,
@@ -1137,16 +1109,13 @@ pub mod pure_helpers {
     }
 }
 
-/// Functional attribute parsing
 pub mod functional_attrs {
     use super::{error_utils, AttributeData, ParseResult, Vec};
     use syn::{parse::Parser, LitInt};
 
-    /// Parse attributes functionally without side effects
     pub fn parse_attributes_functional(
         attributes: &[syn::Attribute],
     ) -> ParseResult<AttributeData> {
-        // Check for multiple bits attributes first
         let bits_count = attributes
             .iter()
             .filter(|attr| attr.path().is_ident("bits"))
@@ -1162,12 +1131,8 @@ pub mod functional_attrs {
             .iter()
             .map(|attr| {
                 if attr.path().is_ident("bits") {
-                    parse_bits_attribute_functional(attr).map(|size_opt| {
-                        let mut data = AttributeData::new().with_bits_attribute();
-                        if let Some(size) = size_opt {
-                            data = data.with_size(size);
-                        }
-                        Some(data)
+                    parse_bits_attribute_functional(attr).map(|size| {
+                        Some(AttributeData::new().with_bits_attribute().with_size(size))
                     })
                 } else if attr.path().is_ident("With") {
                     parse_with_attribute_with_expressions(attr)
@@ -1193,16 +1158,13 @@ pub mod functional_attrs {
         let flattened: Vec<Result<AttributeData, syn::Error>> =
             results.into_iter().filter_map(Result::transpose).collect();
 
-        // Check for attribute conflicts before merging
         let mut conflict_errors = Vec::new();
 
-        // Check for FromField vs With(size) conflict
         let has_from_field = attributes
             .iter()
             .any(|attr| attr.path().is_ident("FromField"));
         let has_with_size = attributes.iter().any(|attr| {
             attr.path().is_ident("With") && {
-                // Check if the With attribute contains size()
                 let mut has_size = false;
                 if let Ok(()) = attr.parse_nested_meta(|meta| {
                     if meta.path.is_ident("size") {
@@ -1224,7 +1186,6 @@ pub mod functional_attrs {
             ));
         }
 
-        // Check for multiple endian attributes
         let endian_attrs: Vec<_> = attributes
             .iter()
             .filter(|attr| {
@@ -1248,7 +1209,6 @@ pub mod functional_attrs {
             ));
         }
 
-        // If there are conflict errors, return them
         if !conflict_errors.is_empty() {
             return Err(conflict_errors);
         }
@@ -1256,72 +1216,41 @@ pub mod functional_attrs {
         error_utils::aggregate_results(flattened.into_iter()).map(AttributeData::merge)
     }
 
-    /// Parse bits attribute functionally
-    pub fn parse_bits_attribute_functional(
-        attr: &syn::Attribute,
-    ) -> Result<Option<usize>, syn::Error> {
-        // Check the meta type first
-        match &attr.meta {
-            syn::Meta::Path(_) => {
-                // #[bits] without parentheses - not allowed by Rust for derive macro attributes
-                // This case won't actually be reached due to Rust's validation
-                Ok(None)
-            }
-            syn::Meta::List(list) => {
-                // Check if tokens are empty first
-                if list.tokens.is_empty() {
-                    // #[bits()] with empty parentheses - auto-size
-                    return Ok(None);
-                }
-
-                // Try to parse as integer literal
-                let parser =
-                    syn::punctuated::Punctuated::<LitInt, syn::Token![,]>::parse_terminated;
-                let parsed = parser.parse2(list.tokens.clone())?;
-
-                if let Some(first) = parsed.first() {
-                    // #[bits(N)] with explicit size
-                    Ok(Some(first.base10_parse()?))
-                } else {
-                    Err(syn::Error::new_spanned(
-                        attr,
-                        "Expected integer literal in #[bits(N)]",
-                    ))
-                }
-            }
-            syn::Meta::NameValue(_) => Err(syn::Error::new_spanned(
+    pub fn parse_bits_attribute_functional(attr: &syn::Attribute) -> Result<usize, syn::Error> {
+        let syn::Meta::List(list) = &attr.meta else {
+            return Err(syn::Error::new_spanned(
                 attr,
-                "Expected #[bits(N)] or #[bits()], not name-value style",
-            )),
+                "Size required for bits attribute. Use #[bits(N)] where N is the number of bits needed for your field",
+            ));
+        };
+        if list.tokens.is_empty() {
+            return Err(syn::Error::new_spanned(
+                attr,
+                "Size required for bits attribute. Use #[bits(N)] where N is the number of bits needed for your field",
+            ));
         }
+        attr.parse_args::<LitInt>()?.base10_parse()
     }
 
-    /// Parse with attribute with support for size expressions
     pub fn parse_with_attribute_with_expressions(
         attr: &syn::Attribute,
     ) -> Result<Option<AttributeData>, syn::Error> {
         let mut size = None;
         let mut size_expression = None;
 
-        // Parse the content inside With(...)
         match &attr.meta {
             syn::Meta::List(list) => {
-                // Parse the tokens inside With(...)
                 let tokens = &list.tokens;
 
-                // Try to parse as "size(...)" pattern
                 let tokens_str = tokens.to_string();
                 if tokens_str.starts_with("size") {
-                    // Find the content inside size(...)
                     if let Some(start) = tokens_str.find('(') {
                         if let Some(end) = tokens_str.rfind(')') {
                             let expr_content = &tokens_str[start + 1..end];
 
-                            // Try to parse as integer literal first
                             if let Ok(n) = expr_content.trim().parse::<usize>() {
                                 size = Some(n);
                             } else {
-                                // Parse as expression
                                 let parsed_expr =
                                     crate::size_expr::SizeExpression::parse(expr_content.trim())?;
                                 size_expression = Some(parsed_expr);
@@ -1364,11 +1293,9 @@ pub mod functional_attrs {
         }
     }
 
-    /// Parse standalone size attribute with expression support
     pub fn parse_size_attribute_with_expressions(
         attr: &syn::Attribute,
     ) -> Result<Option<AttributeData>, syn::Error> {
-        // Parse the content inside #[size(...)]
         match &attr.meta {
             syn::Meta::List(list) => {
                 let tokens = &list.tokens;
@@ -1384,7 +1311,6 @@ pub mod functional_attrs {
         }
     }
 
-    /// Parse from field attribute functionally
     pub fn parse_from_field_attribute_functional(
         attr: &syn::Attribute,
     ) -> Result<Vec<syn::Ident>, syn::Error> {
@@ -1411,19 +1337,15 @@ pub mod functional_attrs {
         }
     }
 
-    /// Parse `UntilMarker` attribute functionally
-    /// Handles `#[UntilMarker(0xFF)]`, `#[UntilMarker(255)]`, or `#[UntilMarker('\n')]`
     pub fn parse_until_marker_attribute_functional(
         attr: &syn::Attribute,
     ) -> Result<u8, syn::Error> {
         match &attr.meta {
             syn::Meta::List(list) => {
-                // Try parsing as integer first
                 if let Ok(literal) = syn::parse2::<syn::LitInt>(list.tokens.clone()) {
                     return literal.base10_parse::<u8>();
                 }
 
-                // Try parsing as character
                 if let Ok(literal) = syn::parse2::<syn::LitChar>(list.tokens.clone()) {
                     let ch = literal.value();
                     if ch.is_ascii() {
@@ -1447,19 +1369,15 @@ pub mod functional_attrs {
         }
     }
 
-    /// Parse `AfterMarker` attribute functionally
-    /// Handles `#[AfterMarker(0xFF)]`, `#[AfterMarker(255)]`, or `#[AfterMarker('\n')]`
     pub fn parse_after_marker_attribute_functional(
         attr: &syn::Attribute,
     ) -> Result<u8, syn::Error> {
         match &attr.meta {
             syn::Meta::List(list) => {
-                // Try parsing as integer first
                 if let Ok(literal) = syn::parse2::<syn::LitInt>(list.tokens.clone()) {
                     return literal.base10_parse::<u8>();
                 }
 
-                // Try parsing as character
                 if let Ok(literal) = syn::parse2::<syn::LitChar>(list.tokens.clone()) {
                     let ch = literal.value();
                     if ch.is_ascii() {
@@ -1483,8 +1401,6 @@ pub mod functional_attrs {
         }
     }
 
-    /// Parse bebytes attribute functionally
-    /// Handles #[bebytes(size = "expression")] and similar bebytes-specific attributes
     pub fn parse_bebytes_attribute_functional(
         attr: &syn::Attribute,
     ) -> Result<Option<AttributeData>, syn::Error> {
@@ -1497,11 +1413,9 @@ pub mod functional_attrs {
                     .value()
                     .map_err(|_| syn::Error::new_spanned(&meta.path, "Expected size expression"))?;
 
-                // Parse the string literal containing the size expression
                 let lit_str: syn::LitStr = value.parse()?;
                 let size_expr = lit_str.value();
 
-                // Parse and validate the size expression
                 let parsed_expr =
                     crate::size_expr::SizeExpression::parse(&size_expr).map_err(|e| {
                         syn::Error::new_spanned(attr, format!("Invalid size expression: {e}"))
@@ -1511,8 +1425,6 @@ pub mod functional_attrs {
                 found_something = true;
                 Ok(())
             } else {
-                // For other bebytes attributes like big_endian, little_endian, etc., we don't need to handle them here
-                // They are handled elsewhere in the codebase
                 Ok(())
             }
         })?;

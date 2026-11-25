@@ -10,17 +10,17 @@ use std::vec::Vec;
 use alloc::vec::Vec;
 
 enum FieldType {
-    BitsField(usize), // only size, position is auto-calculated
+    BitsField(usize),
     PrimitiveType,
-    Array(usize),                                     // array_length
-    Vector(Option<usize>, Option<Vec<syn::Ident>>),   // size, vec_size_ident
-    String(Option<usize>, Option<Vec<syn::Ident>>),   // size, string_size_ident
-    SizeExpression(crate::size_expr::SizeExpression), // expression-based sizing
+    Array(usize),
+    Vector(Option<usize>, Option<Vec<syn::Ident>>),
+    String(Option<usize>, Option<Vec<syn::Ident>>),
+    SizeExpression(crate::size_expr::SizeExpression),
     OptionType,
     CustomType,
-    UntilMarker(u8), // Read Vec<T> until marker byte
-    AfterMarker(u8), // Read remaining bytes after marker
-    VecOfVecsWithMarker(Option<usize>, Option<Vec<syn::Ident>>, u8), // size, field_path, marker
+    UntilMarker(u8),
+    AfterMarker(u8),
+    VecOfVecsWithMarker(Option<usize>, Option<Vec<syn::Ident>>, u8),
 }
 
 struct FieldContext<'a> {
@@ -36,7 +36,7 @@ pub struct FieldData {
     pub field_parsing: Vec<proc_macro2::TokenStream>,
     pub bit_sum: Vec<proc_macro2::TokenStream>,
     pub field_writing: Vec<proc_macro2::TokenStream>,
-    pub direct_writing: Vec<proc_macro2::TokenStream>, // New: direct buffer writing
+    pub direct_writing: Vec<proc_macro2::TokenStream>,
     pub named_fields: Vec<proc_macro2::TokenStream>,
 }
 
@@ -46,11 +46,11 @@ pub struct StructContext<'a> {
     pub field_parsing: &'a mut Vec<proc_macro2::TokenStream>,
     pub bit_sum: &'a mut Vec<proc_macro2::TokenStream>,
     pub field_writing: &'a mut Vec<proc_macro2::TokenStream>,
-    pub direct_writing: &'a mut Vec<proc_macro2::TokenStream>, // New: direct buffer writing
+    pub direct_writing: &'a mut Vec<proc_macro2::TokenStream>,
     pub named_fields: &'a mut Vec<proc_macro2::TokenStream>,
     pub fields: &'a syn::FieldsNamed,
     pub endianness: crate::consts::Endianness,
-    pub has_bit_fields: &'a mut bool, // Track if any fields have bit attributes
+    pub has_bit_fields: &'a mut bool,
 }
 
 fn handle_marker_attribute(
@@ -75,7 +75,6 @@ fn handle_marker_attribute(
     None
 }
 
-// Helper function to handle bits field processing
 fn handle_bits_field(
     context: &FieldContext,
     size: Option<usize>,
@@ -84,7 +83,6 @@ fn handle_bits_field(
 ) -> Option<FieldType> {
     *has_bit_fields = true;
     if let Some(size) = size {
-        // Validate bit count doesn't exceed capacity (also validates type is bitfield-compatible)
         if let Ok(max_bits) = utils::get_primitive_type_max_bits(context.field_type) {
             if size > max_bits {
                 errors.push(syn::Error::new(
@@ -102,7 +100,6 @@ fn handle_bits_field(
         }
         return Some(FieldType::BitsField(size));
     }
-    // Empty #[bits()] is no longer supported
     errors.push(syn::Error::new(
         context.field.span(),
         "Size required for bits attribute. Use #[bits(N)] where N is the number of bits needed for your field",
@@ -110,7 +107,6 @@ fn handle_bits_field(
     None
 }
 
-// Helper function to handle Vec<Vec<u8>> with markers
 fn handle_vec_of_vecs_marker(
     context: &FieldContext,
     marker: u8,
@@ -122,7 +118,6 @@ fn handle_vec_of_vecs_marker(
     if let syn::Type::Path(tp) = context.field_type {
         if utils::is_vec_of_vec_u8(tp) {
             if is_until {
-                // Vec<Vec<u8>> with UntilMarker requires size control
                 if size.is_some() || vec_size_ident.is_some() {
                     return Some(FieldType::VecOfVecsWithMarker(size, vec_size_ident, marker));
                 }
@@ -132,7 +127,6 @@ fn handle_vec_of_vecs_marker(
                 ).to_compile_error());
                 return None;
             }
-            // AfterMarker is not supported for Vec<Vec<u8>>
             errors.push(
                 syn::Error::new(
                     context.field_type.span(),
@@ -156,17 +150,10 @@ fn determine_field_type(
     let (size, vec_size_ident, size_expression, until_marker, after_marker) =
         attrs::parse_attributes_with_expressions(attrs, &mut bits_attribute_present, errors);
 
-    // Check for marker attributes
     if let Some(marker) = until_marker {
-        // Check if this is Vec<Vec<u8>> with size control
-        if let Some(field_type) = handle_vec_of_vecs_marker(
-            context,
-            marker,
-            true, // is_until
-            size,
-            vec_size_ident.clone(),
-            errors,
-        ) {
+        if let Some(field_type) =
+            handle_vec_of_vecs_marker(context, marker, true, size, vec_size_ident.clone(), errors)
+        {
             return Some(field_type);
         }
 
@@ -180,15 +167,9 @@ fn determine_field_type(
     }
 
     if let Some(marker) = after_marker {
-        // Check if this is Vec<Vec<u8>> - AfterMarker is not supported
-        if let Some(field_type) = handle_vec_of_vecs_marker(
-            context,
-            marker,
-            false, // is_until = false (after_marker)
-            size,
-            vec_size_ident.clone(),
-            errors,
-        ) {
+        if let Some(field_type) =
+            handle_vec_of_vecs_marker(context, marker, false, size, vec_size_ident.clone(), errors)
+        {
             return Some(field_type);
         }
 
@@ -238,21 +219,17 @@ fn determine_field_type(
 }
 
 pub fn handle_struct(context: &mut StructContext) {
-    // First validate byte completeness
     if let Err(validation_error) = crate::bit_validation::validate_byte_completeness(context.fields)
     {
         context.errors.push(validation_error);
         return;
     }
 
-    // Initialize ProcessingContext for functional approach
     let processing_ctx = crate::functional::ProcessingContext::new(context.endianness);
 
-    // Use FieldDataBuilder for functional accumulation
     let mut builder = crate::functional::FieldDataBuilder::new();
     let mut errors = Vec::new();
 
-    // Track current bit position for auto-calculation
     let mut current_bit_position = 0;
 
     for (idx, field) in context.fields.named.iter().enumerate() {
@@ -265,7 +242,6 @@ pub fn handle_struct(context: &mut StructContext) {
             is_last_field: is_last,
         };
 
-        // Create a new processing context for this field
         let field_processing_ctx = processing_ctx
             .clone()
             .with_bit_position(current_bit_position)
@@ -315,7 +291,6 @@ pub fn handle_struct(context: &mut StructContext) {
         }
     }
 
-    // Build the final FieldData
     let mut field_data = builder.build();
     field_data.errors = errors;
 
@@ -330,7 +305,6 @@ pub fn handle_struct(context: &mut StructContext) {
     context.named_fields.extend(field_data.named_fields);
 }
 
-// New functional field processor
 fn process_field_type(
     context: &FieldContext,
     field_type: FieldType,
@@ -350,20 +324,17 @@ fn process_field_type(
         }
         FieldType::PrimitiveType => {
             let result = process_primitive_type_functional(context, processing_ctx)?;
-            // Update bit position based on primitive size
             let field_size = utils::get_primitive_type_size(context.field_type)?;
             *current_bit_position += field_size * 8;
             Ok(result)
         }
         FieldType::Array(length) => {
-            let result = process_array_functional(context, length, processing_ctx)?;
-            // Arrays are always byte arrays in our case
+            let result = process_array_functional(context, length)?;
             *current_bit_position += length * 8;
             Ok(result)
         }
         FieldType::Vector(size, vec_size_ident) => {
             let result = process_vector_functional(context, size, vec_size_ident, processing_ctx)?;
-            // Vectors have variable size, but we need to track something for bit field positioning
             if let Some(s) = size {
                 *current_bit_position += s * 8;
             }
@@ -402,55 +373,25 @@ fn process_field_type(
             Ok(result)
         }
         FieldType::String(size, string_size_ident) => {
-            let result =
-                process_string_functional(context, size, string_size_ident, processing_ctx)?;
-            // Strings have variable size, but we need to track something for bit field positioning
+            let result = process_string_functional(context, size, string_size_ident)?;
             if let Some(s) = size {
                 *current_bit_position += s * 8;
             }
             Ok(result)
         }
         FieldType::SizeExpression(size_expr) => {
-            let result = process_size_expression_functional(context, &size_expr, processing_ctx)?;
-            // Size expressions have variable size, so we can't update bit position
-            // This means no bit fields can come after size expression fields
+            let result = process_size_expression_functional(context, &size_expr)?;
             Ok(result)
         }
-        FieldType::CustomType => {
-            // For custom types, we can't know the size at compile time
-            // This is OK because bit fields can't come after custom types anyway
-            Ok(process_custom_type_functional(context, processing_ctx))
-        }
-        FieldType::UntilMarker(marker) => {
-            // UntilMarker fields have dynamic size
-            Ok(process_until_marker_functional(
-                context,
-                marker,
-                processing_ctx,
-            ))
-        }
-        FieldType::AfterMarker(marker) => {
-            // AfterMarker fields consume remaining bytes
-            Ok(process_after_marker_functional(
-                context,
-                marker,
-                processing_ctx,
-            ))
-        }
-        FieldType::VecOfVecsWithMarker(size, field_path, marker) => {
-            // Vec<Vec<u8>> with marker delimiting and size control
-            Ok(process_vec_of_vecs_with_marker_functional(
-                context,
-                size,
-                field_path,
-                marker,
-                processing_ctx,
-            ))
-        }
+        FieldType::CustomType => Ok(process_custom_type_functional(context, processing_ctx)),
+        FieldType::UntilMarker(marker) => Ok(process_until_marker_functional(context, marker)),
+        FieldType::AfterMarker(marker) => Ok(process_after_marker_functional(context, marker)),
+        FieldType::VecOfVecsWithMarker(size, field_path, marker) => Ok(
+            process_vec_of_vecs_with_marker_functional(context, size, field_path, marker),
+        ),
     }
 }
 
-// Functional version of handle_bits_field
 fn process_bits_field_functional(
     context: &FieldContext,
     size: usize,
@@ -465,13 +406,11 @@ fn process_bits_field_functional(
     let limit_check =
         crate::functional::pure_helpers::create_bit_field_limit_check(field_name, field_type, size);
 
-    // Get the size of the underlying number type
     let number_length = utils::get_primitive_type_size(field_type)
         .map_err(|_| syn::Error::new(field_type.span(), "Type not supported"))?;
 
     let mask: u128 = (1 << size) - 1;
 
-    // Check if this is a char type for special handling
     let is_char_type = if let syn::Type::Path(tp) = field_type {
         tp.path.is_ident("char")
     } else {
@@ -511,7 +450,6 @@ fn process_bits_field_functional(
     ))
 }
 
-// Context for multi-byte bit field generation
 struct MultiByteBitFieldCtx<'a> {
     field_name: &'a syn::Ident,
     field_type: &'a syn::Type,
@@ -523,7 +461,6 @@ struct MultiByteBitFieldCtx<'a> {
     processing_ctx: &'a crate::functional::ProcessingContext,
 }
 
-// Generate code for multi-byte bit fields
 fn generate_multibyte_bit_field(
     ctx: &MultiByteBitFieldCtx,
 ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
@@ -630,7 +567,6 @@ fn generate_single_byte_bit_field(
     (parsing, writing)
 }
 
-// Helper to generate parsing tokens
 fn generate_parsing_tokens(
     field_type: &syn::Type,
     size: usize,
@@ -668,7 +604,6 @@ fn generate_parsing_tokens(
     (aligned_parsing, unaligned_parsing)
 }
 
-// Helper to generate writing tokens
 fn generate_writing_tokens(
     field_type: &syn::Type,
     size: usize,
@@ -703,7 +638,6 @@ fn generate_writing_tokens(
     (aligned_writing, unaligned_writing)
 }
 
-// Helper to generate value preparation code
 fn generate_value_preparation(
     field_name: &syn::Ident,
     field_type: &syn::Type,
@@ -781,11 +715,9 @@ fn process_primitive_type_functional(
     ))
 }
 
-// Functional version of handle_array
 fn process_array_functional(
     context: &FieldContext,
     length: usize,
-    _processing_ctx: &crate::functional::ProcessingContext,
 ) -> Result<crate::functional::FieldProcessResult, syn::Error> {
     let field_name = &context.field_name;
     let field_type = context.field_type;
@@ -838,7 +770,6 @@ fn process_array_functional(
     ))
 }
 
-// Helper to generate vector parsing and writing tokens for primitive types
 fn generate_primitive_vector_tokens(
     field_name: &syn::Ident,
     size: Option<usize>,
@@ -918,7 +849,6 @@ fn generate_primitive_vector_tokens(
     }
 }
 
-// Helper to generate parsing code for custom type vectors
 fn generate_custom_vector_parsing(
     field_name: &syn::Ident,
     inner_type_name: &proc_macro2::TokenStream,
@@ -976,7 +906,6 @@ fn generate_custom_vector_parsing(
     }
 }
 
-// Functional version of handle_vector
 fn process_vector_functional(
     context: &FieldContext,
     size: Option<usize>,
@@ -1015,7 +944,6 @@ fn process_vector_functional(
                 ));
             }
 
-            // Handle vector of custom types
             let inner_type_path = &inner_tp.path;
             let inner_type_name = quote! { #inner_type_path };
 
@@ -1066,7 +994,7 @@ fn process_vector_functional(
                 writing,
                 direct_writing,
                 accessor,
-                quote! { bit_sum = 4096 * 8; }, // Variable size
+                quote! { bit_sum = 4096 * 8; },
             ));
         }
     }
@@ -1386,7 +1314,6 @@ fn process_option_type_functional(
     ))
 }
 
-// Functional version of handle_custom_type
 fn process_custom_type_functional(
     context: &FieldContext,
     processing_ctx: &crate::functional::ProcessingContext,
@@ -1432,12 +1359,10 @@ fn process_custom_type_functional(
     )
 }
 
-// Functional version for String fields
 fn process_string_functional(
     context: &FieldContext,
     size: Option<usize>,
     string_size_ident: Option<Vec<syn::Ident>>,
-    _processing_ctx: &crate::functional::ProcessingContext,
 ) -> Result<crate::functional::FieldProcessResult, syn::Error> {
     let field_name = &context.field_name;
     let field = context.field;
@@ -1445,13 +1370,9 @@ fn process_string_functional(
 
     let accessor = create_field_accessor(field_name, AccessorMode::Reference);
 
-    // Generate parsing code based on size constraints
     let (bit_sum, parsing, writing) = match (size, string_size_ident) {
-        // Fixed size from attribute: #[With(size(N))]
         (Some(s), None) => generate_fixed_size_string(field_name, s),
-        // Size from field: #[FromField(field_name)]
         (_, Some(ident_path)) => generate_field_size_string(field_name, &ident_path),
-        // Unbounded (last field only)
         (None, None) => {
             if !is_last_field {
                 return Err(syn::Error::new(
@@ -1477,27 +1398,22 @@ fn process_string_functional(
     ))
 }
 
-// Functional version for Size Expression fields
 fn process_size_expression_functional(
     context: &FieldContext,
     size_expr: &crate::size_expr::SizeExpression,
-    _processing_ctx: &crate::functional::ProcessingContext,
 ) -> Result<crate::functional::FieldProcessResult, syn::Error> {
     let field_name = &context.field_name;
     let field_type = context.field_type;
 
     let accessor = create_field_accessor(field_name, AccessorMode::Clone);
 
-    // Generate the size calculation code
     let size_calculation = size_expr.generate_evaluation_code();
 
-    // Generate parsing and writing code based on field type
     match field_type {
         syn::Type::Path(tp) if !tp.path.segments.is_empty() => {
             let segment = &tp.path.segments[0];
             match &segment.ident {
                 ident if ident == "Vec" => {
-                    // Generate Vec<u8> parsing and writing
                     let (bit_sum, parsing, writing) =
                         generate_size_expression_vector(field_name, &size_calculation);
                     let direct_writing = quote! {
@@ -1513,7 +1429,6 @@ fn process_size_expression_functional(
                     ))
                 }
                 ident if ident == "String" => {
-                    // Generate String parsing and writing
                     let (bit_sum, parsing, writing) =
                         generate_size_expression_string(field_name, &size_calculation);
                     let direct_writing = quote! {
@@ -1542,7 +1457,6 @@ fn process_size_expression_functional(
     }
 }
 
-// Generate code for fixed-size strings
 fn generate_fixed_size_string(
     field_name: &syn::Ident,
     size: usize,
@@ -1593,7 +1507,7 @@ fn generate_field_size_string(
     proc_macro2::TokenStream,
     proc_macro2::TokenStream,
 ) {
-    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0); // Variable size doesn't contribute to bit sum
+    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0);
 
     let field_access = crate::functional::pure_helpers::generate_field_access_path(ident_path);
 
@@ -1629,7 +1543,7 @@ fn generate_unbounded_string(
     proc_macro2::TokenStream,
     proc_macro2::TokenStream,
 ) {
-    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0); // Unbounded doesn't contribute to bit sum
+    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0);
 
     let parsing = quote! {
         byte_index = _bit_sum / 8;
@@ -1648,7 +1562,6 @@ fn generate_unbounded_string(
     (bit_sum, parsing, writing)
 }
 
-// Generate code for Vec<u8> with size expressions
 fn generate_size_expression_vector(
     field_name: &syn::Ident,
     size_calculation: &proc_macro2::TokenStream,
@@ -1657,7 +1570,7 @@ fn generate_size_expression_vector(
     proc_macro2::TokenStream,
     proc_macro2::TokenStream,
 ) {
-    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0); // Variable size doesn't contribute to bit sum
+    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0);
 
     let parsing = quote! {
         byte_index = _bit_sum / 8;
@@ -1684,7 +1597,6 @@ fn generate_size_expression_vector(
     (bit_sum, parsing, writing)
 }
 
-// Generate code for String with size expressions
 fn generate_size_expression_string(
     field_name: &syn::Ident,
     size_calculation: &proc_macro2::TokenStream,
@@ -1693,7 +1605,7 @@ fn generate_size_expression_string(
     proc_macro2::TokenStream,
     proc_macro2::TokenStream,
 ) {
-    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0); // Variable size doesn't contribute to bit sum
+    let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0);
 
     let parsing = quote! {
         byte_index = _bit_sum / 8;
@@ -1725,46 +1637,36 @@ fn generate_size_expression_string(
 fn process_until_marker_functional(
     context: &FieldContext,
     marker: u8,
-    _processing_ctx: &crate::functional::ProcessingContext,
 ) -> crate::functional::FieldProcessResult {
     let field_name = &context.field_name;
     let is_last_field = context.is_last_field;
 
-    // For UntilMarker, Vec<u8> is the only supported type for now
-    // Since UntilMarker reads bytes until the marker
-
     let accessor = quote! { let #field_name = &self.#field_name; };
 
-    // Bit sum is dynamic for marker fields
     let bit_sum = quote! {};
 
     let parsing = if is_last_field {
-        // Last field: consume all remaining bytes if marker not found
         quote! {
             byte_index = _bit_sum / 8;
             let mut #field_name = ::bebytes::Vec::new();
 
-            // Read bytes until we find the marker
             while byte_index < bytes.len() && bytes[byte_index] != #marker {
                 #field_name.push(bytes[byte_index]);
                 byte_index += 1;
                 _bit_sum += 8;
             }
 
-            // Skip the marker byte if present
             if byte_index < bytes.len() && bytes[byte_index] == #marker {
                 byte_index += 1;
                 _bit_sum += 8;
             }
         }
     } else {
-        // Not last field: error if marker not found
         quote! {
             byte_index = _bit_sum / 8;
             let mut #field_name = ::bebytes::Vec::new();
             let mut marker_found = false;
 
-            // Read bytes until we find the marker
             while byte_index < bytes.len() {
                 if bytes[byte_index] == #marker {
                     marker_found = true;
@@ -1777,7 +1679,6 @@ fn process_until_marker_functional(
                 _bit_sum += 8;
             }
 
-            // Error if marker not found and this isn't the last field
             if !marker_found {
                 return Err(::bebytes::BeBytesError::MarkerNotFound {
                     marker: #marker,
@@ -1812,32 +1713,26 @@ fn process_until_marker_functional(
 fn process_after_marker_functional(
     context: &FieldContext,
     marker: u8,
-    _processing_ctx: &crate::functional::ProcessingContext,
 ) -> crate::functional::FieldProcessResult {
     let field_name = &context.field_name;
 
     let accessor = quote! { let #field_name = &self.#field_name; };
 
-    // Bit sum is dynamic for marker fields
     let bit_sum = quote! {};
 
     let parsing = quote! {
         byte_index = _bit_sum / 8;
 
-        // Find the marker byte
         let marker_pos = bytes[byte_index..].iter().position(|&b| b == #marker);
 
         let #field_name = if let Some(pos) = marker_pos {
-            // Skip past the marker
             byte_index += pos + 1;
             _bit_sum += (pos + 1) * 8;
 
-            // Read all remaining bytes
             let remaining = bytes[byte_index..].to_vec();
             _bit_sum += remaining.len() * 8;
             remaining
         } else {
-            // No marker found, field is empty
             ::bebytes::Vec::new()
         };
     };
@@ -1869,16 +1764,13 @@ fn process_vec_of_vecs_with_marker_functional(
     size: Option<usize>,
     field_path: Option<Vec<syn::Ident>>,
     marker: u8,
-    _processing_ctx: &crate::functional::ProcessingContext,
 ) -> crate::functional::FieldProcessResult {
     let field_name = &context.field_name;
 
     let accessor = quote! { let #field_name = &self.#field_name; };
 
-    // Bit sum is dynamic for marker fields
     let bit_sum = quote! {};
 
-    // Generate size access code
     let size_expr = if let Some(size) = size {
         quote! { #size }
     } else if let Some(field_path) = field_path {
@@ -1891,7 +1783,6 @@ fn process_vec_of_vecs_with_marker_functional(
         });
         quote! { #field_access as usize }
     } else {
-        // This should never happen due to validation in determine_field_type
         quote! { 0 }
     };
 
@@ -1899,12 +1790,10 @@ fn process_vec_of_vecs_with_marker_functional(
         byte_index = _bit_sum / 8;
         let mut #field_name = ::bebytes::Vec::new();
 
-        // Read exactly the specified number of segments
         for segment_idx in 0..#size_expr {
             let mut current_section = ::bebytes::Vec::new();
             let mut marker_found = false;
 
-            // Read until marker for this segment
             while byte_index < bytes.len() {
                 if bytes[byte_index] == #marker {
                     marker_found = true;
@@ -1917,7 +1806,6 @@ fn process_vec_of_vecs_with_marker_functional(
                 _bit_sum += 8;
             }
 
-            // Error if marker not found for any segment
             if !marker_found {
                 return Err(::bebytes::BeBytesError::MarkerNotFound {
                     marker: #marker,
