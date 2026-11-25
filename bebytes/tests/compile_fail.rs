@@ -4,12 +4,10 @@ use trybuild::TestCases;
 fn ui_tests() {
     let t = TestCases::new();
 
-    // ===== ATTRIBUTE TESTS =====
     t.compile_fail("tests/compile_time/attributes/bits_and_size_conflict.rs");
     t.compile_fail("tests/compile_time/attributes/fromfield_and_with_conflict.rs");
     t.compile_fail("tests/compile_time/attributes/multiple_endian_attrs.rs");
 
-    // ===== BIT FIELD TESTS =====
     t.compile_fail("tests/compile_time/bit_fields/byte_boundary.rs");
     t.compile_fail("tests/compile_time/bit_fields/byte_boundary_option.rs");
     t.compile_fail("tests/compile_time/bit_fields/byte_boundary_vec.rs");
@@ -21,11 +19,11 @@ fn ui_tests() {
     t.compile_fail("tests/compile_time/bit_fields/byte_boundary_bool.rs");
     t.compile_fail("tests/compile_time/bit_fields/incomplete_byte.rs");
     t.compile_fail("tests/compile_time/bit_fields/zero_bits.rs");
+    t.compile_fail("tests/compile_time/bit_fields/empty_bits.rs");
     t.compile_fail("tests/compile_time/bit_fields/exceeds_type_size.rs");
     t.compile_fail("tests/compile_time/bit_fields/bits_on_non_numeric.rs");
     t.compile_fail("tests/compile_time/bit_fields/multiple_bits_attributes.rs");
 
-    // ===== ENUM TESTS =====
     t.compile_fail("tests/compile_time/enums/duplicate_discriminants.rs");
     t.compile_fail("tests/compile_time/enums/data_variants.rs");
     #[cfg(feature = "std")]
@@ -33,14 +31,12 @@ fn ui_tests() {
     #[cfg(feature = "std")]
     t.compile_fail("tests/compile_time/enums/explicit_type_too_small.rs");
 
-    // ===== SIZE EXPRESSION TESTS =====
     t.compile_fail("tests/compile_time/size_expressions/nonexistent_field.rs");
     t.compile_fail("tests/compile_time/size_expressions/circular_dependency.rs");
     t.compile_fail("tests/compile_time/size_expressions/division_by_zero.rs");
     t.compile_fail("tests/compile_time/size_expressions/invalid_operator.rs");
     t.compile_fail("tests/compile_time/size_expressions/size_expression_on_non_vec.rs");
 
-    // ===== TYPE TESTS =====
     t.compile_fail("tests/compile_time/types/unsupported_structure.rs");
     t.compile_fail("tests/compile_time/types/unsupported_isize.rs");
     t.compile_fail("tests/compile_time/types/bits_on_f32.rs");
@@ -48,19 +44,15 @@ fn ui_tests() {
     t.compile_fail("tests/compile_time/types/bits_on_bool.rs");
     t.compile_fail("tests/compile_time/types/array_non_u8.rs");
 
-    // ===== VECTOR TESTS =====
     t.compile_fail("tests/compile_time/vectors/fromfield_nonexistent.rs");
     t.compile_fail("tests/compile_time/vectors/fromfield_non_numeric.rs");
     t.compile_fail("tests/compile_time/vectors/multiple_vecs_no_size.rs");
     t.compile_fail("tests/compile_time/vectors/vec_not_last_no_size.rs");
     t.compile_fail("tests/compile_time/vectors/custom_vec_not_last_no_size.rs");
 
-    // ===== MARKER TESTS =====
     t.compile_fail("tests/compile_time/markers/non_ascii_char.rs");
     t.compile_fail("tests/compile_time/markers/marker_on_non_vec.rs");
 
-    // ===== PASSING TESTS =====
-    // These tests should compile successfully
     t.pass("tests/compile_time/unnamed_fields.rs");
     t.pass("tests/compile_time/test_u8s.rs");
     t.pass("tests/compile_time/test_u16s.rs");

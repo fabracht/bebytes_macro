@@ -12,7 +12,8 @@ All notable changes to this project will be documented in this file.
 ### Internal
 
 - The bit layout oracle covers little-endian, signed whole fields, aligned partial-width fields, small fields on wide types and `encode_be_to` / `encode_le_to`
-- Added arbitrary-input tests, tests for bit fields after variable-size fields, and compile-fail fixtures for size expressions on non-`Vec` fields, unsized custom `Vec` fields, marker attributes on non-`Vec` fields and non-`u8` arrays
+- Added arbitrary-input tests, tests for bit fields after variable-size fields, and compile-fail fixtures for size expressions on non-`Vec` fields, unsized custom `Vec` fields, marker attributes on non-`Vec` fields, non-`u8` arrays and empty `#[bits()]`
+- Removed dead code from the derive: unused direct-writing conversion, unused field size, unused `Option<f32>` / `Option<f64>` branch, unused processing-context parameters, the empty `#[bits()]` auto-size branch and all code comments
 
 ## [3.2.0] - 2026-11-24
 

@@ -1,0 +1,5 @@
+error: Size required for bits attribute. Use #[bits(N)] where N is the number of bits needed for your field
+ --> tests/compile_time/bit_fields/empty_bits.rs:5:5
+  |
+5 |     #[bits()]
+  |     ^^^^^^^^^
