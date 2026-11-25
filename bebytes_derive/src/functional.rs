@@ -110,7 +110,6 @@ impl FieldDataBuilder {
             field_writing: self.writings,
             direct_writing: self.direct_writings,
             named_fields: self.accessors,
-            total_size: 0,
         }
     }
 }

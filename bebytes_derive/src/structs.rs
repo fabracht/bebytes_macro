@@ -3,22 +3,6 @@ use crate::{attrs, utils};
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 
-/// Convert Vec-based writing code to BufMut-based direct writing
-fn convert_to_direct_writing(writing_code: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
-    // For most field types, use fallback approach with temp Vec
-    // This avoids variable name conflicts while maintaining correctness
-    quote! {
-        {
-            let mut field_bytes = ::bebytes::Vec::new();
-            {
-                let bytes = &mut field_bytes; // Create alias to avoid conflicts with 'bytes' crate
-                #writing_code
-            }
-            buf.put_slice(&field_bytes);
-        }
-    }
-}
-
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
@@ -54,7 +38,6 @@ pub struct FieldData {
     pub field_writing: Vec<proc_macro2::TokenStream>,
     pub direct_writing: Vec<proc_macro2::TokenStream>, // New: direct buffer writing
     pub named_fields: Vec<proc_macro2::TokenStream>,
-    pub total_size: usize,
 }
 
 pub struct StructContext<'a> {
@@ -222,35 +205,8 @@ fn determine_field_type(
         return handle_bits_field(context, size, errors, has_bit_fields);
     }
 
-    // Check for size expression
     if let Some(expr) = size_expression {
-        // Size expressions are only supported for Vec<u8> and String types for now
-        match context.field_type {
-            syn::Type::Path(tp) if !tp.path.segments.is_empty() => {
-                let segment = &tp.path.segments[0];
-                match &segment.ident {
-                    ident if ident == "Vec" || ident == "String" => {
-                        return Some(FieldType::SizeExpression(expr));
-                    }
-                    _ => {
-                        let error = syn::Error::new(
-                            context.field_type.span(),
-                            "Size expressions are only supported for Vec<u8> and String types",
-                        );
-                        errors.push(error.to_compile_error());
-                        return None;
-                    }
-                }
-            }
-            _ => {
-                let error = syn::Error::new(
-                    context.field_type.span(),
-                    "Size expressions are only supported for Vec<u8> and String types",
-                );
-                errors.push(error.to_compile_error());
-                return None;
-            }
-        }
+        return Some(FieldType::SizeExpression(expr));
     }
 
     match context.field_type {
@@ -362,7 +318,6 @@ pub fn handle_struct(context: &mut StructContext) {
     // Build the final FieldData
     let mut field_data = builder.build();
     field_data.errors = errors;
-    field_data.total_size = current_bit_position / 8;
 
     context
         .field_limit_check
@@ -546,12 +501,11 @@ fn process_bits_field_functional(
         )
     };
 
-    let direct_writing = convert_to_direct_writing(&writing);
     Ok(crate::functional::FieldProcessResult::new(
         limit_check,
         parsing,
         writing,
-        direct_writing,
+        quote! {},
         accessor,
         bit_sum,
     ))
@@ -1238,17 +1192,6 @@ fn create_option_inner_writing(
             },
             crate::consts::Endianness::Little => quote! {
                 bytes.extend_from_slice(&(inner_val as u32).to_le_bytes());
-            },
-        };
-    }
-
-    if inner_tp.path.is_ident("f32") || inner_tp.path.is_ident("f64") {
-        return match endianness {
-            crate::consts::Endianness::Big => quote! {
-                bytes.extend_from_slice(&inner_val.to_be_bytes());
-            },
-            crate::consts::Endianness::Little => quote! {
-                bytes.extend_from_slice(&inner_val.to_le_bytes());
             },
         };
     }
