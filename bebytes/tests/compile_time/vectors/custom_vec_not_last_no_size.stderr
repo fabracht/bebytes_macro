@@ -1,0 +1,5 @@
+error: Vectors of custom types need size information. Use #[With(size(n))] or #[FromField(field_name)]
+  --> tests/compile_time/vectors/custom_vec_not_last_no_size.rs:10:12
+   |
+10 |     items: Vec<Inner>,
+   |            ^^^

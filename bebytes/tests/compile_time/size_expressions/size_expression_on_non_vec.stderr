@@ -1,0 +1,5 @@
+error: Size expressions are only supported for Vec<u8> and String types
+ --> tests/compile_time/size_expressions/size_expression_on_non_vec.rs:7:12
+  |
+7 |     value: u32,
+  |            ^^^

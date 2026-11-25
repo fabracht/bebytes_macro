@@ -218,6 +218,32 @@ will throw a compile-time error saying that a `U8` attribute must add up to the 
 As long as you follow the above rule, you can create custom sequence of bits by using Rust unsigned integers as types and the derived implementation will take care of the nasty shifting and masking for you.
 One of the advantages is that we don't need an intermediate vector implementation to parse groups of or individual bits.
 
+### Bit order
+
+Bit fields are laid out in declaration order, and the byte order of the method you call decides how bits are numbered:
+
+- `to_be_bytes` / `try_from_be_bytes`: the first field takes the most significant bits of its byte, and each value is written most significant bit first
+- `to_le_bytes` / `try_from_le_bytes`: the first field takes the least significant bits of its byte, and each value is written least significant bit first. This is the same layout as C bitfields on little-endian targets. A value that spans bytes continues into the next byte's least significant bits
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct Header {
+    head: u8,
+    #[bits(4)]
+    high: u8,
+    #[bits(4)]
+    low: u8,
+    tail: u16,
+}
+
+let header = Header { head: 0x01, high: 0x8, low: 0x9, tail: 0x0A0B };
+
+assert_eq!(header.to_be_bytes(), [0x01, 0x89, 0x0A, 0x0B]);
+assert_eq!(header.to_le_bytes(), [0x01, 0x98, 0x0B, 0x0A]);
+```
+
+Fields without `#[bits]` keep the usual byte order of the method.
+
 ## Multi Byte values
 
 The macro has support for all unsigned types from u8 to u128, as well as signed integers (i8 to i128) and the `char` type for Unicode characters. These can be used in the same way the u8 type is used:

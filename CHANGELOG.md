@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Documentation
+
+- Documented the bit order of `#[bits(N)]` fields: big-endian methods pack the first field into the most significant bits of its byte, little-endian methods pack it into the least significant bits
+- Corrected the `bebytes` README: only `[u8; N]` arrays are supported
+
+### Internal
+
+- The bit layout oracle covers little-endian, signed whole fields, aligned partial-width fields, small fields on wide types and `encode_be_to` / `encode_le_to`
+- Added arbitrary-input tests, tests for bit fields after variable-size fields, and compile-fail fixtures for size expressions on non-`Vec` fields, unsized custom `Vec` fields, marker attributes on non-`Vec` fields and non-`u8` arrays
+
 ## [3.2.0] - 2026-11-24
 
 ### Changed

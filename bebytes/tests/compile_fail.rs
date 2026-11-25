@@ -38,6 +38,7 @@ fn ui_tests() {
     t.compile_fail("tests/compile_time/size_expressions/circular_dependency.rs");
     t.compile_fail("tests/compile_time/size_expressions/division_by_zero.rs");
     t.compile_fail("tests/compile_time/size_expressions/invalid_operator.rs");
+    t.compile_fail("tests/compile_time/size_expressions/size_expression_on_non_vec.rs");
 
     // ===== TYPE TESTS =====
     t.compile_fail("tests/compile_time/types/unsupported_structure.rs");
@@ -45,15 +46,18 @@ fn ui_tests() {
     t.compile_fail("tests/compile_time/types/bits_on_f32.rs");
     t.compile_fail("tests/compile_time/types/bits_on_f64.rs");
     t.compile_fail("tests/compile_time/types/bits_on_bool.rs");
+    t.compile_fail("tests/compile_time/types/array_non_u8.rs");
 
     // ===== VECTOR TESTS =====
     t.compile_fail("tests/compile_time/vectors/fromfield_nonexistent.rs");
     t.compile_fail("tests/compile_time/vectors/fromfield_non_numeric.rs");
     t.compile_fail("tests/compile_time/vectors/multiple_vecs_no_size.rs");
     t.compile_fail("tests/compile_time/vectors/vec_not_last_no_size.rs");
+    t.compile_fail("tests/compile_time/vectors/custom_vec_not_last_no_size.rs");
 
     // ===== MARKER TESTS =====
     t.compile_fail("tests/compile_time/markers/non_ascii_char.rs");
+    t.compile_fail("tests/compile_time/markers/marker_on_non_vec.rs");
 
     // ===== PASSING TESTS =====
     // These tests should compile successfully
