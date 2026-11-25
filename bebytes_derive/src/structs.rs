@@ -77,34 +77,31 @@ fn handle_marker_attribute(
 
 fn handle_bits_field(
     context: &FieldContext,
-    size: Option<usize>,
+    size: usize,
     errors: &mut Vec<proc_macro2::TokenStream>,
     has_bit_fields: &mut bool,
 ) -> Option<FieldType> {
     *has_bit_fields = true;
-    if let Some(size) = size {
-        if let Ok(max_bits) = utils::get_primitive_type_max_bits(context.field_type) {
-            if size > max_bits {
-                errors.push(syn::Error::new(
-                    context.field.span(),
-                    format!("bits attribute specifies {size} bits, but type can only hold {max_bits} bits"),
-                ).to_compile_error());
-                return None;
-            }
-        } else {
-            errors.push(syn::Error::new(
-                context.field_type.span(),
-                "Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) and char are supported. Note: f32, f64, and bool cannot be used with bit fields",
-            ).to_compile_error());
-            return None;
-        }
-        return Some(FieldType::BitsField(size));
+    let Ok(max_bits) = utils::get_primitive_type_max_bits(context.field_type) else {
+        errors.push(syn::Error::new(
+            context.field_type.span(),
+            "Unsupported type for bits attribute. Only integer types (u8, i8, u16, i16, u32, i32, u64, i64, u128, i128) and char are supported. Note: f32, f64, and bool cannot be used with bit fields",
+        ).to_compile_error());
+        return None;
+    };
+    if size > max_bits {
+        errors.push(
+            syn::Error::new(
+                context.field.span(),
+                format!(
+                    "bits attribute specifies {size} bits, but type can only hold {max_bits} bits"
+                ),
+            )
+            .to_compile_error(),
+        );
+        return None;
     }
-    errors.push(syn::Error::new(
-        context.field.span(),
-        "Size required for bits attribute. Use #[bits(N)] where N is the number of bits needed for your field",
-    ).to_compile_error());
-    None
+    Some(FieldType::BitsField(size))
 }
 
 fn handle_vec_of_vecs_marker(
@@ -183,7 +180,7 @@ fn determine_field_type(
     }
 
     if bits_attribute_present {
-        return handle_bits_field(context, size, errors, has_bit_fields);
+        return handle_bits_field(context, size?, errors, has_bit_fields);
     }
 
     if let Some(expr) = size_expression {
