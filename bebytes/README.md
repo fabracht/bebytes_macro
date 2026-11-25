@@ -116,6 +116,32 @@ struct U16Example {
 
 The same rules apply - all bits fields must complete a byte boundary together.
 
+### Bit order
+
+Bit fields are laid out in declaration order, and the byte order of the method you call decides how bits are numbered:
+
+- `to_be_bytes` / `try_from_be_bytes`: the first field takes the most significant bits of its byte, and each value is written most significant bit first
+- `to_le_bytes` / `try_from_le_bytes`: the first field takes the least significant bits of its byte, and each value is written least significant bit first. This is the same layout as C bitfields on little-endian targets. A value that spans bytes continues into the next byte's least significant bits
+
+```rust
+#[derive(BeBytes, Debug, PartialEq)]
+struct Header {
+    head: u8,
+    #[bits(4)]
+    high: u8,
+    #[bits(4)]
+    low: u8,
+    tail: u16,
+}
+
+let header = Header { head: 0x01, high: 0x8, low: 0x9, tail: 0x0A0B };
+
+assert_eq!(header.to_be_bytes(), [0x01, 0x89, 0x0A, 0x0B]);
+assert_eq!(header.to_le_bytes(), [0x01, 0x98, 0x0B, 0x0A]);
+```
+
+Fields without `#[bits]` keep the usual byte order of the method.
+
 ### Enums in Bit Fields
 
 Enum fields cannot carry `#[bits(N)]`. To pack an enum into a bit field, store its discriminant in an integer bit field and convert with the generated `TryFrom`:
@@ -197,7 +223,7 @@ BeBytes supports:
 - Primitives: `u8`, `u16`, `u32`, `u64`, `u128`, `i8`, `i16`, `i32`, `i64`, `i128`
 - Characters: `char` with full Unicode support
 - Strings: Standard Rust `String` type with attributes for size control
-- Arrays: `[u8; N]`, `[u16; N]`, etc.
+- Arrays: `[u8; N]`
 - Enums with named fields (serialized as a single byte)
 - `Option<T>` where T is a primitive
 - Nested structs that also implement `BeBytes`

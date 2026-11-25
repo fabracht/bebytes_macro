@@ -1,0 +1,5 @@
+error: UntilMarker can only be used with Vec types
+ --> tests/compile_time/markers/marker_on_non_vec.rs:6:12
+  |
+6 |     value: u8,
+  |            ^^

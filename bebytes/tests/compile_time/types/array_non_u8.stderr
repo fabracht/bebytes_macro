@@ -1,0 +1,5 @@
+error: Unsupported array type
+ --> tests/compile_time/types/array_non_u8.rs:5:13
+  |
+5 |     values: [u16; 4],
+  |             ^^^^^^^^
