@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Internal
 
+- `Vec<Vec<u8>>` marker fields carry a required segment count type in the derive, which removes an unreachable fallback and adds a compile-fail fixture for a missing count
 - CI builds both crates on Rust 1.75.0 (std and no_std) with dependencies resolved for that version, and runs `cargo semver-checks` on pull requests
 - The bit layout oracle covers little-endian, signed whole fields, aligned partial-width fields, small fields on wide types and `encode_be_to` / `encode_le_to`
 - Added arbitrary-input tests, tests for bit fields after variable-size fields, and compile-fail fixtures for size expressions on non-`Vec` fields, unsized custom `Vec` fields, marker attributes on non-`Vec` fields, non-`u8` arrays and empty `#[bits()]`

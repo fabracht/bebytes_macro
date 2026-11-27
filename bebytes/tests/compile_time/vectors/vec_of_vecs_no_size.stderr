@@ -1,0 +1,5 @@
+error: Vec<Vec<u8>> with UntilMarker requires size control via #[With(size(N))] or #[FromField(field_name)]
+ --> tests/compile_time/vectors/vec_of_vecs_no_size.rs:6:15
+  |
+6 |     sections: Vec<Vec<u8>>,
+  |               ^^^

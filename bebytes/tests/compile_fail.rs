@@ -49,6 +49,7 @@ fn ui_tests() {
     t.compile_fail("tests/compile_time/vectors/multiple_vecs_no_size.rs");
     t.compile_fail("tests/compile_time/vectors/vec_not_last_no_size.rs");
     t.compile_fail("tests/compile_time/vectors/custom_vec_not_last_no_size.rs");
+    t.compile_fail("tests/compile_time/vectors/vec_of_vecs_no_size.rs");
 
     t.compile_fail("tests/compile_time/markers/non_ascii_char.rs");
     t.compile_fail("tests/compile_time/markers/marker_on_non_vec.rs");
