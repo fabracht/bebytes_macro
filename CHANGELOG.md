@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Size expressions and `#[FromField]` lengths on `Vec<u8>` and `String` return `BeBytesError::InsufficientData` instead of panicking when a length field is negative, larger than the input, or makes the arithmetic overflow, underflow or divide by zero
+
 ### Documentation
 
 - Documented the bit order of `#[bits(N)]` fields: big-endian methods pack the first field into the most significant bits of its byte, little-endian methods pack it into the least significant bits

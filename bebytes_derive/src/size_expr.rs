@@ -93,16 +93,26 @@ impl SizeExpression {
 
     pub fn generate_evaluation_code(&self) -> TokenStream {
         match self {
-            SizeExpression::Literal(value) => quote! { #value as usize },
+            SizeExpression::Literal(value) => {
+                quote! { <usize as ::core::convert::TryFrom<_>>::try_from(#value).ok() }
+            }
             SizeExpression::FieldRef(field_path) => {
                 let field_access = field_path.generate_access_code();
-                quote! { (#field_access) as usize }
+                quote! { <usize as ::core::convert::TryFrom<_>>::try_from(#field_access).ok() }
             }
             SizeExpression::BinaryOp { left, op, right } => {
                 let left_code = left.generate_evaluation_code();
                 let right_code = right.generate_evaluation_code();
-                let op_code = op.generate_operator_code();
-                quote! { (#left_code) #op_code (#right_code) }
+                let method = op.checked_method();
+                quote! {
+                    match (#left_code, #right_code) {
+                        (
+                            ::core::option::Option::Some(left_value),
+                            ::core::option::Option::Some(right_value),
+                        ) => left_value.#method(right_value),
+                        _ => ::core::option::Option::None,
+                    }
+                }
             }
         }
     }
@@ -149,14 +159,15 @@ impl BinaryOperator {
         }
     }
 
-    fn generate_operator_code(&self) -> TokenStream {
-        match self {
-            BinaryOperator::Add => quote! { + },
-            BinaryOperator::Subtract => quote! { - },
-            BinaryOperator::Multiply => quote! { * },
-            BinaryOperator::Divide => quote! { / },
-            BinaryOperator::Modulo => quote! { % },
-        }
+    fn checked_method(&self) -> Ident {
+        let name = match self {
+            BinaryOperator::Add => "checked_add",
+            BinaryOperator::Subtract => "checked_sub",
+            BinaryOperator::Multiply => "checked_mul",
+            BinaryOperator::Divide => "checked_div",
+            BinaryOperator::Modulo => "checked_rem",
+        };
+        Ident::new(name, proc_macro2::Span::call_site())
     }
 }
 

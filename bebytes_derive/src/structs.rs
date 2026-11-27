@@ -794,12 +794,15 @@ fn generate_primitive_vector_tokens(
         (_, Some(ident_path)) => {
             let field_access_parse =
                 crate::functional::pure_helpers::generate_field_access_path(&ident_path);
+            let parsed_size = parsed_size_from(&quote! {
+                <usize as ::core::convert::TryFrom<_>>::try_from(#field_access_parse).ok()
+            });
             Ok((
                 quote! { bit_sum = 4096 * 8; },
                 quote! {
-                    let vec_size = #field_access_parse as usize;
+                    let vec_size = #parsed_size;
                     byte_index = _bit_sum / 8;
-                    let end_index = byte_index + vec_size;
+                    let end_index = byte_index.saturating_add(vec_size);
                     if end_index > bytes.len() {
                         return Err(::bebytes::BeBytesError::InsufficientData {
                             expected: vec_size,
@@ -869,7 +872,9 @@ fn generate_custom_vector_parsing(
         (None, Some(ident_path)) => {
             let field_access_parse =
                 crate::functional::pure_helpers::generate_field_access_path(&ident_path);
-            Some(quote! { #field_access_parse as usize })
+            Some(parsed_size_from(&quote! {
+                <usize as ::core::convert::TryFrom<_>>::try_from(#field_access_parse).ok()
+            }))
         }
         (None, None) => None,
     };
@@ -1516,11 +1521,14 @@ fn generate_field_size_string(
     let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0);
 
     let field_access = crate::functional::pure_helpers::generate_field_access_path(ident_path);
+    let parsed_size = parsed_size_from(&quote! {
+        <usize as ::core::convert::TryFrom<_>>::try_from(#field_access).ok()
+    });
 
     let parsing = quote! {
         byte_index = _bit_sum / 8;
-        let string_size = (#field_access) as usize;
-        let end_index = byte_index + string_size;
+        let string_size = #parsed_size;
+        let end_index = byte_index.saturating_add(string_size);
         if end_index > bytes.len() {
             return Err(::bebytes::BeBytesError::InsufficientData {
                 expected: end_index,
@@ -1568,6 +1576,34 @@ fn generate_unbounded_string(
     (bit_sum, parsing, writing)
 }
 
+fn parsed_size_from(checked_size: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    quote! {
+        match #checked_size {
+            ::core::option::Option::Some(size) => size,
+            ::core::option::Option::None => {
+                return Err(::bebytes::BeBytesError::InsufficientData {
+                    expected: usize::MAX,
+                    actual: bytes.len(),
+                });
+            }
+        }
+    }
+}
+
+fn written_size_from(
+    field_name: &syn::Ident,
+    checked_size: &proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
+    quote! {
+        match #checked_size {
+            ::core::option::Option::Some(size) => size,
+            ::core::option::Option::None => {
+                panic!("Size of field {} cannot be evaluated", stringify!(#field_name))
+            }
+        }
+    }
+}
+
 fn generate_size_expression_vector(
     field_name: &syn::Ident,
     size_calculation: &proc_macro2::TokenStream,
@@ -1577,22 +1613,25 @@ fn generate_size_expression_vector(
     proc_macro2::TokenStream,
 ) {
     let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0);
+    let parsed_size = parsed_size_from(size_calculation);
+    let written_size = written_size_from(field_name, size_calculation);
 
     let parsing = quote! {
         byte_index = _bit_sum / 8;
-        let field_size = #size_calculation;
-        if bytes.len() < byte_index + field_size {
+        let field_size = #parsed_size;
+        let end_index = byte_index.saturating_add(field_size);
+        if end_index > bytes.len() {
             return Err(::bebytes::BeBytesError::InsufficientData {
-                expected: byte_index + field_size,
+                expected: end_index,
                 actual: bytes.len(),
             });
         }
-        let #field_name = bytes[byte_index..byte_index + field_size].to_vec();
+        let #field_name = bytes[byte_index..end_index].to_vec();
         _bit_sum += field_size * 8;
     };
 
     let writing = quote! {
-        let field_size = #size_calculation;
+        let field_size = #written_size;
         if #field_name.len() != field_size {
             panic!("Vector size {} does not match expected size {}", #field_name.len(), field_size);
         }
@@ -1612,24 +1651,27 @@ fn generate_size_expression_string(
     proc_macro2::TokenStream,
 ) {
     let bit_sum = crate::functional::pure_helpers::create_byte_bit_sum(0);
+    let parsed_size = parsed_size_from(size_calculation);
+    let written_size = written_size_from(field_name, size_calculation);
 
     let parsing = quote! {
         byte_index = _bit_sum / 8;
-        let field_size = #size_calculation;
-        if bytes.len() < byte_index + field_size {
+        let field_size = #parsed_size;
+        let end_index = byte_index.saturating_add(field_size);
+        if end_index > bytes.len() {
             return Err(::bebytes::BeBytesError::InsufficientData {
-                expected: byte_index + field_size,
+                expected: end_index,
                 actual: bytes.len(),
             });
         }
-        let string_bytes = &bytes[byte_index..byte_index + field_size];
+        let string_bytes = &bytes[byte_index..end_index];
         let #field_name = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::from_bytes(string_bytes)?;
         _bit_sum += field_size * 8;
     };
 
     let writing = quote! {
         let string_bytes = <::bebytes::Utf8 as ::bebytes::StringInterpreter>::to_bytes(&#field_name);
-        let field_size = #size_calculation;
+        let field_size = #written_size;
         if string_bytes.len() != field_size {
             panic!("String size {} does not match expected size {}", string_bytes.len(), field_size);
         }
@@ -1786,7 +1828,9 @@ fn process_vec_of_vecs_with_marker_functional(
                     quote! { #acc.#ident }
                 }
             });
-            quote! { #field_access as usize }
+            parsed_size_from(&quote! {
+                <usize as ::core::convert::TryFrom<_>>::try_from(#field_access).ok()
+            })
         }
     };
 
