@@ -240,13 +240,12 @@ assert!(result.is_err());
 
 ## Current Limitations
 
-- **Conditional expressions**: `if-else` expressions are not yet fully supported due to token parsing complexity
+- **Conditional expressions**: `if-else` expressions are not supported and fail to compile with `Unsupported expression type in size expression`
 - **Nested field access**: Currently limited to direct field references (no `header.length` style access)
 - **Type restrictions**: Only supported for `Vec<u8>` and `String` fields
 
 ## Future Enhancements
 
-- Support for conditional expressions: `#[With(size(if version == 4 { 4 } else { 16 }))]`
 - Nested field access: `#[With(size(header.length))]`
 - More complex expressions and built-in functions
 - Compile-time size validation where possible
