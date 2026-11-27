@@ -36,6 +36,7 @@ fn ui_tests() {
     t.compile_fail("tests/compile_time/size_expressions/division_by_zero.rs");
     t.compile_fail("tests/compile_time/size_expressions/invalid_operator.rs");
     t.compile_fail("tests/compile_time/size_expressions/size_expression_on_non_vec.rs");
+    t.compile_fail("tests/compile_time/size_expressions/conditional_size_expression.rs");
 
     t.compile_fail("tests/compile_time/types/unsupported_structure.rs");
     t.compile_fail("tests/compile_time/types/unsupported_isize.rs");
