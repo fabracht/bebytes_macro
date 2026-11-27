@@ -9,6 +9,11 @@ use std::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
+enum SegmentCount {
+    Fixed(usize),
+    FromField(Vec<syn::Ident>),
+}
+
 enum FieldType {
     BitsField(usize),
     PrimitiveType,
@@ -20,7 +25,7 @@ enum FieldType {
     CustomType,
     UntilMarker(u8),
     AfterMarker(u8),
-    VecOfVecsWithMarker(Option<usize>, Option<Vec<syn::Ident>>, u8),
+    VecOfVecsWithMarker(SegmentCount, u8),
 }
 
 struct FieldContext<'a> {
@@ -115,14 +120,18 @@ fn handle_vec_of_vecs_marker(
     if let syn::Type::Path(tp) = context.field_type {
         if utils::is_vec_of_vec_u8(tp) {
             if is_until {
-                if size.is_some() || vec_size_ident.is_some() {
-                    return Some(FieldType::VecOfVecsWithMarker(size, vec_size_ident, marker));
-                }
-                errors.push(syn::Error::new(
-                    context.field_type.span(),
-                    "Vec<Vec<u8>> with UntilMarker requires size control via #[With(size(N))] or #[FromField(field_name)]"
-                ).to_compile_error());
-                return None;
+                let count = match (size, vec_size_ident) {
+                    (Some(size), _) => SegmentCount::Fixed(size),
+                    (None, Some(field_path)) => SegmentCount::FromField(field_path),
+                    (None, None) => {
+                        errors.push(syn::Error::new(
+                            context.field_type.span(),
+                            "Vec<Vec<u8>> with UntilMarker requires size control via #[With(size(N))] or #[FromField(field_name)]"
+                        ).to_compile_error());
+                        return None;
+                    }
+                };
+                return Some(FieldType::VecOfVecsWithMarker(count, marker));
             }
             errors.push(
                 syn::Error::new(
@@ -383,8 +392,8 @@ fn process_field_type(
         FieldType::CustomType => Ok(process_custom_type_functional(context, processing_ctx)),
         FieldType::UntilMarker(marker) => Ok(process_until_marker_functional(context, marker)),
         FieldType::AfterMarker(marker) => Ok(process_after_marker_functional(context, marker)),
-        FieldType::VecOfVecsWithMarker(size, field_path, marker) => Ok(
-            process_vec_of_vecs_with_marker_functional(context, size, field_path, marker),
+        FieldType::VecOfVecsWithMarker(count, marker) => Ok(
+            process_vec_of_vecs_with_marker_functional(context, &count, marker),
         ),
     }
 }
@@ -1758,8 +1767,7 @@ fn process_after_marker_functional(
 
 fn process_vec_of_vecs_with_marker_functional(
     context: &FieldContext,
-    size: Option<usize>,
-    field_path: Option<Vec<syn::Ident>>,
+    count: &SegmentCount,
     marker: u8,
 ) -> crate::functional::FieldProcessResult {
     let field_name = &context.field_name;
@@ -1768,19 +1776,18 @@ fn process_vec_of_vecs_with_marker_functional(
 
     let bit_sum = quote! {};
 
-    let size_expr = if let Some(size) = size {
-        quote! { #size }
-    } else if let Some(field_path) = field_path {
-        let field_access = field_path.iter().fold(quote! {}, |acc, ident| {
-            if acc.is_empty() {
-                quote! { #ident }
-            } else {
-                quote! { #acc.#ident }
-            }
-        });
-        quote! { #field_access as usize }
-    } else {
-        quote! { 0 }
+    let size_expr = match count {
+        SegmentCount::Fixed(size) => quote! { #size },
+        SegmentCount::FromField(field_path) => {
+            let field_access = field_path.iter().fold(quote! {}, |acc, ident| {
+                if acc.is_empty() {
+                    quote! { #ident }
+                } else {
+                    quote! { #acc.#ident }
+                }
+            });
+            quote! { #field_access as usize }
+        }
     };
 
     let parsing = quote! {
